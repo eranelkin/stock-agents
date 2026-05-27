@@ -3,10 +3,14 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
+from dotenv import load_dotenv
+
+load_dotenv()  # load .env before pydantic-settings so MODEL_API_KEY_* vars are in os.environ
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.api.routes import results, runs
+from backend.api.routes import models, results, runs
 from backend.config import settings
 from backend.db.models import Base
 from backend.db.session import engine
@@ -31,6 +35,7 @@ app.add_middleware(
 
 app.include_router(runs.router)
 app.include_router(results.router)
+app.include_router(models.router)
 
 
 @app.get("/health")
