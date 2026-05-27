@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-import aiofiles
 from sqlalchemy import update
 
 from ai_service.config import settings
 from ai_service.db import models
 from ai_service.db.session import AsyncSessionLocal
+from ai_service.models.llm_client import LLMClient
 from ai_service.pipeline import Pipeline
 from ai_service.schemas.input import TickerInput
+from ai_service.schemas.run import ModelConfig
 from ai_service.utils.logger import get_logger
 from ai_service.utils.output_writer import write_output
 from ai_service.utils.prompt_loader import load_prompts
@@ -22,25 +22,45 @@ logger = get_logger(__name__)
 
 
 class Orchestrator:
-    """Loads tickers and prompts, runs all pipelines, persists results to DB and disk."""
+    """Loads prompts, runs all (model × ticker) pipelines, persists results to DB and disk."""
 
-    def __init__(self, run_id: str) -> None:
+    def __init__(
+        self,
+        run_id: str,
+        model_configs: list[ModelConfig],
+        tickers: list[dict[str, Any]],
+    ) -> None:
         self.run_id = run_id
+        self.model_configs = model_configs
+        self.tickers = tickers
 
     async def run(self) -> None:
         """Entry point: orchestrate the full run lifecycle."""
-        logger.info("Orchestrator started", extra={"run_id": self.run_id})
+        logger.info(
+            "Orchestrator started",
+            extra={"run_id": self.run_id, "model_count": len(self.model_configs)},
+        )
         await self._set_status("running")
 
         try:
             prompts = await load_prompts("Prompts.json")
-            tickers = await self._load_tickers("Data.json")
+            ticker_inputs = [TickerInput(**item) for item in self.tickers]
 
             semaphore = asyncio.Semaphore(settings.max_concurrent_pipelines)
+
+            # One pipeline per (model, ticker) combination
             pipelines = [
-                Pipeline(ticker=t, prompts=prompts, pipeline_semaphore=semaphore)
-                for t in tickers
+                Pipeline(
+                    ticker=ticker,
+                    prompts=prompts,
+                    pipeline_semaphore=semaphore,
+                    llm_client=LLMClient(mc),
+                    model_name=mc.name,
+                )
+                for mc in self.model_configs
+                for ticker in ticker_inputs
             ]
+
             outputs = await asyncio.gather(*[p.run() for p in pipelines])
 
             async with AsyncSessionLocal() as session:
@@ -68,12 +88,6 @@ class Orchestrator:
         except Exception:
             logger.exception("Orchestrator failed", extra={"run_id": self.run_id})
             await self._set_status("failed")
-
-    async def _load_tickers(self, path: str) -> list[TickerInput]:
-        """Read Data.json and return validated TickerInput objects."""
-        async with aiofiles.open(path) as f:
-            content = await f.read()
-        return [TickerInput(**item) for item in json.loads(content)]
 
     async def _set_status(self, status: str, error: str | None = None) -> None:
         """Update the Run row status in the database."""

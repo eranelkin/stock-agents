@@ -28,7 +28,7 @@ function App() {
           refreshKey={modelsRefreshKey}
         />
         <Box component="main" sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          {activeTab === 'run' && <RunPage />}
+          {activeTab === 'run' && <RunPage selectedModelIds={selectedModelIds} />}
           {activeTab === 'models' && <ModelsPage onModelsChange={refreshModels} />}
         </Box>
       </Box>

@@ -12,6 +12,7 @@ class Aggregator:
     def aggregate(
         self,
         ticker: str,
+        model_name: str,
         agent_results: dict[str, Any],
         duration_ms: int,
     ) -> PipelineOutput:
@@ -27,6 +28,7 @@ class Aggregator:
         """
         return PipelineOutput(
             ticker=ticker,
+            model_name=model_name,
             agents=agent_results,
             metadata=AgentMetadata(
                 pipeline_duration_ms=duration_ms,

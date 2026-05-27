@@ -24,19 +24,26 @@ class Pipeline:
         ticker: TickerInput,
         prompts: dict[str, str],
         pipeline_semaphore: asyncio.Semaphore,
+        llm_client: LLMClient,
+        model_name: str,
     ) -> None:
         self.ticker = ticker
         self.prompts = prompts
+        self.model_name = model_name
         self.pipeline_id = str(uuid.uuid4())
         self._pipeline_semaphore = pipeline_semaphore
         self._agent_semaphore = asyncio.Semaphore(settings.max_concurrent_agents)
-        self._llm = LLMClient()
+        self._llm = llm_client
         self._aggregator = Aggregator()
 
     async def run(self) -> PipelineOutput:
         """Acquire a pipeline slot, run agents, return the aggregated result."""
         async with self._pipeline_semaphore:
-            extra = {"ticker": self.ticker.name, "pipeline_id": self.pipeline_id}
+            extra = {
+                "ticker": self.ticker.name,
+                "pipeline_id": self.pipeline_id,
+                "model": self.model_name,
+            }
             logger.info("Pipeline started", extra=extra)
             start = time.monotonic()
 
@@ -48,6 +55,7 @@ class Pipeline:
             duration_ms = int((time.monotonic() - start) * 1000)
             output = self._aggregator.aggregate(
                 ticker=self.ticker.name,
+                model_name=self.model_name,
                 agent_results=results,
                 duration_ms=duration_ms,
             )

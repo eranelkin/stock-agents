@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 from dotenv import load_dotenv
 
@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from ai_service.db.models import Base
 from ai_service.db.session import engine
 from ai_service.orchestrator import Orchestrator
+from ai_service.schemas.run import ModelConfig
 from ai_service.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -30,6 +31,8 @@ app = FastAPI(title="Stock-Agents AI Service", lifespan=lifespan)
 
 class RunRequest(BaseModel):
     run_id: str
+    models: list[ModelConfig]
+    tickers: list[dict[str, Any]]
 
 
 @app.post("/run", status_code=202)
@@ -37,8 +40,13 @@ async def trigger_run(
     request: RunRequest, background_tasks: BackgroundTasks
 ) -> dict[str, str]:
     """Accept a run request and process it asynchronously in the background."""
-    background_tasks.add_task(_run_orchestrator, request.run_id)
-    logger.info("Run accepted", extra={"run_id": request.run_id})
+    background_tasks.add_task(
+        _run_orchestrator, request.run_id, request.models, request.tickers
+    )
+    logger.info(
+        "Run accepted",
+        extra={"run_id": request.run_id, "models": [m.name for m in request.models]},
+    )
     return {"status": "accepted", "run_id": request.run_id}
 
 
@@ -47,5 +55,7 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-async def _run_orchestrator(run_id: str) -> None:
-    await Orchestrator(run_id=run_id).run()
+async def _run_orchestrator(
+    run_id: str, model_configs: list[ModelConfig], tickers: list[dict[str, Any]]
+) -> None:
+    await Orchestrator(run_id=run_id, model_configs=model_configs, tickers=tickers).run()

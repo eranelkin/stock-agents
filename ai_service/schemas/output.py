@@ -15,5 +15,6 @@ class PipelineOutput(BaseModel):
     """Aggregated result for one ticker across all agents."""
 
     ticker: str
+    model_name: str
     agents: dict[str, Any]
     metadata: AgentMetadata

@@ -26,6 +26,7 @@ class Run(Base):
         DateTime(timezone=True), nullable=True
     )
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    name: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     results: Mapped[list[TickerResult]] = relationship(back_populates="run")
 

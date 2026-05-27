@@ -9,6 +9,7 @@ from tenacity import (
 )
 
 from ai_service.config import settings
+from ai_service.schemas.run import ModelConfig
 from ai_service.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -21,8 +22,10 @@ class LLMError(Exception):
 class LLMClient:
     """Provider-agnostic async LLM client backed by litellm.acompletion."""
 
-    def __init__(self) -> None:
-        self._model = settings.llm_model
+    def __init__(self, model_config: ModelConfig) -> None:
+        self._model = model_config.model_id
+        self._base_url = model_config.base_url
+        self._api_key = model_config.api_key
 
     async def complete(self, system_prompt: str, user_message: str) -> str:
         """Send a chat completion and return the response text.
@@ -48,14 +51,20 @@ class LLMClient:
         retry=retry_if_exception_type((litellm.RateLimitError, litellm.Timeout)),
     )
     async def _complete_with_retry(self, system_prompt: str, user_message: str) -> str:
-        response = await litellm.acompletion(
-            model=self._model,
-            messages=[
+        kwargs: dict = {
+            "model": self._model,
+            "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
             ],
-            temperature=settings.llm_temperature,
-            max_tokens=settings.llm_max_tokens,
-            timeout=settings.llm_timeout_seconds,
-        )
+            "temperature": settings.llm_temperature,
+            "max_tokens": settings.llm_max_tokens,
+            "timeout": settings.llm_timeout_seconds,
+        }
+        if self._base_url:
+            kwargs["base_url"] = self._base_url
+        if self._api_key:
+            kwargs["api_key"] = self._api_key
+
+        response = await litellm.acompletion(**kwargs)
         return response.choices[0].message.content or ""
