@@ -46,5 +46,14 @@ services:
       - ./Data.json:/app/Data.json:ro
       - ./Prompts.json:/app/Prompts.json:ro
 
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    depends_on:
+      - backend
+    ports:
+      - "4100:4100"
+
 volumes:
   pgdata:

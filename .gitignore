@@ -1,5 +1,7 @@
+# ── Secrets ──────────────────────────────────────────
 .env
-outputs/
+
+# ── Python ───────────────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
@@ -7,7 +9,14 @@ __pycache__/
 .ruff_cache/
 .pytest_cache/
 *.egg-info/
-dist/
 build/
 .venv/
 venv/
+
+# ── App output ───────────────────────────────────────
+outputs/
+
+# ── Frontend ─────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
