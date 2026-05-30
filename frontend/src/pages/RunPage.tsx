@@ -147,7 +147,7 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
     !selectedFile || !parsedTickers || selectedModelIds.length === 0 || starting
 
   return (
-    <Box sx={{ px: 4, py: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
+    <Box sx={{ px: 4, py: 3, display: 'flex', flexDirection: 'column', gap: 2, flex: 1, overflow: 'hidden' }}>
       {/* Page header */}
       <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <Box>
@@ -248,6 +248,7 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
       </Tabs>
 
       {/* Table */}
+      <Box sx={{ flex: 1, overflow: 'auto' }}>
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', pt: 6 }}>
           <CircularProgress size={28} />
@@ -375,6 +376,7 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
           </Table>
         </TableContainer>
       )}
+      </Box>
       {resultsRun && (
         <RunResultsDialog
           open={Boolean(resultsRun)}
