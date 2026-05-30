@@ -9,7 +9,7 @@ from sqlalchemy import delete as sql_delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import settings
-from backend.db.models import AIModel, Run, TickerResult
+from backend.db.models import AIModel, Prompt, Run, TickerResult
 from backend.db.session import get_session
 from backend.schemas.run import RunCreate, RunResponse
 
@@ -38,6 +38,16 @@ async def create_run(
             detail="No active models found for the provided IDs. Enable models in the Models tab first.",
         )
 
+    prompt_result = await session.execute(
+        select(Prompt).where(Prompt.category == "agents")
+    )
+    agent_prompts = prompt_result.scalars().all()
+    if not agent_prompts:
+        raise HTTPException(
+            status_code=400,
+            detail="No Agent prompts configured. Add prompts in the Agents tab first.",
+        )
+
     model_configs = [
         {
             "id": str(m.id),
@@ -62,6 +72,10 @@ async def create_run(
                     "run_id": str(run.id),
                     "models": model_configs,
                     "tickers": body.tickers,
+                    "prompts": [
+                        {"id": str(p.id), "title": p.title, "content": p.content}
+                        for p in agent_prompts
+                    ],
                 },
                 timeout=10.0,
             )

@@ -25,6 +25,8 @@ interface HeaderProps {
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'run', label: 'Run' },
+  { id: 'prompts', label: 'Prompts' },
+  { id: 'chat', label: 'Chat' },
   { id: 'models', label: 'Models' },
 ]
 
@@ -45,8 +47,9 @@ export default function Header({
       .catch(() => setActiveModels([]))
   }, [refreshKey])
 
-  // Remove selected ids that no longer exist in active models
+  // Remove selected ids that no longer exist in active models (skip while models haven't loaded yet)
   useEffect(() => {
+    if (activeModels.length === 0) return
     const activeIds = new Set(activeModels.map((m) => m.id))
     const valid = selectedModelIds.filter((id) => activeIds.has(id))
     if (valid.length !== selectedModelIds.length) onSelectedModelsChange(valid)

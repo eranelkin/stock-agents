@@ -44,7 +44,6 @@ services:
     volumes:
       - ./outputs:/app/outputs
       - ./Data.json:/app/Data.json:ro
-      - ./Prompts.json:/app/Prompts.json:ro
 
   frontend:
     build:

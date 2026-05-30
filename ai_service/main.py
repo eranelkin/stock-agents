@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from ai_service.db.models import Base
 from ai_service.db.session import engine
 from ai_service.orchestrator import Orchestrator
-from ai_service.schemas.run import ModelConfig
+from ai_service.schemas.run import ModelConfig, PromptConfig
 from ai_service.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -33,6 +33,7 @@ class RunRequest(BaseModel):
     run_id: str
     models: list[ModelConfig]
     tickers: list[dict[str, Any]]
+    prompts: list[PromptConfig]
 
 
 @app.post("/run", status_code=202)
@@ -41,7 +42,7 @@ async def trigger_run(
 ) -> dict[str, str]:
     """Accept a run request and process it asynchronously in the background."""
     background_tasks.add_task(
-        _run_orchestrator, request.run_id, request.models, request.tickers
+        _run_orchestrator, request.run_id, request.models, request.tickers, request.prompts
     )
     logger.info(
         "Run accepted",
@@ -56,6 +57,11 @@ async def health() -> dict[str, str]:
 
 
 async def _run_orchestrator(
-    run_id: str, model_configs: list[ModelConfig], tickers: list[dict[str, Any]]
+    run_id: str,
+    model_configs: list[ModelConfig],
+    tickers: list[dict[str, Any]],
+    prompts: list[PromptConfig],
 ) -> None:
-    await Orchestrator(run_id=run_id, model_configs=model_configs, tickers=tickers).run()
+    await Orchestrator(
+        run_id=run_id, model_configs=model_configs, tickers=tickers, prompts=prompts
+    ).run()

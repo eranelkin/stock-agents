@@ -13,10 +13,9 @@ from ai_service.db.session import AsyncSessionLocal
 from ai_service.models.llm_client import LLMClient
 from ai_service.pipeline import Pipeline
 from ai_service.schemas.input import TickerInput
-from ai_service.schemas.run import ModelConfig
+from ai_service.schemas.run import ModelConfig, PromptConfig
 from ai_service.utils.logger import get_logger
 from ai_service.utils.output_writer import write_output
-from ai_service.utils.prompt_loader import load_prompts
 
 logger = get_logger(__name__)
 
@@ -29,10 +28,12 @@ class Orchestrator:
         run_id: str,
         model_configs: list[ModelConfig],
         tickers: list[dict[str, Any]],
+        prompts: list[PromptConfig],
     ) -> None:
         self.run_id = run_id
         self.model_configs = model_configs
         self.tickers = tickers
+        self.prompts = prompts
 
     async def run(self) -> None:
         """Entry point: orchestrate the full run lifecycle."""
@@ -43,7 +44,7 @@ class Orchestrator:
         await self._set_status("running")
 
         try:
-            prompts = await load_prompts("Prompts.json")
+            prompts = {p.title: p.content for p in self.prompts}
             ticker_inputs = [TickerInput(**item) for item in self.tickers]
 
             semaphore = asyncio.Semaphore(settings.max_concurrent_pipelines)

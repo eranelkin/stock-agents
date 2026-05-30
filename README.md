@@ -4,20 +4,81 @@ A Python-based multi-agent AI system that processes a list of stock tickers in p
 
 ## Architecture
 
+### Workflow overview
+
 ```
-POST /runs (backend:4101)
-    └── triggers ai-service:4102
-            └── Orchestrator
-                    └── Pipeline per ticker (parallel)
-                            └── Agent per prompt (parallel or chain)
-                                    └── LLM (via litellm)
-                                            └── Results → PostgreSQL + ./outputs/
+Data.json  [AAPL, GOOGL, MSFT, AMZN, ...]
+    │
+    ▼
+┌─────────────────────────────────────────────────────────┐
+│                       Orchestrator                      │
+│          Splits input → spawns N pipelines in parallel  │
+└──────┬──────────────┬──────────────┬──────────────┬─────┘
+       │              │              │              │
+       ▼              ▼              ▼              ▼
+  Pipeline 1     Pipeline 2     Pipeline 3     Pipeline 4
+  (AAPL)         (GOOGL)        (MSFT)         (AMZN)
+       │              │              │              │
+       └──────────────┴──────────────┴──────────────┘
+                             │
+              ┌──────────────▼──────────────┐
+              │  Per-pipeline internals      │
+              │  (identical for each ticker) │
+              │                             │
+              │    Prompts (from database)   │
+              │     prompt1 … promptN       │
+              │    (dynamic — no hardcode)  │
+              │                             │
+              │  ┌────────┐  ┌────────┐  ┌────────┐  ┌────────┐
+              │  │Agent 1 │  │Agent 2 │  │Agent 3 │  │Agent 4 │
+              │  │prompt1 │  │prompt2 │  │prompt3 │  │prompt4 │
+              │  │+ LLM   │  │+ LLM   │  │+ LLM   │  │+ LLM   │
+              │  └────────┘  └────────┘  └────────┘  └────────┘
+              │       ↑ prompt-chain: each agent passes result to next ↓
+              │                             │
+              │              ┌──────────────▼──────────────┐
+              │              │          Aggregator          │
+              │              │  merges agent results →      │
+              │              │  YAML / JSON output          │
+              │              └─────────────────────────────┘
+              └─────────────────────────────────────────────┘
+                             │  one output file per ticker
+                             ▼
+              ┌──────────────────────────────────────────────┐
+              │           YAML / JSON Reports                │
+              │   output_AAPL.yaml, output_GOOGL.yaml …     │
+              └──────────────────────────────────────────────┘
+                             │
+                             ▼
+              ┌──────────────────────────────────────────────┐
+              │          Backend API  (FastAPI)              │
+              │    REST endpoints · job queue · auth         │
+              └──────────────────────────────────────────────┘
+                             │
+                             ▼
+              ┌──────────────────────────────────────────────┐
+              │           PostgreSQL  (Docker)               │
+              │      runs · results · configs · models       │
+              └──────────────────────────────────────────────┘
 ```
 
-- **Backend** (port 4101) — FastAPI REST API for managing runs and reading results
-- **AI Service** (port 4102) — FastAPI service that runs the agent pipelines
-- **PostgreSQL** — stores run status and all agent outputs
-- **LiteLLM** — provider-agnostic LLM routing (OpenAI, Anthropic, Groq, Google, etc.)
+### Component summary
+
+| Component | Port | Role |
+|-----------|------|------|
+| **Backend** | 4101 | FastAPI REST API — manages runs, prompts, models, and results |
+| **AI Service** | 4102 | Runs the orchestrator and all agent pipelines |
+| **PostgreSQL** | 5432 | Persists run status, ticker results, prompts, and model configs |
+| **LiteLLM** | — | Provider-agnostic LLM routing (OpenAI, Anthropic, Groq, Google, etc.) |
+
+### How a run flows
+
+1. **`Data.json`** supplies the list of tickers (e.g. `AAPL`, `GOOGL`, `MSFT`, `AMZN`).
+2. The **Orchestrator** reads the list and spawns one **Pipeline** per ticker, all running concurrently via `asyncio.gather()`.
+3. Each **Pipeline** reads **`Prompts.json`** and creates one **Agent** per prompt key — the count is fully dynamic.
+4. Agents run in **parallel mode** (all at once) or **chain mode** (each receives the previous agent's output), controlled by `AGENT_MODE` in `.env`.
+5. The **Aggregator** merges all agent outputs for a ticker into a single structured result.
+6. Results are written to `./outputs/` as YAML or JSON and saved to **PostgreSQL** via the backend API.
 
 ---
 
@@ -287,15 +348,15 @@ Edit `Data.json` to change which tickers are processed:
 
 ## Customizing agents
 
-Edit `Prompts.json` to add, remove, or modify agents. The system reads the number of agents dynamically — no code changes needed. Each key becomes one agent:
+Agents are driven by prompts stored in the database with `category = "agents"`. Add, edit, or remove them via the **Prompts tab** in the UI, or directly via the API:
 
-```json
-{
-  "prompt1": "You are a financial data agent...",
-  "prompt2": "You are a sentiment analysis agent...",
-  "my_custom_agent": "You are a ESG scoring agent..."
-}
+```bash
+curl -X POST http://localhost:4101/prompts \
+  -H "Content-Type: application/json" \
+  -d '{"title": "ESG Agent", "content": "You are an ESG scoring agent...", "category": "agents"}'
 ```
+
+The system reads the agent count dynamically from the database — no code changes or file edits needed. Each prompt with `category: "agents"` becomes one agent in the pipeline.
 
 ---
 

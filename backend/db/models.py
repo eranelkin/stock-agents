@@ -47,6 +47,23 @@ class TickerResult(Base):
     run: Mapped[Run] = relationship(back_populates="results")
 
 
+class Prompt(Base):
+    """A user-managed prompt, organised by category. Agents-category prompts drive the pipeline."""
+
+    __tablename__ = "prompts"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str] = mapped_column(String(50), nullable=False, default="agents")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class AIModel(Base):
     """A configured AI model with provider details. API key stored in .env, not here."""
 

@@ -255,10 +255,10 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
         </Box>
       ) : (
         <TableContainer>
-          <Table size="small">
+          <Table size="small" sx={{ width: '100%' }}>
             <TableHead>
               <TableRow>
-                {['Title', 'Status', 'Date & Time', 'Actions'].map((h) => (
+                {['Title', 'Status', 'Date & Time'].map((h) => (
                   <TableCell
                     key={h}
                     sx={{
@@ -271,6 +271,17 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
                     {h}
                   </TableCell>
                 ))}
+                <TableCell
+                  align="right"
+                  sx={{
+                    color: 'text.secondary',
+                    fontSize: '0.8rem',
+                    borderColor: 'rgba(255,255,255,0.08)',
+                    fontWeight: 600,
+                  }}
+                >
+                  Actions
+                </TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -306,7 +317,7 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
                   >
                     {new Date(run.created_at).toLocaleString()}
                   </TableCell>
-                  <TableCell sx={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                  <TableCell align="right" sx={{ borderColor: 'rgba(255,255,255,0.06)' }}>
                     <Tooltip title="Delete">
                       <IconButton
                         size="small"
