@@ -32,7 +32,13 @@ async def create_prompt(
     body: PromptCreate, session: AsyncSession = Depends(get_session)
 ) -> Prompt:
     """Create a new prompt."""
-    prompt = Prompt(title=body.title, content=body.content, category=body.category)
+    prompt = Prompt(
+        title=body.title,
+        content=body.content,
+        category=body.category,
+        search_enabled=body.search_enabled,
+        search_query_template=body.search_query_template,
+    )
     session.add(prompt)
     await session.commit()
     await session.refresh(prompt)
@@ -56,6 +62,10 @@ async def update_prompt(
         prompt.content = body.content
     if body.category is not None:
         prompt.category = body.category
+    if body.search_enabled is not None:
+        prompt.search_enabled = body.search_enabled
+    if body.search_query_template is not None:
+        prompt.search_query_template = body.search_query_template
 
     prompt.updated_at = datetime.now(timezone.utc)
     await session.commit()

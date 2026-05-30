@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     postgres_user: str = "sa_user"
     postgres_password: str = "changeme"
 
+    # Tavily web search
+    tavily_api_key: str = ""
+    search_enabled: bool = False
+    search_max_results: int = 5
+    search_depth: str = "basic"  # basic | advanced
+
     # Service
     ai_service_port: int = 4102
 

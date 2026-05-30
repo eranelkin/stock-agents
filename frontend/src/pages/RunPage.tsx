@@ -20,7 +20,10 @@ import Alert from '@mui/material/Alert'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import DeleteIcon from '@mui/icons-material/Delete'
 import AttachFileIcon from '@mui/icons-material/AttachFile'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
+import CheckIcon from '@mui/icons-material/Check'
 import { createRun, deleteRun, fetchRuns } from '../api/runs'
+import RunResultsDialog from '../components/RunResultsDialog'
 import type { Run } from '../types/run'
 
 interface RunPageProps {
@@ -46,6 +49,8 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
   const [parsedTickers, setParsedTickers] = useState<Record<string, unknown>[] | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
   const [innerTab, setInnerTab] = useState(0)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [resultsRun, setResultsRun] = useState<Run | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -258,7 +263,7 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
           <Table size="small" sx={{ width: '100%' }}>
             <TableHead>
               <TableRow>
-                {['Title', 'Status', 'Date & Time'].map((h) => (
+                {['Title', 'Run ID', 'Status', 'Date & Time'].map((h) => (
                   <TableCell
                     key={h}
                     sx={{
@@ -299,6 +304,42 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
                   >
                     {run.name ?? 'Unnamed'}
                   </TableCell>
+                  <TableCell
+                    sx={{
+                      borderColor: 'rgba(255,255,255,0.06)',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Typography
+                        onClick={() => setResultsRun(run)}
+                        sx={{
+                          fontFamily: 'monospace', fontSize: '0.8rem',
+                          color: 'text.secondary', cursor: 'pointer',
+                          px: 0.75, py: 0.25, borderRadius: 1,
+                          transition: 'color 0.15s, background-color 0.15s',
+                          '&:hover': { color: '#90caf9', bgcolor: 'rgba(144,202,249,0.10)' },
+                        }}
+                      >
+                        {run.id}
+                      </Typography>
+                      <Tooltip title={copiedId === run.id ? 'Copied!' : 'Copy ID'}>
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            navigator.clipboard.writeText(run.id)
+                            setCopiedId(run.id)
+                            setTimeout(() => setCopiedId(null), 2000)
+                          }}
+                          sx={{ color: copiedId === run.id ? '#4caf50' : 'text.disabled', '&:hover': { color: copiedId === run.id ? '#4caf50' : 'text.secondary' } }}
+                        >
+                          {copiedId === run.id
+                            ? <CheckIcon sx={{ fontSize: 14 }} />
+                            : <ContentCopyIcon sx={{ fontSize: 14 }} />}
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  </TableCell>
                   <TableCell sx={{ borderColor: 'rgba(255,255,255,0.06)' }}>
                     <Chip
                       label={run.status.toUpperCase()}
@@ -333,6 +374,14 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
             </TableBody>
           </Table>
         </TableContainer>
+      )}
+      {resultsRun && (
+        <RunResultsDialog
+          open={Boolean(resultsRun)}
+          onClose={() => setResultsRun(null)}
+          runId={resultsRun.id}
+          runName={resultsRun.name}
+        />
       )}
     </Box>
   )

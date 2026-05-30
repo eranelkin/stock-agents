@@ -73,7 +73,13 @@ async def create_run(
                     "models": model_configs,
                     "tickers": body.tickers,
                     "prompts": [
-                        {"id": str(p.id), "title": p.title, "content": p.content}
+                        {
+                            "id": str(p.id),
+                            "title": p.title,
+                            "content": p.content,
+                            "search_enabled": p.search_enabled,
+                            "search_query_template": p.search_query_template,
+                        }
                         for p in agent_prompts
                     ],
                 },

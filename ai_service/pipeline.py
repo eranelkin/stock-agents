@@ -9,8 +9,10 @@ from ai_service.agent import Agent
 from ai_service.aggregator import Aggregator
 from ai_service.config import settings
 from ai_service.models.llm_client import LLMClient
+from ai_service.models.search_client import SearchClient, build_search_query
 from ai_service.schemas.input import TickerInput
 from ai_service.schemas.output import PipelineOutput
+from ai_service.schemas.run import PromptConfig
 from ai_service.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -22,10 +24,11 @@ class Pipeline:
     def __init__(
         self,
         ticker: TickerInput,
-        prompts: dict[str, str],
+        prompts: list[PromptConfig],
         pipeline_semaphore: asyncio.Semaphore,
         llm_client: LLMClient,
         model_name: str,
+        search_client: SearchClient | None = None,
     ) -> None:
         self.ticker = ticker
         self.prompts = prompts
@@ -34,6 +37,7 @@ class Pipeline:
         self._pipeline_semaphore = pipeline_semaphore
         self._agent_semaphore = asyncio.Semaphore(settings.max_concurrent_agents)
         self._llm = llm_client
+        self._search = search_client
         self._aggregator = Aggregator()
 
     async def run(self) -> PipelineOutput:
@@ -63,35 +67,69 @@ class Pipeline:
             return output
 
     async def _run_parallel(self) -> dict[str, Any]:
-        """Run all agents concurrently, bounded by the agent semaphore."""
+        """Run all searches concurrently, then run all agents concurrently."""
+        # Phase 1: fire all searches in parallel for search-enabled prompts
+        search_contexts: dict[str, str] = {}
+        if self._search and self._search.is_available():
+            search_enabled = [p for p in self.prompts if p.search_enabled]
+            if search_enabled:
+                contexts = await asyncio.gather(
+                    *[self._fetch_search(p) for p in search_enabled]
+                )
+                search_contexts = {p.title: ctx for p, ctx in zip(search_enabled, contexts)}
 
-        async def _run_one(agent_id: str, prompt: str) -> tuple[str, dict[str, Any]]:
+        # Phase 2: run all agents concurrently with their search contexts
+        async def _run_one(prompt_config: PromptConfig) -> tuple[str, dict[str, Any]]:
             async with self._agent_semaphore:
-                agent = Agent(agent_id=agent_id, prompt=prompt, llm_client=self._llm)
+                agent = Agent(
+                    agent_id=prompt_config.id,
+                    prompt=prompt_config.content,
+                    llm_client=self._llm,
+                )
                 result = await agent.run(
                     ticker_input=self.ticker.model_dump(),
                     ticker=self.ticker.name,
                     pipeline_id=self.pipeline_id,
+                    search_context=search_contexts.get(prompt_config.title, ""),
                 )
-                return agent_id, result
+                return prompt_config.title, result
 
-        pairs = await asyncio.gather(*[_run_one(aid, p) for aid, p in self.prompts.items()])
+        pairs = await asyncio.gather(*[_run_one(p) for p in self.prompts])
         return dict(pairs)
 
     async def _run_chain(self) -> dict[str, Any]:
-        """Run agents sequentially, forwarding each result to the next agent."""
+        """Run agents sequentially; each searches and then receives the previous result."""
         results: dict[str, Any] = {}
         previous: dict[str, Any] | None = None
 
-        for agent_id, prompt in self.prompts.items():
-            agent = Agent(agent_id=agent_id, prompt=prompt, llm_client=self._llm)
+        for prompt_config in self.prompts:
+            search_context = ""
+            if self._search and self._search.is_available() and prompt_config.search_enabled:
+                search_context = await self._fetch_search(prompt_config)
+
+            agent = Agent(
+                agent_id=prompt_config.id,
+                prompt=prompt_config.content,
+                llm_client=self._llm,
+            )
             result = await agent.run(
                 ticker_input=self.ticker.model_dump(),
                 previous_output=previous,
                 ticker=self.ticker.name,
                 pipeline_id=self.pipeline_id,
+                search_context=search_context,
             )
-            results[agent_id] = result
+            results[prompt_config.title] = result
             previous = result
 
         return results
+
+    async def _fetch_search(self, prompt_config: PromptConfig) -> str:
+        """Build the query and call Tavily for a single prompt."""
+        assert self._search is not None
+        query = build_search_query(self.ticker.name, prompt_config.search_query_template)
+        return await self._search.search(
+            query,
+            ticker=self.ticker.name,
+            agent_id=prompt_config.id,
+        )

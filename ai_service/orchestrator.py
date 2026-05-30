@@ -11,6 +11,7 @@ from ai_service.config import settings
 from ai_service.db import models
 from ai_service.db.session import AsyncSessionLocal
 from ai_service.models.llm_client import LLMClient
+from ai_service.models.search_client import SearchClient
 from ai_service.pipeline import Pipeline
 from ai_service.schemas.input import TickerInput
 from ai_service.schemas.run import ModelConfig, PromptConfig
@@ -44,19 +45,19 @@ class Orchestrator:
         await self._set_status("running")
 
         try:
-            prompts = {p.title: p.content for p in self.prompts}
             ticker_inputs = [TickerInput(**item) for item in self.tickers]
-
             semaphore = asyncio.Semaphore(settings.max_concurrent_pipelines)
+            search_client = SearchClient()
 
             # One pipeline per (model, ticker) combination
             pipelines = [
                 Pipeline(
                     ticker=ticker,
-                    prompts=prompts,
+                    prompts=self.prompts,
                     pipeline_semaphore=semaphore,
                     llm_client=LLMClient(mc),
                     model_name=mc.name,
+                    search_client=search_client,
                 )
                 for mc in self.model_configs
                 for ticker in ticker_inputs

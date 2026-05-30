@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     ai_service_host: str = "ai-service"  # use "localhost" when running outside Docker
     ai_service_port: int = 4102
 
+    # Tavily web search
+    tavily_api_key: str = ""
+    search_enabled: bool = False
+    search_max_results: int = 5
+    search_depth: str = "basic"
+
     @property
     def database_url(self) -> str:
         return (

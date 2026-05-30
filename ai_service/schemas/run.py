@@ -19,3 +19,5 @@ class PromptConfig(BaseModel):
     id: str
     title: str
     content: str
+    search_enabled: bool = False
+    search_query_template: str | None = None

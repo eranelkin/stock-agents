@@ -24,6 +24,7 @@ class Agent:
         *,
         ticker: str = "",
         pipeline_id: str = "",
+        search_context: str = "",
     ) -> dict[str, Any]:
         """Execute the agent and return a parsed JSON dict.
 
@@ -32,6 +33,7 @@ class Agent:
             previous_output: Prior agent result for chain mode; None in parallel mode.
             ticker: Ticker symbol for log context.
             pipeline_id: Pipeline UUID for log context.
+            search_context: Pre-fetched Tavily search results as plain text; empty if search is off.
 
         Returns:
             Parsed dict from the LLM, or {"raw_output": ..., "parse_error": true} on failure.
@@ -40,6 +42,8 @@ class Agent:
         user_content: dict[str, Any] = dict(ticker_input)
         if previous_output is not None:
             user_content["previous_output"] = previous_output
+        if search_context:
+            user_content["search_context"] = search_context
 
         raw = ""
         try:
