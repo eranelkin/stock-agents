@@ -183,46 +183,131 @@ docker compose down -v
 
 ---
 
-## Option 2 — Local Installation
+## Option 2 — Local Development (Recommended)
 
-Run Python services directly on your machine with only PostgreSQL in Docker.
+Run all services directly on your machine. Only PostgreSQL runs in Docker.
 
-### 1. Install Python dependencies
+### What you need installed first
+
+| Tool | Version | Check |
+|------|---------|-------|
+| Python | 3.12+ | `python3 --version` |
+| Node.js | 18+ | `node --version` |
+| npm | 9+ | `npm --version` |
+| Docker | any | `docker --version` |
+
+---
+
+### Step 1 — Clone the repo
 
 ```bash
-pip install -e .
+git clone <repo-url>
+cd stock-agents
 ```
 
-### 2. Start PostgreSQL only
+---
+
+### Step 2 — Set up Python
+
+```bash
+# Create a virtual environment
+python3 -m venv .venv
+
+# Activate it
+source .venv/bin/activate        # macOS / Linux
+# .venv\Scripts\activate         # Windows
+
+# Install all Python dependencies
+pip install -e ".[dev]"
+```
+
+---
+
+### Step 3 — Set up the frontend
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+---
+
+### Step 4 — Configure environment variables
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` and fill in at minimum:
+
+```env
+# Choose your LLM provider and set the matching key
+LLM_MODEL=groq/llama-3.3-70b-versatile
+GROQ_API_KEY=gsk_your_key_here
+# LLM_MODEL=gpt-4o
+# OPENAI_API_KEY=sk-...
+# LLM_MODEL=claude-sonnet-4-6
+# ANTHROPIC_API_KEY=sk-ant-...
+
+# Must be "localhost" for local development (not Docker service names)
+POSTGRES_HOST=localhost
+AI_SERVICE_HOST=localhost
+```
+
+---
+
+### Step 5 — Start PostgreSQL
 
 ```bash
 docker compose up postgres -d
 ```
 
-### 3. Configure `.env`
+---
 
-Use `localhost` instead of Docker service names:
+### Step 6 — Start the backend
 
-```env
-POSTGRES_HOST=localhost
-AI_SERVICE_HOST=localhost     # backend calls ai-service via localhost
-```
-
-### 4. Start the backend
-
-Open a terminal and run:
+Open **terminal 1** and run:
 
 ```bash
+source .venv/bin/activate
 uvicorn backend.main:app --port 4101 --reload
 ```
 
-### 5. Start the AI service
+---
 
-Open a second terminal and run:
+### Step 7 — Start the AI service
+
+Open **terminal 2** and run:
 
 ```bash
+source .venv/bin/activate
 uvicorn ai_service.main:app --port 4102 --reload
 ```
+
+---
+
+### Step 8 — Start the frontend
+
+Open **terminal 3** and run:
+
+```bash
+cd frontend
+npm run dev
+```
+
+---
+
+### Everything is running
+
+| Service | URL |
+|---------|-----|
+| **Frontend UI** | http://localhost:5173 |
+| **Backend API** | http://localhost:4101 |
+| **API docs (Swagger)** | http://localhost:4101/docs |
+| **AI Service** | http://localhost:4102 |
+
+Open http://localhost:5173 in your browser to use the app.
 
 ---
 
