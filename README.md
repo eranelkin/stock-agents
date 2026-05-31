@@ -85,7 +85,8 @@ Data.json  [AAPL, GOOGL, MSFT, AMZN, ...]
 ## Prerequisites
 
 - Python 3.12+
-- Docker + Docker Compose (for Docker installation)
+- Node.js 18+ and npm 9+
+- Docker + Docker Compose (for PostgreSQL / full Docker install)
 - An API key for your chosen LLM provider
 
 ---
@@ -302,12 +303,12 @@ npm run dev
 
 | Service | URL |
 |---------|-----|
-| **Frontend UI** | http://localhost:5173 |
+| **Frontend UI** | http://localhost:4100 |
 | **Backend API** | http://localhost:4101 |
 | **API docs (Swagger)** | http://localhost:4101/docs |
 | **AI Service** | http://localhost:4102 |
 
-Open http://localhost:5173 in your browser to use the app.
+Open http://localhost:4100 in your browser to use the app.
 
 ---
 
