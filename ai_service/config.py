@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     search_enabled: bool = False
     search_max_results: int = 5
     search_depth: str = "basic"  # basic | advanced
+    search_mode: str = "prefetch"  # prefetch | tool_call
 
     # Service
     ai_service_port: int = 4102
