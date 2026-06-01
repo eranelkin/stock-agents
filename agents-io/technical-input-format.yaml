@@ -1,0 +1,10 @@
+stocks:
+  - symbol: "" # stock ticker symbol
+    company_name: "" # full company name for clarity
+    market_cap: "xx.xxB" #market capitalization in billions(B) or millions(M)
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_parket_volume: xx.xxM #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: xx.xx #current realtime price in pre-market
+    atr: xx.xx #average true range, a measure of volatility
+    price: xx.xx #last closing price 
+

@@ -1,0 +1,12 @@
+stocks:
+  - symbol: "" # stock symbol
+    company_name: "" # company name for clarity
+    current_price: 0.00 # current stock price
+    fundamental_catalysts_brief: "" # main fundamental catalysts news or report causing the stock move
+    fundamental_release_date: "" # fundamental info released date (YYYY-MM-DD:HH:MM)
+    reason: "" # reason for the estimated price change range for specifically today
+    price_change_prediction: "" # "+x.x% to +x.x%"  percentage predicted price change for today
+    confidence: 0.0 # your confidence with this price change range (1-10)
+    success_probability: 0.0 # success probability for price change range (1-10)
+    collapse_trigger: "" # (Invalidation event) - How to detect
+    conviction_detect: "" # How to detect prediction with high conviction (signs)

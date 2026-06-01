@@ -1,0 +1,19 @@
+sectors:
+  - name: "" #"Energy"
+    etf_symbol: "" #"XLE"
+    etf_name: "" #"Energy Select Sector SPDR Fund"
+    pre_market_chg: "" #"+xx.xx%" #pre-market percentage change
+    pre_market_volume: "" #"xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "" #"xx.xx" #current realtime price in pre-market
+    price: "" #"xx.xx" #last closing price
+    tradingview_link: "" #"https://www.tradingview.com/symbols/XLE/"
+    industry_groups:
+      - name: "" #"Energy Equipment & Services"
+        etf_symbol: "" #"XES"
+        etf_name: "" #"SPDR S&P Oil & Gas Equipment & Services ETF"
+        pre_market_chg: "" #"+xx.xx%" #pre-market percentage change
+        pre_market_volume: "" #"xx.xxM" #pre-market volume in millions(M) or thousands(K)
+        pre_market_price: "" #"xx.xx" #current realtime price in pre-market
+        price: "" #"xx.xx" #last closing price
+        tradingview_link: "" #"https://www.tradingview.com/symbols/XES/"
+      
