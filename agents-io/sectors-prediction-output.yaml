@@ -1,0 +1,20 @@
+sectors_intraday_prediction:
+  - sector_name: ""
+    sector_ticker: ""
+    current_price: "" # current price of the sector ETF
+    estimated_move: "[Format strictly enforced: X.XX% (ATR Base: Y.YY% * Z.ZZ Multiplier Function)]" 
+    rate: "[Integer 0-10; 10 = absolute upside probability, 0 = absolute short/decline probability]" 
+    confidence: "" # your confidence level in the sector prediction, considering the current market conditions and data quality.
+    conviction_detect: "[Specific intraday technical milestone, VWAP crossover node, or VPIN threshold confirming validity]" 
+    collapse_conviction: "[The exact quantitative invalidation criteria extracted directly from your pre_mortem analysis block]" 
+    daily_main_catalyst_sentiment: ""
+    reasoning:  #provide at least 3 concise reasons supporting the sector prediction, based on data analysis and market insights.
+      reason_1: "[Miner Component: Audited Price Action, Volume Microstructure, and VWAP Divergence]"
+      reason_2: "[Screener Component: Options Flow Dynamics, Net GEX/VEX orientation, and RRG quadrant acceleration]"
+      reason_3: "[Trader/Macro Component: Institutional flow validation via VPIN and structural alignment with the 2026 Macro Regime]"
+
+    volume: "" # current intraday volume compared to average, indicating liquidity and interest in the sector.
+    notes: "" # any additional context or observations relevant to the sector's intraday outlook.
+    sector_description: "[1-sentence architectural profile mapping the asset's structural role in the 2026 macroeconomic regime]"
+    top_5_leaders: "[List the 5 most heavily capitalized, liquid constituent equities driving this sector's momentum]" 
+    tradingview_link: "" # direct link to the primary sector ETF proxy (e.g., xlk, xle) on TradingView for quick access to charts and technical analysis.
