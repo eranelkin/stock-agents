@@ -21,16 +21,27 @@ docker compose up --build -d
 ### First-time setup on a new machine
 
 1. Start PostgreSQL:
+
    ```bash
    docker compose up postgres -d
    ```
 
 2. Apply all migrations:
+
    ```bash
    PYTHONPATH=. alembic upgrade head
    ```
 
+   if `command not found: alembic`
+
+   ```bash
+   source .venv/bin/activate
+   pip install -e .
+   PYTHONPATH=. alembic upgrade head
+   ```
+
 3. Start each service in its own terminal:
+
    ```bash
    # Terminal 1
    uvicorn backend.main:app --host 0.0.0.0 --port 4101
@@ -65,6 +76,7 @@ Then start your services as normal. If no new migration files appeared, skip the
 1. Edit the model in `backend/db/models.py`
 
 2. Generate the migration file:
+
    ```bash
    PYTHONPATH=. alembic revision --autogenerate -m "short description of the change"
    ```
@@ -72,6 +84,7 @@ Then start your services as normal. If no new migration files appeared, skip the
 3. Open the generated file in `backend/db/migrations/versions/` and verify it looks correct
 
 4. Apply it locally:
+
    ```bash
    PYTHONPATH=. alembic upgrade head
    ```
@@ -88,12 +101,12 @@ When your teammates pull this commit, they just run `alembic upgrade head` and t
 
 ## Useful commands
 
-| Command | What it does |
-|---|---|
-| `alembic upgrade head` | Apply all pending migrations |
-| `alembic downgrade -1` | Roll back the last migration |
-| `alembic current` | Show which migration is currently applied |
-| `alembic history` | List all migrations in order |
+| Command                | What it does                              |
+| ---------------------- | ----------------------------------------- |
+| `alembic upgrade head` | Apply all pending migrations              |
+| `alembic downgrade -1` | Roll back the last migration              |
+| `alembic current`      | Show which migration is currently applied |
+| `alembic history`      | List all migrations in order              |
 
 ---
 
