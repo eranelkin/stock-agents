@@ -39,7 +39,11 @@ function PlayIcon() {
   );
 }
 
-export default function PromptsPage() {
+interface PromptsPageProps {
+  onRunPrompt: (content: string) => void
+}
+
+export default function PromptsPage({ onRunPrompt }: PromptsPageProps) {
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [loading, setLoading] = useState(true);
   const [innerTab, setInnerTab] = useState(0);
@@ -72,7 +76,9 @@ export default function PromptsPage() {
     setDialogOpen(true);
   };
 
-  function handleRun() {}
+  function handleRun(prompt: Prompt) {
+    onRunPrompt(prompt.content)
+  }
 
   const handleEditClick = (prompt: Prompt) => {
     setEditTarget(prompt);
@@ -243,7 +249,7 @@ export default function PromptsPage() {
                   >
                     <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 0.5 }}>
                       <Tooltip title="Run">
-                        <IconButton size="small" onClick={() => handleRun()}>
+                        <IconButton size="small" onClick={() => handleRun(prompt)}>
                           <PlayIcon />
                         </IconButton>
                       </Tooltip>

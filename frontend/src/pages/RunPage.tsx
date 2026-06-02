@@ -46,7 +46,7 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
   const [error, setError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [parsedTickers, setParsedTickers] = useState<Record<string, unknown>[] | null>(null)
+  const [rawFileText, setRawFileText] = useState<string | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
   const [innerTab, setInnerTab] = useState(0)
   const [copiedId, setCopiedId] = useState<string | null>(null)
@@ -88,12 +88,13 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setFileError(null)
-    setParsedTickers(null)
+    setRawFileText(null)
     const file = e.target.files?.[0]
     if (!file) { setSelectedFile(null); return }
     setSelectedFile(file)
     try {
       const text = await file.text()
+      setRawFileText(text)
       const lower = file.name.toLowerCase()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let parsed: any
@@ -110,7 +111,6 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
         setFileError('Ticker list is empty.')
         return
       }
-      setParsedTickers(parsed as Record<string, unknown>[])
     } catch {
       setFileError('Could not parse file. Make sure it is valid JSON or YAML.')
     }
@@ -118,12 +118,29 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
     e.target.value = ''
   }
 
+  const formatCurrentDate = () => {
+    const now = new Date()
+    const date = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' })
+    const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/New_York' })
+    const tz = now.toLocaleTimeString('en-US', { timeZoneName: 'short', timeZone: 'America/New_York' }).split(' ').pop() ?? 'ET'
+    return `${date}, ${time} ${tz}`
+  }
+
   const handleRun = async () => {
-    if (!parsedTickers || !selectedFile) return
+    if (!rawFileText || !selectedFile) return
     setError(null)
     setStarting(true)
     try {
-      const created = await createRun(selectedModelIds, selectedFile.name, parsedTickers)
+      const processedText = rawFileText.replace(/CURRENT_DATE/g, formatCurrentDate())
+      const lower = selectedFile.name.toLowerCase()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let tickers: Record<string, unknown>[]
+      if (lower.endsWith('.yaml') || lower.endsWith('.yml')) {
+        tickers = jsyaml.load(processedText) as Record<string, unknown>[]
+      } else {
+        tickers = JSON.parse(processedText)
+      }
+      const created = await createRun(selectedModelIds, selectedFile.name, tickers)
       setRuns(prev => [created, ...prev])
       setInnerTab(0) // switch to Today tab so user sees the new run
     } catch (err) {
@@ -144,7 +161,7 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
   const displayedRuns = innerTab === 0 ? todayRuns : historyRuns
 
   const runDisabled =
-    !selectedFile || !parsedTickers || selectedModelIds.length === 0 || starting
+    !selectedFile || !rawFileText || selectedModelIds.length === 0 || starting
 
   return (
     <Box sx={{ px: 4, py: 3, display: 'flex', flexDirection: 'column', gap: 2, flex: 1, overflow: 'hidden' }}>

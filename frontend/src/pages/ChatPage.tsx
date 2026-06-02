@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -181,9 +181,11 @@ function EmptyState() {
 
 interface ChatPageProps {
   selectedModelIds: string[];
+  pendingInput?: string | null;
+  onClearPendingInput?: () => void;
 }
 
-export default function ChatPage({ selectedModelIds }: ChatPageProps) {
+export default function ChatPage({ selectedModelIds, pendingInput, onClearPendingInput }: ChatPageProps) {
   const selectedModelId = selectedModelIds[0] ?? null;
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -193,6 +195,13 @@ export default function ChatPage({ selectedModelIds }: ChatPageProps) {
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (pendingInput) {
+      setInput(pendingInput);
+      onClearPendingInput?.();
+    }
+  }, [pendingInput, onClearPendingInput]);
 
   const scrollToBottom = () =>
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -361,12 +370,12 @@ export default function ChatPage({ selectedModelIds }: ChatPageProps) {
         display: "flex",
         flexDirection: "column",
         flex: 1,
+        minHeight: 0,
         overflow: "hidden",
-        height: "100%",
       }}
     >
       {/* Messages area */}
-      <Box sx={{ flex: 1, overflowY: "auto", py: 2, display: "flex", flexDirection: "column" }}>
+      <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", py: 2, display: "flex", flexDirection: "column" }}>
         {messages.length === 0 ? (
           <EmptyState />
         ) : (
@@ -469,6 +478,9 @@ export default function ChatPage({ selectedModelIds }: ChatPageProps) {
               "& .MuiOutlinedInput-root": {
                 borderRadius: 2,
                 fontSize: "0.9rem",
+              },
+              "& textarea": {
+                overflow: "auto !important",
               },
             }}
           />

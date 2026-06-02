@@ -7,23 +7,22 @@ sectors:
     pre_market_price: "xx.xx" #current realtime price in pre-market
     price: "xx.xx" #last closing price
     tradingview_link: "https://www.tradingview.com/symbols/XLE/"
-    industry_groups:
-      - name: "Energy Equipment & Services"
-        etf_symbol: "XES"
-        etf_name: "SPDR S&P Oil & Gas Equipment & Services ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/XES/"
-      - name: "Oil, Gas & Consumable Fuels"
-        etf_symbol: "XOP"
-        etf_name: "SPDR S&P Oil & Gas Exploration & Production ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/XOP/"
+  - name: "Energy Equipment & Services"
+    etf_symbol: "XES"
+    etf_name: "SPDR S&P Oil & Gas Equipment & Services ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/XES/"
+  - name: "Oil, Gas & Consumable Fuels"
+    etf_symbol: "XOP"
+    etf_name: "SPDR S&P Oil & Gas Exploration & Production ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/XOP/"
   - name: "Materials"
     etf_symbol: "XLB"
     etf_name: "Materials Select Sector SPDR Fund"
@@ -32,47 +31,46 @@ sectors:
     pre_market_price: "xx.xx" #current realtime price in pre-market
     price: "xx.xx" #last closing price
     tradingview_link: "https://www.tradingview.com/symbols/XLB/"
-    industry_groups:
-      - name: "Chemicals"
-        etf_symbol: "IYM"
-        etf_name: "iShares U.S. Basic Materials ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/IYM/"
-      - name: "Construction Materials"
-        etf_symbol: "ITB"
-        etf_name: "iShares U.S. Home Construction ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/ITB/"
-      - name: "Containers & Packaging"
-        etf_symbol: "XLB"
-        etf_name: "Materials Select Sector SPDR Fund (Proxy)"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/XLB/"
-      - name: "Metals & Mining"
-        etf_symbol: "XME"
-        etf_name: "SPDR S&P Metals & Mining ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/XME/"
-      - name: "Paper & Forest Products"
-        etf_symbol: "WOOD"
-        etf_name: "iShares Global Timber & Forestry ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/WOOD/"
+  - name: "Chemicals"
+    etf_symbol: "IYM"
+    etf_name: "iShares U.S. Basic Materials ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/IYM/"
+  - name: "Construction Materials"
+    etf_symbol: "ITB"
+    etf_name: "iShares U.S. Home Construction ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/ITB/"
+  - name: "Containers & Packaging"
+    etf_symbol: "XLB"
+    etf_name: "Materials Select Sector SPDR Fund (Proxy)"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/XLB/"
+  - name: "Metals & Mining"
+    etf_symbol: "XME"
+    etf_name: "SPDR S&P Metals & Mining ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/XME/"
+  - name: "Paper & Forest Products"
+    etf_symbol: "WOOD"
+    etf_name: "iShares Global Timber & Forestry ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/WOOD/"
   - name: "Industrials"
     etf_symbol: "XLI"
     etf_name: "Industrial Select Sector SPDR Fund"
@@ -81,31 +79,30 @@ sectors:
     pre_market_price: "xx.xx" #current realtime price in pre-market
     price: "xx.xx" #last closing price
     tradingview_link: "https://www.tradingview.com/symbols/XLI/"
-    industry_groups:
-      - name: "Capital Goods"
-        etf_symbol: "VIS"
-        etf_name: "Vanguard Industrials ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/VIS/"
-      - name: "Commercial & Professional Services"
-        etf_symbol: "XLI"
-        etf_name: "Industrial Select Sector SPDR Fund (Proxy)"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/XLI/"
-      - name: "Transportation"
-        etf_symbol: "IYT"
-        etf_name: "iShares U.S. Transportation ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/IYT/"
+  - name: "Capital Goods"
+    etf_symbol: "VIS"
+    etf_name: "Vanguard Industrials ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/VIS/"
+  - name: "Commercial & Professional Services"
+    etf_symbol: "XLI"
+    etf_name: "Industrial Select Sector SPDR Fund (Proxy)"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/XLI/"
+  - name: "Transportation"
+    etf_symbol: "IYT"
+    etf_name: "iShares U.S. Transportation ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/IYT/"
   - name: "Consumer Discretionary"
     etf_symbol: "XLY"
     etf_name: "Consumer Discretionary Select Sector SPDR Fund"
@@ -114,47 +111,46 @@ sectors:
     pre_market_price: "xx.xx" #current realtime price in pre-market
     price: "xx.xx" #last closing price
     tradingview_link: "https://www.tradingview.com/symbols/XLY/"
-    industry_groups:
-      - name: "Automobiles & Components"
-        etf_symbol: "CARZ"
-        etf_name: "First Trust NASDAQ Global Auto Index Fund"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/CARZ/"
-      - name: "Consumer Durables & Apparel"
-        etf_symbol: "XLY"
-        etf_name: "Consumer Discretionary Select Sector SPDR Fund (Proxy)"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/XLY/"
-      - name: "Consumer Services"
-        etf_symbol: "PEJ"
-        etf_name: "Invesco Dynamic Leisure and Entertainment ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/PEJ/"
-      - name: "Media & Entertainment"
-        etf_symbol: "PBS"
-        etf_name: "Invesco Dynamic Media ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/PBS/"
-      - name: "Retailing"
-        etf_symbol: "XRT"
-        etf_name: "SPDR S&P Retail ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/XRT/"
+  - name: "Automobiles & Components"
+    etf_symbol: "CARZ"
+    etf_name: "First Trust NASDAQ Global Auto Index Fund"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/CARZ/"
+  - name: "Consumer Durables & Apparel"
+    etf_symbol: "XLY"
+    etf_name: "Consumer Discretionary Select Sector SPDR Fund (Proxy)"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/XLY/"
+  - name: "Consumer Services"
+    etf_symbol: "PEJ"
+    etf_name: "Invesco Dynamic Leisure and Entertainment ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/PEJ/"
+  - name: "Media & Entertainment"
+    etf_symbol: "PBS"
+    etf_name: "Invesco Dynamic Media ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/PBS/"
+  - name: "Retailing"
+    etf_symbol: "XRT"
+    etf_name: "SPDR S&P Retail ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/XRT/"
   - name: "Consumer Staples"
     etf_symbol: "XLP"
     etf_name: "Consumer Staples Select Sector SPDR Fund"
@@ -163,31 +159,30 @@ sectors:
     pre_market_price: "xx.xx" #current realtime price in pre-market
     price: "xx.xx" #last closing price
     tradingview_link: "https://www.tradingview.com/symbols/XLP/"
-    industry_groups:
-      - name: "Consumer Staples Distribution & Retail"
-        etf_symbol: "XLP"
-        etf_name: "Consumer Staples Select Sector SPDR Fund (Proxy)"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/XLP/"
-      - name: "Food, Beverage & Tobacco"
-        etf_symbol: "PBJ"
-        etf_name: "Invesco Dynamic Food & Beverage ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/PBJ/"
-      - name: "Household & Personal Products"
-        etf_symbol: "XLP"
-        etf_name: "Consumer Staples Select Sector SPDR Fund (Proxy)"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/XLP/"
+  - name: "Consumer Staples Distribution & Retail"
+    etf_symbol: "XLP"
+    etf_name: "Consumer Staples Select Sector SPDR Fund (Proxy)"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/XLP/"
+  - name: "Food, Beverage & Tobacco"
+    etf_symbol: "PBJ"
+    etf_name: "Invesco Dynamic Food & Beverage ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/PBJ/"
+  - name: "Household & Personal Products"
+    etf_symbol: "XLP"
+    etf_name: "Consumer Staples Select Sector SPDR Fund (Proxy)"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/XLP/"
   - name: "Health Care"
     etf_symbol: "XLV"
     etf_name: "Health Care Select Sector SPDR Fund"
@@ -196,47 +191,46 @@ sectors:
     pre_market_price: "xx.xx" #current realtime price in pre-market
     price: "xx.xx" #last closing price
     tradingview_link: "https://www.tradingview.com/symbols/XLV/"
-    industry_groups:
-      - name: "Health Care Equipment & Supplies"
-        etf_symbol: "IHI"
-        etf_name: "iShares U.S. Medical Devices ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/IHI/"
-      - name: "Health Care Providers & Services"
-        etf_symbol: "IHF"
-        etf_name: "iShares U.S. Healthcare Providers ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/IHF/"
-      - name: "Biotechnology"
-        etf_symbol: "IBB"
-        etf_name: "iShares Biotechnology ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/IBB/"
-      - name: "Pharmaceuticals"
-        etf_symbol: "PPH"
-        etf_name: "VanEck Pharmaceutical ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/PPH/"
-      - name: "Life Sciences Tools & Services"
-        etf_symbol: "XLV"
-        etf_name: "Health Care Select Sector SPDR Fund (Proxy)"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/XLV/"
+  - name: "Health Care Equipment & Supplies"
+    etf_symbol: "IHI"
+    etf_name: "iShares U.S. Medical Devices ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/IHI/"
+  - name: "Health Care Providers & Services"
+    etf_symbol: "IHF"
+    etf_name: "iShares U.S. Healthcare Providers ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/IHF/"
+  - name: "Biotechnology"
+    etf_symbol: "IBB"
+    etf_name: "iShares Biotechnology ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/IBB/"
+  - name: "Pharmaceuticals"
+    etf_symbol: "PPH"
+    etf_name: "VanEck Pharmaceutical ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/PPH/"
+  - name: "Life Sciences Tools & Services"
+    etf_symbol: "XLV"
+    etf_name: "Health Care Select Sector SPDR Fund (Proxy)"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/XLV/"
   - name: "Financials"
     etf_symbol: "XLF"
     etf_name: "Financial Select Sector SPDR Fund"
@@ -245,55 +239,54 @@ sectors:
     pre_market_price: "xx.xx" #current realtime price in pre-market
     price: "xx.xx" #last closing price
     tradingview_link: "https://www.tradingview.com/symbols/XLF/"
-    industry_groups:
-      - name: "Banks"
-        etf_symbol: "KBE"
-        etf_name: "SPDR S&P Bank ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/KBE/"
-      - name: "Capital Markets"
-        etf_symbol: "KCE"
-        etf_name: "SPDR S&P Capital Markets ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/KCE/"
-      - name: "Commercial Services & Supplies"
-        etf_symbol: "XLF"
-        etf_name: "Financial Select Sector SPDR Fund (Proxy)"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/XLF/"
-      - name: "Financial Services"
-        etf_symbol: "IYG"
-        etf_name: "iShares U.S. Financial Services ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/IYG/"
-      - name: "Insurance"
-        etf_symbol: "KIE"
-        etf_name: "SPDR S&P Insurance ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/KIE/"
-      - name: "Mortgage Real Estate Investment Trusts"
-        etf_symbol: "REM"
-        etf_name: "iShares Mortgage Real Estate ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/REM/"
+  - name: "Banks"
+    etf_symbol: "KBE"
+    etf_name: "SPDR S&P Bank ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/KBE/"
+  - name: "Capital Markets"
+    etf_symbol: "KCE"
+    etf_name: "SPDR S&P Capital Markets ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/KCE/"
+  - name: "Commercial Services & Supplies"
+    etf_symbol: "XLF"
+    etf_name: "Financial Select Sector SPDR Fund (Proxy)"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/XLF/"
+  - name: "Financial Services"
+    etf_symbol: "IYG"
+    etf_name: "iShares U.S. Financial Services ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/IYG/"
+  - name: "Insurance"
+    etf_symbol: "KIE"
+    etf_name: "SPDR S&P Insurance ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/KIE/"
+  - name: "Mortgage Real Estate Investment Trusts"
+    etf_symbol: "REM"
+    etf_name: "iShares Mortgage Real Estate ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/REM/"
   - name: "Communication Services"
     etf_symbol: "XLC"
     etf_name: "Communication Services Select Sector SPDR Fund"
@@ -302,31 +295,30 @@ sectors:
     pre_market_price: "xx.xx" #current realtime price in pre-market
     price: "xx.xx" #last closing price
     tradingview_link: "https://www.tradingview.com/symbols/XLC/"
-    industry_groups:
-      - name: "Communication Services"
-        etf_symbol: "XLC"
-        etf_name: "Communication Services Select Sector SPDR Fund (Proxy)"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/XLC/"
-      - name: "Media & Entertainment"
-        etf_symbol: "PBS"
-        etf_name: "Invesco Dynamic Media ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/PBS/"
-      - name: "Telecommunications Services"
-        etf_symbol: "IYZ"
-        etf_name: "iShares U.S. Telecommunications ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/IYZ/"
+  - name: "Communication Services"
+    etf_symbol: "XLC"
+    etf_name: "Communication Services Select Sector SPDR Fund (Proxy)"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/XLC/"
+  - name: "Media & Entertainment"
+    etf_symbol: "PBS"
+    etf_name: "Invesco Dynamic Media ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/PBS/"
+  - name: "Telecommunications Services"
+    etf_symbol: "IYZ"
+    etf_name: "iShares U.S. Telecommunications ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/IYZ/"
   - name: "Information Technology"
     etf_symbol: "XLK"
     etf_name: "Technology Select Sector SPDR Fund"
@@ -335,31 +327,31 @@ sectors:
     pre_market_price: "xx.xx" #current realtime price in pre-market
     price: "xx.xx" #last closing price
     tradingview_link: "https://www.tradingview.com/symbols/XLK/"
-    industry_groups:
-      - name: "Software & Services"
-        etf_symbol: "IGV"
-        etf_name: "iShares Expanded Tech-Software Sector ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/IGV/"
-      - name: "Technology Hardware & Equipment"
-        etf_symbol: "IYW"
-        etf_name: "iShares U.S. Technology ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/IYW/"
-      - name: "Semiconductors & Semiconductor Equipment"
-        etf_symbol: "SMH"
-        etf_name: "VanEck Semiconductor ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/SMH/"
+
+  - name: "Software & Services"
+    etf_symbol: "IGV"
+    etf_name: "iShares Expanded Tech-Software Sector ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/IGV/"
+  - name: "Technology Hardware & Equipment"
+    etf_symbol: "IYW"
+    etf_name: "iShares U.S. Technology ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/IYW/"
+  - name: "Semiconductors & Semiconductor Equipment"
+    etf_symbol: "SMH"
+    etf_name: "VanEck Semiconductor ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/SMH/"
   - name: "Utilities"
     etf_symbol: "XLU"
     etf_name: "Utilities Select Sector SPDR Fund"
@@ -368,47 +360,46 @@ sectors:
     pre_market_price: "xx.xx" #current realtime price in pre-market
     price: "xx.xx" #last closing price
     tradingview_link: "https://www.tradingview.com/symbols/XLU/"
-    industry_groups:
-      - name: "Electric Utilities"
-        etf_symbol: "IDU"
-        etf_name: "iShares U.S. Utilities ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/IDU/"
-      - name: "Gas Utilities"
-        etf_symbol: "XLU"
-        etf_name: "Utilities Select Sector SPDR Fund (Proxy)"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/XLU/"
-      - name: "Multi-Utilities"
-        etf_symbol: "XLU"
-        etf_name: "Utilities Select Sector SPDR Fund (Proxy)"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/XLU/"
-      - name: "Water Utilities"
-        etf_symbol: "PHO"
-        etf_name: "Invesco Water Resources ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/PHO/"
-      - name: "Independent Power Producers & Energy Traders"
-        etf_symbol: "XLU"
-        etf_name: "Utilities Select Sector SPDR Fund (Proxy)"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/XLU/"
+  - name: "Electric Utilities"
+    etf_symbol: "IDU"
+    etf_name: "iShares U.S. Utilities ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/IDU/"
+  - name: "Gas Utilities"
+    etf_symbol: "XLU"
+    etf_name: "Utilities Select Sector SPDR Fund (Proxy)"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/XLU/"
+  - name: "Multi-Utilities"
+    etf_symbol: "XLU"
+    etf_name: "Utilities Select Sector SPDR Fund (Proxy)"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/XLU/"
+  - name: "Water Utilities"
+    etf_symbol: "PHO"
+    etf_name: "Invesco Water Resources ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/PHO/"
+  - name: "Independent Power Producers & Energy Traders"
+    etf_symbol: "XLU"
+    etf_name: "Utilities Select Sector SPDR Fund (Proxy)"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/XLU/"
   - name: "Real Estate"
     etf_symbol: "XLRE"
     etf_name: "Real Estate Select Sector SPDR Fund"
@@ -417,20 +408,19 @@ sectors:
     pre_market_price: "xx.xx" #current realtime price in pre-market
     price: "xx.xx" #last closing price
     tradingview_link: "https://www.tradingview.com/symbols/XLRE/"
-    industry_groups:
-      - name: "Equity Real Estate Investment Trusts (REITs)"
-        etf_symbol: "VNQ"
-        etf_name: "Vanguard Real Estate ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/VNQ/"
-      - name: "Real Estate Management & Development"
-        etf_symbol: "IYR"
-        etf_name: "iShares U.S. Real Estate ETF"
-        pre_market_chg: "+xx.xx%" #pre-market percentage change
-        pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
-        pre_market_price: "xx.xx" #current realtime price in pre-market
-        price: "xx.xx" #last closing price
-        tradingview_link: "https://www.tradingview.com/symbols/IYR/"
+  - name: "Equity Real Estate Investment Trusts (REITs)"
+    etf_symbol: "VNQ"
+    etf_name: "Vanguard Real Estate ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/VNQ/"
+  - name: "Real Estate Management & Development"
+    etf_symbol: "IYR"
+    etf_name: "iShares U.S. Real Estate ETF"
+    pre_market_chg: "+xx.xx%" #pre-market percentage change
+    pre_market_volume: "xx.xxM" #pre-market volume in millions(M) or thousands(K)
+    pre_market_price: "xx.xx" #current realtime price in pre-market
+    price: "xx.xx" #last closing price
+    tradingview_link: "https://www.tradingview.com/symbols/IYR/"

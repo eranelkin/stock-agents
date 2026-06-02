@@ -16,8 +16,14 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabId>('run')
   const [selectedModelIds, setSelectedModelIds] = useLocalStorage<string[]>('selectedModelIds', [])
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0)
+  const [pendingChatInput, setPendingChatInput] = useState<string | null>(null)
 
   const refreshModels = () => setModelsRefreshKey((k) => k + 1)
+
+  const handleRunPrompt = (content: string) => {
+    setPendingChatInput(content)
+    setActiveTab('chat')
+  }
 
   return (
     <ThemeProvider theme={theme}>
@@ -30,10 +36,10 @@ function App() {
           onSelectedModelsChange={setSelectedModelIds}
           refreshKey={modelsRefreshKey}
         />
-        <Box component="main" sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <Box component="main" sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           {activeTab === 'run' && <RunPage selectedModelIds={selectedModelIds} />}
-          {activeTab === 'prompts' && <PromptsPage />}
-          {activeTab === 'chat' && <ChatPage selectedModelIds={selectedModelIds} />}
+          {activeTab === 'prompts' && <PromptsPage onRunPrompt={handleRunPrompt} />}
+          {activeTab === 'chat' && <ChatPage selectedModelIds={selectedModelIds} pendingInput={pendingChatInput} onClearPendingInput={() => setPendingChatInput(null)} />}
           {activeTab === 'models' && <ModelsPage onModelsChange={refreshModels} />}
         </Box>
       </Box>
