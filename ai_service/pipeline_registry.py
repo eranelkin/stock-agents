@@ -1,0 +1,63 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Literal
+
+from ai_service.schemas.input import TickerInput
+from ai_service.schemas.sector_input import SectorInput
+
+
+@dataclass
+class PipelineTypeConfig:
+    """Configuration for one pipeline type in the multi-pipeline registry.
+
+    Adding a new pipeline type = one new PipelineTypeConfig in PIPELINE_REGISTRY.
+    No other code changes required.
+    """
+
+    name: str
+    entity_schema: type
+    prompt_category: str
+    output_mode: Literal["per_entity", "single_file"]
+    output_prefix: str
+    # data_source_key: attribute name on settings for the JSON file path.
+    # Ignored when use_request_entities=True.
+    data_source_key: str = ""
+    # single_file_name: output filename (without extension) for single_file mode.
+    single_file_name: str = ""
+    dependencies: list[str] = field(default_factory=list)
+    # required: if False, pipeline is skipped silently when no prompts are configured.
+    required: bool = True
+    # use_request_entities: if True, entities come from the RunRequest tickers list
+    # instead of a JSON file. Used for the stocks pipeline.
+    use_request_entities: bool = False
+    # persist_to_db: Phase 1 — only stocks persist. Phase 2 will add SectorResult table.
+    persist_to_db: bool = False
+
+
+PIPELINE_REGISTRY: list[PipelineTypeConfig] = [
+    PipelineTypeConfig(
+        name="stocks",
+        entity_schema=TickerInput,
+        prompt_category="agents",
+        output_mode="per_entity",
+        output_prefix="output_",
+        dependencies=[],
+        required=True,
+        use_request_entities=True,
+        persist_to_db=True,
+    ),
+    PipelineTypeConfig(
+        name="sectors",
+        data_source_key="sectors_json",
+        entity_schema=SectorInput,
+        prompt_category="sectors",
+        output_mode="single_file",
+        output_prefix="",
+        single_file_name="sectors",
+        dependencies=[],
+        required=False,
+        use_request_entities=False,
+        persist_to_db=False,  # TODO Phase 2: add SectorResult table
+    ),
+]

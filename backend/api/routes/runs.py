@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import shutil
 import uuid
+from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -48,6 +50,11 @@ async def create_run(
             detail="No Agent prompts configured. Add prompts in the Agents tab first.",
         )
 
+    sector_prompt_result = await session.execute(
+        select(Prompt).where(Prompt.category == "sectors")
+    )
+    sector_prompts = sector_prompt_result.scalars().all()
+
     model_configs = [
         {
             "id": str(m.id),
@@ -82,6 +89,16 @@ async def create_run(
                         }
                         for p in agent_prompts
                     ],
+                    "sector_prompts": [
+                        {
+                            "id": str(p.id),
+                            "title": p.title,
+                            "content": p.content,
+                            "search_enabled": p.search_enabled,
+                            "search_query_template": p.search_query_template,
+                        }
+                        for p in sector_prompts
+                    ],
                 },
                 timeout=10.0,
             )
@@ -114,11 +131,20 @@ async def get_run(run_id: uuid.UUID, session: AsyncSession = Depends(get_session
 async def delete_run(
     run_id: uuid.UUID, session: AsyncSession = Depends(get_session)
 ) -> Response:
-    """Delete a run and all its ticker results."""
+    """Delete a run, its ticker results, and its output directory if it exists."""
     run = await session.get(Run, run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
+
+    output_dir = run.output_dir
+
     await session.execute(sql_delete(TickerResult).where(TickerResult.run_id == run_id))
     await session.delete(run)
     await session.commit()
+
+    if output_dir:
+        output_path = Path(output_dir)
+        if output_path.exists() and output_path.is_dir():
+            shutil.rmtree(output_path)
+
     return Response(status_code=204)

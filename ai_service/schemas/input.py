@@ -7,3 +7,4 @@ class TickerInput(BaseModel):
     """A single ticker entry from Data.json."""
 
     name: str
+    sector: str | None = None

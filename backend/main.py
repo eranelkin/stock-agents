@@ -12,14 +12,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.routes import chat, models, prompts, results, runs
 from backend.config import settings
-from backend.db.models import Base
-from backend.db.session import engine
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
     yield
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -9,7 +10,7 @@ from tenacity import (
     retry,
     retry_if_exception_type,
     stop_after_attempt,
-    wait_exponential,
+    wait_random_exponential,
 )
 
 from ai_service.config import settings
@@ -142,8 +143,8 @@ class LLMClient:
             raise LLMError(str(exc)) from exc
 
     @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=30),
+        stop=stop_after_attempt(settings.llm_max_retries),
+        wait=wait_random_exponential(min=5, max=60),
         retry=retry_if_exception_type((litellm.RateLimitError, litellm.Timeout)),
     )
     async def _call_llm(self, messages: list[dict[str, Any]], **kwargs: Any) -> Any:
@@ -156,6 +157,9 @@ class LLMClient:
         Returns:
             litellm ModelResponse object.
         """
+        if settings.llm_request_delay_seconds > 0:
+            await asyncio.sleep(settings.llm_request_delay_seconds)
+
         params: dict[str, Any] = {
             "model": self._model,
             "messages": messages,

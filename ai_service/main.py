@@ -10,8 +10,6 @@ load_dotenv()  # must run before litellm is imported so API keys are in os.envir
 from fastapi import BackgroundTasks, FastAPI
 from pydantic import BaseModel
 
-from ai_service.db.models import Base
-from ai_service.db.session import engine
 from ai_service.orchestrator import Orchestrator
 from ai_service.schemas.run import ModelConfig, PromptConfig
 from ai_service.utils.logger import get_logger
@@ -21,8 +19,6 @@ logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
     yield
 
 
@@ -34,6 +30,7 @@ class RunRequest(BaseModel):
     models: list[ModelConfig]
     tickers: list[dict[str, Any]]
     prompts: list[PromptConfig]
+    sector_prompts: list[PromptConfig] = []
 
 
 @app.post("/run", status_code=202)
@@ -42,7 +39,12 @@ async def trigger_run(
 ) -> dict[str, str]:
     """Accept a run request and process it asynchronously in the background."""
     background_tasks.add_task(
-        _run_orchestrator, request.run_id, request.models, request.tickers, request.prompts
+        _run_orchestrator,
+        request.run_id,
+        request.models,
+        request.tickers,
+        request.prompts,
+        request.sector_prompts,
     )
     logger.info(
         "Run accepted",
@@ -61,7 +63,12 @@ async def _run_orchestrator(
     model_configs: list[ModelConfig],
     tickers: list[dict[str, Any]],
     prompts: list[PromptConfig],
+    sector_prompts: list[PromptConfig],
 ) -> None:
     await Orchestrator(
-        run_id=run_id, model_configs=model_configs, tickers=tickers, prompts=prompts
+        run_id=run_id,
+        model_configs=model_configs,
+        tickers=tickers,
+        prompts=prompts,
+        sector_prompts=sector_prompts,
     ).run()

@@ -9,18 +9,23 @@ class Settings(BaseSettings):
     llm_temperature: float = 0.2
     llm_max_tokens: int = 4096
     llm_timeout_seconds: int = 60
-    llm_max_retries: int = 3
+    llm_max_retries: int = 5
+    llm_request_delay_seconds: float = 0.0
 
     # Agent behavior
     agent_mode: str = "parallel"  # parallel | chain
 
     # Concurrency
-    max_concurrent_pipelines: int = 10
-    max_concurrent_agents: int = 8
+    max_concurrent_pipelines: int = 5
+    max_concurrent_agents: int = 2
 
     # Output
     output_format: str = "yaml"
     output_dir: str = "./outputs"
+
+    # Data sources
+    data_json: str = "./Data.json"
+    sectors_json: str = "./Sectors.json"
 
     # Database
     postgres_host: str = "localhost"
