@@ -42,6 +42,8 @@ class SearchClient:
         ticker: str = "",
         agent_id: str = "",
         prompt_title: str = "",
+        pipeline_id: str = "",
+        pipeline_type: str = "",
     ) -> str:
         """Run a Tavily search and return a formatted plain-text context block."""
         if not self._client:
@@ -54,6 +56,9 @@ class SearchClient:
                 agent_id=agent_id,
                 prompt_title=prompt_title,
                 query=query,
+                pipeline_id=pipeline_id,
+                pipeline_type=pipeline_type,
+                entity=ticker,
             )
 
         start = time.monotonic()
@@ -90,6 +95,9 @@ class SearchClient:
                     prompt_title=prompt_title,
                     duration_ms=duration_ms,
                     sources=sources,
+                    pipeline_id=pipeline_id,
+                    pipeline_type=pipeline_type,
+                    entity=ticker,
                 )
 
             return _format_context(response)

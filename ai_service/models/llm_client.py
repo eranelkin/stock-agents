@@ -45,6 +45,9 @@ class LLMClient:
         ctx = log_context or {}
         agent_id = ctx.get("agent_id", "")
         prompt_title = ctx.get("prompt_title", "")
+        pipeline_id = ctx.get("pipeline_id", "")
+        pipeline_type = ctx.get("pipeline_type", "")
+        entity = ctx.get("entity", "")
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -58,6 +61,9 @@ class LLMClient:
                 model=self._model,
                 system_prompt=system_prompt,
                 user_message=user_message,
+                pipeline_id=pipeline_id,
+                pipeline_type=pipeline_type,
+                entity=entity,
             )
 
         start = time.monotonic()
@@ -78,6 +84,9 @@ class LLMClient:
                         "total_tokens": getattr(usage, "total_tokens", 0),
                     },
                     response_text=text,
+                    pipeline_id=pipeline_id,
+                    pipeline_type=pipeline_type,
+                    entity=entity,
                 )
             return text
         except Exception as exc:
@@ -88,6 +97,9 @@ class LLMClient:
                     prompt_title=prompt_title,
                     duration_ms=duration_ms,
                     error=str(exc),
+                    pipeline_id=pipeline_id,
+                    pipeline_type=pipeline_type,
+                    entity=entity,
                 )
             logger.error("LLM completion failed after retries", exc_info=True)
             raise LLMError(str(exc)) from exc
@@ -105,6 +117,9 @@ class LLMClient:
         ctx = log_context or {}
         agent_id = ctx.get("agent_id", "")
         prompt_title = ctx.get("prompt_title", "")
+        pipeline_id = ctx.get("pipeline_id", "")
+        pipeline_type = ctx.get("pipeline_type", "")
+        entity = ctx.get("entity", "")
 
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_prompt},
@@ -120,6 +135,9 @@ class LLMClient:
                         model=self._model,
                         system_prompt=system_prompt,
                         user_message=json.dumps(messages[-1].get("content", "")),
+                        pipeline_id=pipeline_id,
+                        pipeline_type=pipeline_type,
+                        entity=entity,
                     )
 
                 start = time.monotonic()
@@ -134,6 +152,9 @@ class LLMClient:
                             prompt_title=prompt_title,
                             duration_ms=duration_ms,
                             error=str(exc),
+                            pipeline_id=pipeline_id,
+                            pipeline_type=pipeline_type,
+                            entity=entity,
                         )
                     raise
 
@@ -152,6 +173,9 @@ class LLMClient:
                                 "total_tokens": getattr(usage, "total_tokens", 0),
                             },
                             response_text=msg.content or "",
+                            pipeline_id=pipeline_id,
+                            pipeline_type=pipeline_type,
+                            entity=entity,
                         )
                     return msg.content or ""
 

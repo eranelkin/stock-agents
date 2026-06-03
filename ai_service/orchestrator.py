@@ -58,7 +58,7 @@ class Orchestrator:
         run_dir = self._make_run_dir()
         await self._set_output_dir(run_dir)
 
-        log_path = str(Path(settings.output_dir) / "logs" / f"{self._dt_str}.log")
+        log_path = str(Path(settings.output_dir) / "logs" / f"{self._dt_str}.html")
         run_logger = RunLogger(log_path)
         started_at = datetime.now(timezone.utc).strftime("%Y-%m-%d  %H:%M:%S UTC")
         await run_logger.open(run_id=self.run_id, started_at=started_at)

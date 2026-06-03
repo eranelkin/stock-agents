@@ -18,7 +18,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("runs", sa.Column("output_dir", sa.Text(), nullable=True))
+    op.execute("ALTER TABLE runs ADD COLUMN IF NOT EXISTS output_dir TEXT")
 
 
 def downgrade() -> None:

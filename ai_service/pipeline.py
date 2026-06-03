@@ -126,7 +126,11 @@ class Pipeline:
                     pipeline_id=self.pipeline_id,
                     search_context=search_contexts.get(prompt_config.title, ""),
                     prompt_title=prompt_config.title,
-                    log_context={"pipeline_type": self._pipeline_type},
+                    log_context={
+                        "pipeline_type": self._pipeline_type,
+                        "pipeline_id": self.pipeline_id,
+                        "entity": self.entity_name,
+                    },
                 )
                 return prompt_config.title, result
 
@@ -155,7 +159,11 @@ class Pipeline:
                 pipeline_id=self.pipeline_id,
                 search_context=search_context,
                 prompt_title=prompt_config.title,
-                log_context={"pipeline_type": self._pipeline_type},
+                log_context={
+                    "pipeline_type": self._pipeline_type,
+                    "pipeline_id": self.pipeline_id,
+                    "entity": self.entity_name,
+                },
             )
             results[prompt_config.title] = result
             previous = result
@@ -171,4 +179,6 @@ class Pipeline:
             ticker=self.entity_name,
             agent_id=prompt_config.id,
             prompt_title=prompt_config.title,
+            pipeline_id=self.pipeline_id,
+            pipeline_type=self._pipeline_type,
         )
