@@ -4,8 +4,8 @@ const theme = createTheme({
   palette: {
     mode: 'dark',
     background: {
-      default: '#0d0d0d',
-      paper: '#111111',
+      default: '#101010',
+      paper: '#101010',
     },
     primary: {
       main: '#1976d2',
@@ -22,7 +22,7 @@ const theme = createTheme({
     MuiAppBar: {
       styleOverrides: {
         root: {
-          backgroundColor: '#111111',
+          backgroundColor: '#101010',
           boxShadow: 'none',
           borderBottom: '1px solid #1e1e1e',
         },
