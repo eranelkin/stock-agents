@@ -3,6 +3,7 @@ export interface Prompt {
   title: string
   content: string
   category: string
+  is_active: boolean
   created_at: string
   updated_at: string
 }

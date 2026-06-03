@@ -1,0 +1,13 @@
+[
+  { "name": "Information Technology", "etf_symbol": "XLK" },
+  { "name": "Communication Services", "etf_symbol": "XLC" },
+  { "name": "Consumer Discretionary", "etf_symbol": "XLY" },
+  { "name": "Consumer Staples", "etf_symbol": "XLP" },
+  { "name": "Energy", "etf_symbol": "XLE" },
+  { "name": "Financials", "etf_symbol": "XLF" },
+  { "name": "Health Care", "etf_symbol": "XLV" },
+  { "name": "Industrials", "etf_symbol": "XLI" },
+  { "name": "Materials", "etf_symbol": "XLB" },
+  { "name": "Real Estate", "etf_symbol": "XLRE" },
+  { "name": "Utilities", "etf_symbol": "XLU" }
+]

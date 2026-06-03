@@ -19,7 +19,8 @@ import AddIcon from "@mui/icons-material/Add";
 // import PlayIcon from '@mui/icons-material/PlayIcon'
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
-import { fetchPrompts, deletePrompt } from "../api/prompts";
+import Switch from "@mui/material/Switch";
+import { fetchPrompts, deletePrompt, togglePromptActive } from "../api/prompts";
 import type { Prompt } from "../types/prompt";
 import PromptDialog from "../components/PromptDialog";
 
@@ -89,6 +90,11 @@ export default function PromptsPage({ onRunPrompt }: PromptsPageProps) {
     if (!window.confirm(`Delete prompt "${prompt.title}"?`)) return;
     await deletePrompt(prompt.id);
     setPrompts((prev) => prev.filter((p) => p.id !== prompt.id));
+  };
+
+  const handleToggleActive = async (prompt: Prompt) => {
+    await togglePromptActive(prompt.id, !prompt.is_active);
+    load(currentCategory);
   };
 
   const handleSaved = () => {
@@ -192,6 +198,16 @@ export default function PromptsPage({ onRunPrompt }: PromptsPageProps) {
                   </TableCell>
                 ))}
                 <TableCell
+                  sx={{
+                    color: "text.secondary",
+                    fontSize: "0.8rem",
+                    borderColor: "rgba(255,255,255,0.08)",
+                    fontWeight: 600,
+                  }}
+                >
+                  Active
+                </TableCell>
+                <TableCell
                   align="right"
                   sx={{
                     color: "text.secondary",
@@ -242,6 +258,13 @@ export default function PromptsPage({ onRunPrompt }: PromptsPageProps) {
                     }}
                   >
                     {new Date(prompt.created_at).toLocaleString()}
+                  </TableCell>
+                  <TableCell sx={{ ...cellBorder }}>
+                    <Switch
+                      size="small"
+                      checked={prompt.is_active}
+                      onChange={() => handleToggleActive(prompt)}
+                    />
                   </TableCell>
                   <TableCell
                     align="right"

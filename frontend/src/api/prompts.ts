@@ -43,6 +43,16 @@ export async function updatePrompt(
   return res.json()
 }
 
+export async function togglePromptActive(id: string, is_active: boolean): Promise<Prompt> {
+  const res = await fetch(`${BASE}/${id}/active`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ is_active }),
+  })
+  if (!res.ok) throw new Error(`Failed to toggle prompt: ${res.statusText}`)
+  return res.json()
+}
+
 export async function deletePrompt(id: string): Promise<void> {
   const res = await fetch(`${BASE}/${id}`, { method: 'DELETE' })
   if (!res.ok) throw new Error(`Failed to delete prompt: ${res.statusText}`)

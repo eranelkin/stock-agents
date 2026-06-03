@@ -1,6 +1,6 @@
 [
-  { "name": "AAPL" },
-  { "name": "GOOGL" },
-  { "name": "MSFT" },
-  { "name": "AMZN" }
+  { "name": "AAPL", "sector": "Information Technology" },
+  { "name": "GOOGL", "sector": "Communication Services" },
+  { "name": "MSFT", "sector": "Information Technology" },
+  { "name": "AMZN", "sector": "Consumer Discretionary" }
 ]

@@ -18,6 +18,7 @@ import Tooltip from '@mui/material/Tooltip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Alert from '@mui/material/Alert'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
+import TableSortLabel from '@mui/material/TableSortLabel'
 import DeleteIcon from '@mui/icons-material/Delete'
 import AttachFileIcon from '@mui/icons-material/AttachFile'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
@@ -51,6 +52,7 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
   const [innerTab, setInnerTab] = useState(0)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [resultsRun, setResultsRun] = useState<Run | null>(null)
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -158,7 +160,11 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
 
   const todayRuns = runs.filter(r => isToday(r.created_at))
   const historyRuns = runs.filter(r => !isToday(r.created_at))
-  const displayedRuns = innerTab === 0 ? todayRuns : historyRuns
+  const sorted = (innerTab === 0 ? todayRuns : historyRuns).slice().sort((a, b) => {
+    const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    return sortOrder === 'asc' ? diff : -diff
+  })
+  const displayedRuns = sorted
 
   const runDisabled =
     !selectedFile || !rawFileText || selectedModelIds.length === 0 || starting
@@ -281,27 +287,32 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
           <Table size="small" sx={{ width: '100%' }}>
             <TableHead>
               <TableRow>
-                {['Title', 'Run ID', 'Status', 'Date & Time'].map((h) => (
+                <TableCell
+                  sx={{ color: 'text.secondary', fontSize: '0.8rem', borderColor: 'rgba(255,255,255,0.08)', fontWeight: 600 }}
+                >
+                  <TableSortLabel
+                    active
+                    direction={sortOrder}
+                    onClick={() => setSortOrder(o => o === 'asc' ? 'desc' : 'asc')}
+                    sx={{
+                      color: 'text.secondary !important',
+                      '& .MuiTableSortLabel-icon': { color: 'text.secondary !important' },
+                    }}
+                  >
+                    Date & Time
+                  </TableSortLabel>
+                </TableCell>
+                {['Run ID', 'Status'].map((h) => (
                   <TableCell
                     key={h}
-                    sx={{
-                      color: 'text.secondary',
-                      fontSize: '0.8rem',
-                      borderColor: 'rgba(255,255,255,0.08)',
-                      fontWeight: 600,
-                    }}
+                    sx={{ color: 'text.secondary', fontSize: '0.8rem', borderColor: 'rgba(255,255,255,0.08)', fontWeight: 600 }}
                   >
                     {h}
                   </TableCell>
                 ))}
                 <TableCell
                   align="right"
-                  sx={{
-                    color: 'text.secondary',
-                    fontSize: '0.8rem',
-                    borderColor: 'rgba(255,255,255,0.08)',
-                    fontWeight: 600,
-                  }}
+                  sx={{ color: 'text.secondary', fontSize: '0.8rem', borderColor: 'rgba(255,255,255,0.08)', fontWeight: 600 }}
                 >
                   Actions
                 </TableCell>
@@ -315,12 +326,13 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
                 >
                   <TableCell
                     sx={{
-                      color: 'text.primary',
+                      color: '#ffffff',
                       borderColor: 'rgba(255,255,255,0.06)',
-                      fontWeight: 500,
+                      fontSize: '0.85rem',
+                      whiteSpace: 'nowrap',
                     }}
                   >
-                    {run.name ?? 'Unnamed'}
+                    {new Date(run.created_at).toLocaleString()}
                   </TableCell>
                   <TableCell
                     sx={{
@@ -365,16 +377,6 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
                       size="small"
                       sx={{ fontWeight: 700, letterSpacing: 0.5, fontSize: '0.7rem' }}
                     />
-                  </TableCell>
-                  <TableCell
-                    sx={{
-                      color: 'text.secondary',
-                      borderColor: 'rgba(255,255,255,0.06)',
-                      fontSize: '0.85rem',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {new Date(run.created_at).toLocaleString()}
                   </TableCell>
                   <TableCell align="right" sx={{ borderColor: 'rgba(255,255,255,0.06)' }}>
                     <Tooltip title="Delete">

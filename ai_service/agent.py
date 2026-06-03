@@ -12,7 +12,7 @@ logger = get_logger(__name__)
 
 
 class Agent:
-    """Stateless agent: receives a prompt + ticker input, calls LLM, returns JSON."""
+    """Stateless agent: receives a prompt + entity input, calls LLM, returns JSON."""
 
     def __init__(self, agent_id: str, prompt: str, llm_client: LLMClient) -> None:
         self.agent_id = agent_id
@@ -27,27 +27,20 @@ class Agent:
         ticker: str = "",
         pipeline_id: str = "",
         search_context: str = "",
+        prompt_title: str = "",
+        log_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Execute the agent and return a parsed JSON dict.
-
-        In tool_call mode the LLM drives its own web searches via function calling.
-        In prefetch mode (default) pre-fetched search_context is injected into the
-        user message.
-
-        Args:
-            ticker_input: Raw ticker data (e.g. {"name": "AAPL"}).
-            previous_output: Prior agent result for chain mode; None in parallel mode.
-            ticker: Ticker symbol for log context.
-            pipeline_id: Pipeline UUID for log context.
-            search_context: Pre-fetched Tavily results (prefetch mode only).
-
-        Returns:
-            Parsed dict from the LLM, or {"raw_output": ..., "parse_error": true} on failure.
-        """
+        """Execute the agent and return a parsed JSON dict."""
         extra = {"ticker": ticker, "agent_id": self.agent_id, "pipeline_id": pipeline_id}
         user_content: dict[str, Any] = dict(ticker_input)
         if previous_output is not None:
             user_content["previous_output"] = previous_output
+
+        full_log_context = {
+            "agent_id": self.agent_id,
+            "prompt_title": prompt_title,
+            **(log_context or {}),
+        }
 
         raw = ""
         try:
@@ -57,6 +50,7 @@ class Agent:
                     user_message=json.dumps(user_content),
                     tools=[WEB_SEARCH_TOOL],
                     tool_handlers={"web_search": execute_search},
+                    log_context=full_log_context,
                 )
             else:
                 if search_context:
@@ -64,6 +58,7 @@ class Agent:
                 raw = await self._llm.complete(
                     system_prompt=self.prompt,
                     user_message=json.dumps(user_content),
+                    log_context=full_log_context,
                 )
 
             result: dict[str, Any] = json.loads(raw)
@@ -71,10 +66,7 @@ class Agent:
                 raise ValueError(f"Expected JSON object, got {type(result).__name__}")
             return result
         except (json.JSONDecodeError, ValueError) as exc:
-            logger.warning(
-                "Agent output parse failed",
-                extra={**extra, "error": str(exc)},
-            )
+            logger.warning("Agent output parse failed", extra={**extra, "error": str(exc)})
             return {"raw_output": raw, "parse_error": True}
         except LLMError as exc:
             logger.error("Agent LLM call failed", exc_info=True, extra=extra)
