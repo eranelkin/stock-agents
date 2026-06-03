@@ -206,8 +206,7 @@ class RunLogger:
                 pipeline_id=pipeline_id, agent_id=agent_id,
                 prompt_title=prompt_title, status="", duration_ms=-1,
                 payload={
-                    "system_prompt": system_prompt[:400],
-                    "system_prompt_full_len": len(system_prompt),
+                    "system_prompt": system_prompt,
                     "user_message": user_message,
                 },
             ))
@@ -542,40 +541,23 @@ def _section_kv(
 
 def _body_llm_request(p: dict[str, Any]) -> str:
     sys_prompt = p.get("system_prompt", "")
-    full_len = p.get("system_prompt_full_len", len(sys_prompt))
     user_msg = p.get("user_message", "")
 
-    # system prompt (collapsed when truncated)
-    is_trunc = full_len > 400
-    sys_note = (
-        f' <span class="char-count">({full_len:,} chars &mdash; first 400 shown)</span>'
-        if is_trunc else
-        f' <span class="char-count">({full_len:,} chars)</span>'
-    )
-    sys_btn = (
-        '<button class="expand-btn" onclick="toggleCollapse(this)">&#x25B6; expand</button>'
-        if is_trunc else ""
-    )
-    sys_cls = " collapsed" if is_trunc else ""
+    char_note = f' <span class="char-count">({len(sys_prompt):,} chars)</span>' if sys_prompt else ""
 
-    # user message (try pretty-print JSON; collapse if long)
     user_display = _pretty_json(user_msg)
     user_is_json = _is_json(user_msg)
-    user_long = len(user_display) > 600
-    user_cls = " collapsed" if user_long else ""
-    user_btn = (
-        '<button class="expand-btn" onclick="toggleCollapse(this)">&#x25B6; expand</button>'
-        if user_long else ""
-    )
-    user_block_cls = f'code-block {"json-block " if user_is_json else ""}collapsible{user_cls}'
+    user_block_cls = f'code-block{"  json-block" if user_is_json else ""}'
+
+    copy_btn = '<button class="copy-btn" onclick="copyBlock(this)">&#x2398; copy</button>'
 
     return (
         f'<div class="card-section">'
-        f'<div class="section-label">System Prompt{sys_note} {sys_btn}</div>'
-        f'<pre class="code-block collapsible{sys_cls}">{_h(sys_prompt)}</pre>'
+        f'<div class="section-label">System Prompt{char_note}{copy_btn}</div>'
+        f'<pre class="code-block">{_h(sys_prompt)}</pre>'
         f'</div>'
         f'<div class="card-section">'
-        f'<div class="section-label">Input {user_btn}</div>'
+        f'<div class="section-label">Input{copy_btn}</div>'
         f'<pre class="{user_block_cls}">{_h(user_display)}</pre>'
         f'</div>'
     )
@@ -589,24 +571,20 @@ def _body_llm_ok(p: dict[str, Any]) -> str:
     resp = p.get("response_text", "")
     display = _pretty_json(resp)
     is_json = _is_json(resp)
-    is_long = len(display) > 600
-    resp_cls = f'code-block {"json-block " if is_json else ""}collapsible{" collapsed" if is_long else ""}'
-    resp_btn = (
-        '<button class="expand-btn" onclick="toggleCollapse(this)">&#x25B6; expand</button>'
-        if is_long else ""
-    )
+    resp_cls = f'code-block{"  json-block" if is_json else ""}'
     token_str = (
         f'prompt=<strong>{pt:,}</strong>'
         f'&nbsp;&nbsp;completion=<strong>{ct:,}</strong>'
         f'&nbsp;&nbsp;total=<strong class="tok-total">{tt:,}</strong>'
     ) if tt else "tokens not reported"
+    copy_btn = '<button class="copy-btn" onclick="copyBlock(this)">&#x2398; copy</button>'
 
     return (
         f'<div class="card-section">'
         f'<div class="token-line">{token_str}</div>'
         f'</div>'
         f'<div class="card-section">'
-        f'<div class="section-label">Response {resp_btn}</div>'
+        f'<div class="section-label">Response{copy_btn}</div>'
         f'<pre class="{resp_cls}">{_h(display)}</pre>'
         f'</div>'
     )
@@ -755,18 +733,19 @@ table#events-table th{
 .code-block{
   background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:6px;
   padding:10px 14px;font-size:11.5px;line-height:1.55;
-  white-space:pre-wrap;word-break:break-word;overflow-x:auto;
+  white-space:pre-wrap;word-break:break-word;
+  overflow-x:auto;overflow-y:auto;max-height:240px;
   color:var(--text);font-family:'SF Mono','Fira Code','Consolas',monospace;
   margin-top:4px;
 }
-.collapsible.collapsed{display:none}
 
-.expand-btn{
-  background:none;border:1px solid var(--border);color:var(--muted);
+.copy-btn{
+  margin-left:auto;background:none;border:1px solid var(--border);color:var(--muted);
   border-radius:4px;padding:1px 8px;font-size:10px;cursor:pointer;
-  font-family:inherit;transition:color .15s;
+  font-family:inherit;transition:color .15s,border-color .15s;flex-shrink:0;
 }
-.expand-btn:hover{color:var(--text);border-color:var(--muted)}
+.copy-btn:hover{color:var(--text);border-color:var(--muted)}
+.copy-btn.copied{color:var(--green);border-color:var(--green)}
 
 .error-block{
   background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);
@@ -829,12 +808,30 @@ function toggleRow(seq) {
   }
 }
 
-function toggleCollapse(btn) {
+function copyBlock(btn) {
   var section = btn.closest('.card-section');
-  var target = section && section.querySelector('.collapsible');
-  if (!target) return;
-  var collapsed = target.classList.toggle('collapsed');
-  btn.innerHTML = collapsed ? '&#x25B6; expand' : '&#x25BC; collapse';
+  var pre = section && section.querySelector('pre');
+  if (!pre) return;
+  var text = pre.textContent;
+  navigator.clipboard.writeText(text).then(function() {
+    btn.textContent = 'copied!';
+    btn.classList.add('copied');
+    setTimeout(function() {
+      btn.innerHTML = '&#x2398; copy';
+      btn.classList.remove('copied');
+    }, 1500);
+  }).catch(function() {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.textContent = 'copied!';
+    setTimeout(function() { btn.innerHTML = '&#x2398; copy'; }, 1500);
+  });
 }
 
 function esc(s) {

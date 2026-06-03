@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     search_enabled: bool = False
     search_max_results: int = 5
     search_depth: str = "basic"
+    search_mode: str = "prefetch"  # prefetch | tool_call
 
     @property
     def database_url(self) -> str:

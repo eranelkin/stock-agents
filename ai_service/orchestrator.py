@@ -70,7 +70,7 @@ class Orchestrator:
             await run_logger.run_start(
                 mode=settings.agent_mode,
                 models=[f"{mc.name} ({mc.model_id})" for mc in self.model_configs],
-                tickers=[t.get("name", str(t)) for t in self.tickers],
+                tickers=[t.get("name") or t.get("symbol", str(t)) for t in self.tickers],
                 agent_prompts=[p.title for p in agent_prompts],
                 sector_prompts=[p.title for p in sector_prompts],
             )

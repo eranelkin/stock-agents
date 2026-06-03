@@ -119,6 +119,7 @@ class Pipeline:
                     agent_id=prompt_config.id,
                     prompt=prompt_config.content,
                     llm_client=self._llm,
+                    run_logger=self._run_logger,
                 )
                 result = await agent.run(
                     ticker_input=self.entity.model_dump(),
@@ -151,6 +152,7 @@ class Pipeline:
                 agent_id=prompt_config.id,
                 prompt=prompt_config.content,
                 llm_client=self._llm,
+                run_logger=self._run_logger,
             )
             result = await agent.run(
                 ticker_input=self.entity.model_dump(),

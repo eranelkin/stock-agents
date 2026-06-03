@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     search_max_results: int = 5
     search_depth: str = "basic"  # basic | advanced
     search_mode: str = "prefetch"  # prefetch | tool_call
+    search_max_tool_rounds: int = 10  # max LLM↔tool cycles before forcing final answer
 
     # Service
     ai_service_port: int = 4102

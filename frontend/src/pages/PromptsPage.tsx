@@ -23,6 +23,7 @@ import Switch from "@mui/material/Switch";
 import { fetchPrompts, deletePrompt, togglePromptActive } from "../api/prompts";
 import type { Prompt } from "../types/prompt";
 import PromptDialog from "../components/PromptDialog";
+import { resolvePlaceholders } from "../utils/placeholders";
 
 const CATEGORIES = ["system", "agents", "once", "market"] as const;
 const CATEGORY_LABELS: Record<string, string> = {
@@ -78,7 +79,7 @@ export default function PromptsPage({ onRunPrompt }: PromptsPageProps) {
   };
 
   function handleRun(prompt: Prompt) {
-    onRunPrompt(prompt.content)
+    onRunPrompt(resolvePlaceholders(prompt.content));
   }
 
   const handleEditClick = (prompt: Prompt) => {

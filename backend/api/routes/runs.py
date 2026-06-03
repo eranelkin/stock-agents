@@ -146,5 +146,9 @@ async def delete_run(
         output_path = Path(output_dir)
         if output_path.exists() and output_path.is_dir():
             shutil.rmtree(output_path)
+        # Log file lives at <base>/logs/<timestamp>.html, parallel to <base>/runs/<timestamp>
+        log_path = output_path.parent.parent / "logs" / (output_path.name + ".html")
+        if log_path.exists():
+            log_path.unlink()
 
     return Response(status_code=204)

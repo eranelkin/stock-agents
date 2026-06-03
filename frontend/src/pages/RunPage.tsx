@@ -41,6 +41,14 @@ const STATUS_COLOR: Record<string, 'default' | 'info' | 'success' | 'error' | 'w
 const isToday = (dateStr: string) =>
   new Date(dateStr).toDateString() === new Date().toDateString()
 
+const formatDuration = (ms: number): string => {
+  const s = Math.floor(ms / 1000)
+  if (s < 60) return `${s}s`
+  const m = Math.floor(s / 60)
+  const rem = s % 60
+  return rem > 0 ? `${m}m ${rem}s` : `${m}m`
+}
+
 export default function RunPage({ selectedModelIds }: RunPageProps) {
   const [runs, setRuns] = useState<Run[]>([])
   const [loading, setLoading] = useState(true)
@@ -53,8 +61,10 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [resultsRun, setResultsRun] = useState<Run | null>(null)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [now, setNow] = useState(() => Date.now())
   const fileInputRef = useRef<HTMLInputElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const stopPolling = () => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
@@ -72,19 +82,25 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
 
   useEffect(() => {
     load()
-    return () => stopPolling()
+    return () => { stopPolling(); if (tickRef.current) clearInterval(tickRef.current) }
   }, [load])
 
-  // Poll while any run is active
+  // Poll while any run is active; tick every second for live duration
   useEffect(() => {
     const hasActive = runs.some(r => r.status === 'pending' || r.status === 'running')
-    if (hasActive && !pollRef.current) {
-      pollRef.current = setInterval(async () => {
-        const updated = await fetchRuns().catch(() => null)
-        if (updated) setRuns(updated)
-      }, 2000)
-    } else if (!hasActive) {
+    if (hasActive) {
+      if (!pollRef.current) {
+        pollRef.current = setInterval(async () => {
+          const updated = await fetchRuns().catch(() => null)
+          if (updated) setRuns(updated)
+        }, 2000)
+      }
+      if (!tickRef.current) {
+        tickRef.current = setInterval(() => setNow(Date.now()), 1000)
+      }
+    } else {
       stopPolling()
+      if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null }
     }
   }, [runs])
 
@@ -302,7 +318,7 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
                     Date & Time
                   </TableSortLabel>
                 </TableCell>
-                {['Run ID', 'Status'].map((h) => (
+                {['Run ID', 'Duration', 'Status'].map((h) => (
                   <TableCell
                     key={h}
                     sx={{ color: 'text.secondary', fontSize: '0.8rem', borderColor: 'rgba(255,255,255,0.08)', fontWeight: 600 }}
@@ -369,6 +385,28 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
                         </IconButton>
                       </Tooltip>
                     </Box>
+                  </TableCell>
+                  <TableCell sx={{ borderColor: 'rgba(255,255,255,0.06)', whiteSpace: 'nowrap' }}>
+                    {(() => {
+                      const start = new Date(run.created_at).getTime()
+                      const end = run.completed_at ? new Date(run.completed_at).getTime() : null
+                      const active = run.status === 'pending' || run.status === 'running'
+                      if (active) {
+                        return (
+                          <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem', color: '#fb923c' }}>
+                            {formatDuration(now - start)}
+                          </Typography>
+                        )
+                      }
+                      if (end) {
+                        return (
+                          <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'text.secondary' }}>
+                            {formatDuration(end - start)}
+                          </Typography>
+                        )
+                      }
+                      return <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.disabled' }}>—</Typography>
+                    })()}
                   </TableCell>
                   <TableCell sx={{ borderColor: 'rgba(255,255,255,0.06)' }}>
                     <Chip

@@ -1,23 +1,84 @@
 from __future__ import annotations
 
 import json
+import re
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
+
+import yaml
 
 from ai_service.config import settings
 from ai_service.models.llm_client import LLMClient, LLMError
+from ai_service.models.search_client import SearchClient
 from ai_service.utils.logger import get_logger
+from ai_service.utils.run_logger import RunLogger
 from ai_service.utils.search_tool import WEB_SEARCH_TOOL, execute_search
 
 logger = get_logger(__name__)
 
 
+def _parse_response(raw: str) -> dict[str, Any]:
+    """Try JSON → YAML → code-block extraction. Raises ValueError if all fail."""
+    text = raw.strip()
+
+    # 1. Try JSON directly
+    try:
+        result = json.loads(text)
+        if isinstance(result, dict):
+            return result
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # 2. Try YAML directly
+    try:
+        result = yaml.safe_load(text)
+        if isinstance(result, dict):
+            return result
+    except yaml.YAMLError:
+        pass
+
+    # 3. Extract content from ```json or ```yaml code blocks and retry
+    match = re.search(r"```(?:json|yaml)?\s*\n(.*?)```", text, re.DOTALL)
+    if match:
+        block = match.group(1).strip()
+        try:
+            result = json.loads(block)
+            if isinstance(result, dict):
+                return result
+        except (json.JSONDecodeError, ValueError):
+            pass
+        try:
+            result = yaml.safe_load(block)
+            if isinstance(result, dict):
+                return result
+        except yaml.YAMLError:
+            pass
+
+    raise ValueError("Response is not parseable as JSON or YAML")
+
+
+def _resolve_placeholders(text: str) -> str:
+    """Replace known placeholders in a prompt string before sending to the LLM."""
+    now = datetime.now(ZoneInfo("America/New_York"))
+    current_date = now.strftime(f"%B {now.day}, %Y, %H:%M %Z")
+    return text.replace("{CURRENT_DATE}", current_date)
+
+
 class Agent:
     """Stateless agent: receives a prompt + entity input, calls LLM, returns JSON."""
 
-    def __init__(self, agent_id: str, prompt: str, llm_client: LLMClient) -> None:
+    def __init__(
+        self,
+        agent_id: str,
+        prompt: str,
+        llm_client: LLMClient,
+        run_logger: RunLogger | None = None,
+    ) -> None:
         self.agent_id = agent_id
         self.prompt = prompt
         self._llm = llm_client
+        self._run_logger = run_logger
 
     async def run(
         self,
@@ -42,32 +103,61 @@ class Agent:
             **(log_context or {}),
         }
 
+        resolved_prompt = _resolve_placeholders(self.prompt)
         raw = ""
         try:
             if settings.search_mode == "tool_call":
+                search_handler = self._make_search_handler(
+                    ticker=ticker,
+                    prompt_title=prompt_title,
+                    pipeline_id=pipeline_id,
+                    pipeline_type=(log_context or {}).get("pipeline_type", ""),
+                )
                 raw = await self._llm.complete_with_tools(
-                    system_prompt=self.prompt,
+                    system_prompt=resolved_prompt,
                     user_message=json.dumps(user_content),
                     tools=[WEB_SEARCH_TOOL],
-                    tool_handlers={"web_search": execute_search},
+                    tool_handlers={"web_search": search_handler},
+                    max_tool_rounds=settings.search_max_tool_rounds,
                     log_context=full_log_context,
                 )
             else:
                 if search_context:
                     user_content["search_context"] = search_context
                 raw = await self._llm.complete(
-                    system_prompt=self.prompt,
+                    system_prompt=resolved_prompt,
                     user_message=json.dumps(user_content),
                     log_context=full_log_context,
                 )
 
-            result: dict[str, Any] = json.loads(raw)
-            if not isinstance(result, dict):
-                raise ValueError(f"Expected JSON object, got {type(result).__name__}")
-            return result
-        except (json.JSONDecodeError, ValueError) as exc:
+            return _parse_response(raw)
+        except ValueError as exc:
             logger.warning("Agent output parse failed", extra={**extra, "error": str(exc)})
             return {"raw_output": raw, "parse_error": True}
         except LLMError as exc:
             logger.error("Agent LLM call failed", exc_info=True, extra=extra)
             return {"error": str(exc), "parse_error": True}
+
+    def _make_search_handler(
+        self,
+        *,
+        ticker: str,
+        prompt_title: str,
+        pipeline_id: str,
+        pipeline_type: str,
+    ):
+        """Return a search coroutine that logs via RunLogger when available."""
+        client = SearchClient(run_logger=self._run_logger)
+        agent_id = self.agent_id
+
+        async def _handler(query: str) -> str:
+            return await client.search(
+                query,
+                ticker=ticker,
+                agent_id=agent_id,
+                prompt_title=prompt_title,
+                pipeline_id=pipeline_id,
+                pipeline_type=pipeline_type,
+            )
+
+        return _handler
