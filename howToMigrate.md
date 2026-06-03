@@ -32,7 +32,7 @@ docker compose up --build -d
    PYTHONPATH=. alembic upgrade head
    ```
 
-   if `command not found: alembic`
+   `if - command not found: alembic`
 
    ```bash
    source .venv/bin/activate
@@ -40,14 +40,23 @@ docker compose up --build -d
    PYTHONPATH=. alembic upgrade head
    ```
 
+   `if the tables already exist in the DB and getting errors try running:`
+
+   ```bash
+   source .venv/bin/activate
+   PYTHONPATH=. alembic stamp head
+   ```
+
 3. Start each service in its own terminal:
 
    ```bash
    # Terminal 1
-   uvicorn backend.main:app --host 0.0.0.0 --port 4101
+   uvicorn backend.main:app --host 0.0.0.0 --port 4101 OR
+   PYTHONPATH=. .venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 4101
 
    # Terminal 2
-   uvicorn ai_service.main:app --host 0.0.0.0 --port 4102
+   uvicorn ai_service.main:app --host 0.0.0.0 --port 4102 OR
+   PYTHONPATH=. .venv/bin/uvicorn ai_service.main:app --host 0.0.0.0 --port 4102
    ```
 
 ---
