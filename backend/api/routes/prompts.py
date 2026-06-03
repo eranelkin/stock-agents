@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db.models import Prompt
 from backend.db.session import get_session
-from backend.schemas.prompt import PromptCreate, PromptResponse, PromptUpdate
+from backend.schemas.prompt import PromptActiveUpdate, PromptCreate, PromptResponse, PromptUpdate
 
 router = APIRouter(prefix="/prompts", tags=["prompts"])
 
@@ -38,6 +38,7 @@ async def create_prompt(
         category=body.category,
         search_enabled=body.search_enabled,
         search_query_template=body.search_query_template,
+        is_active=body.is_active,
     )
     session.add(prompt)
     await session.commit()
@@ -66,7 +67,27 @@ async def update_prompt(
         prompt.search_enabled = body.search_enabled
     if body.search_query_template is not None:
         prompt.search_query_template = body.search_query_template
+    if body.is_active is not None:
+        prompt.is_active = body.is_active
 
+    prompt.updated_at = datetime.now(timezone.utc)
+    await session.commit()
+    await session.refresh(prompt)
+    return prompt
+
+
+@router.patch("/{prompt_id}/active", response_model=PromptResponse)
+async def toggle_active(
+    prompt_id: uuid.UUID,
+    body: PromptActiveUpdate,
+    session: AsyncSession = Depends(get_session),
+) -> Prompt:
+    """Set the active state of a prompt."""
+    prompt = await session.get(Prompt, prompt_id)
+    if prompt is None:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+
+    prompt.is_active = body.is_active
     prompt.updated_at = datetime.now(timezone.utc)
     await session.commit()
     await session.refresh(prompt)

@@ -41,17 +41,17 @@ async def create_run(
         )
 
     prompt_result = await session.execute(
-        select(Prompt).where(Prompt.category == "agents")
+        select(Prompt).where(Prompt.category == "agents", Prompt.is_active == True)  # noqa: E712
     )
     agent_prompts = prompt_result.scalars().all()
     if not agent_prompts:
         raise HTTPException(
             status_code=400,
-            detail="No Agent prompts configured. Add prompts in the Agents tab first.",
+            detail="No active Agent prompts configured. Enable prompts in the Agents tab first.",
         )
 
     sector_prompt_result = await session.execute(
-        select(Prompt).where(Prompt.category == "sectors")
+        select(Prompt).where(Prompt.category == "sectors", Prompt.is_active == True)  # noqa: E712
     )
     sector_prompts = sector_prompt_result.scalars().all()
 

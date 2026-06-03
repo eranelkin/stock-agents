@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +22,7 @@ from ai_service.schemas.output import PipelineOutput
 from ai_service.schemas.run import ModelConfig, PromptConfig
 from ai_service.utils.logger import get_logger
 from ai_service.utils.output_writer import write_combined_output, write_output
+from ai_service.utils.run_logger import RunLogger
 
 logger = get_logger(__name__)
 
@@ -43,6 +45,7 @@ class Orchestrator:
             "agents": prompts,
             "sectors": sector_prompts,
         }
+        self._dt_str: str = ""
 
     async def run(self) -> None:
         """Entry point: orchestrate the full run lifecycle."""
@@ -52,19 +55,33 @@ class Orchestrator:
         )
         await self._set_status("running")
 
-        try:
-            run_dir = self._make_run_dir()
-            await self._set_output_dir(run_dir)
-            semaphore = asyncio.Semaphore(settings.max_concurrent_pipelines)
-            search_client = SearchClient()
+        run_dir = self._make_run_dir()
+        await self._set_output_dir(run_dir)
 
-            # One asyncio.Event per pipeline type for dependency signalling
+        log_path = str(Path(settings.output_dir) / "logs" / f"{self._dt_str}.log")
+        run_logger = RunLogger(log_path)
+        started_at = datetime.now(timezone.utc).strftime("%Y-%m-%d  %H:%M:%S UTC")
+        await run_logger.open(run_id=self.run_id, started_at=started_at)
+
+        run_start = time.monotonic()
+        try:
+            agent_prompts = self.prompts_by_category.get("agents", [])
+            sector_prompts = self.prompts_by_category.get("sectors", [])
+            await run_logger.run_start(
+                mode=settings.agent_mode,
+                models=[f"{mc.name} ({mc.model_id})" for mc in self.model_configs],
+                tickers=[t.get("name", str(t)) for t in self.tickers],
+                agent_prompts=[p.title for p in agent_prompts],
+                sector_prompts=[p.title for p in sector_prompts],
+            )
+
+            semaphore = asyncio.Semaphore(settings.max_concurrent_pipelines)
+
             done_events: dict[str, asyncio.Event] = {
                 cfg.name: asyncio.Event() for cfg in PIPELINE_REGISTRY
             }
 
             async def run_pipeline_type(cfg: PipelineTypeConfig) -> None:
-                # Wait for all declared dependencies to finish first
                 for dep in cfg.dependencies:
                     await done_events[dep].wait()
 
@@ -82,7 +99,6 @@ class Orchestrator:
                         f"Required pipeline '{cfg.name}' has no prompts configured"
                     )
 
-                # Load entities: from request (stocks) or from JSON file (others)
                 if cfg.use_request_entities:
                     entities = [cfg.entity_schema(**item) for item in self.tickers]
                 else:
@@ -98,13 +114,13 @@ class Orchestrator:
                     done_events[cfg.name].set()
                     return
 
-                # For single_file output, run with only the first model to keep
-                # the combined file unambiguous. Per-entity pipelines use all models.
                 models_to_use = (
                     [self.model_configs[0]]
                     if cfg.output_mode == "single_file"
                     else self.model_configs
                 )
+
+                search_client = SearchClient(run_logger=run_logger)
 
                 pipelines = [
                     Pipeline(
@@ -112,9 +128,13 @@ class Orchestrator:
                         entity_name=entity.name,
                         prompts=type_prompts,
                         pipeline_semaphore=semaphore,
-                        llm_client=LLMClient(mc),
+                        llm_client=LLMClient(mc, run_logger=run_logger),
                         model_name=mc.name,
                         search_client=search_client,
+                        run_logger=run_logger,
+                        pipeline_type=cfg.name,
+                        run_dir=run_dir,
+                        output_prefix=cfg.output_prefix,
                     )
                     for mc in models_to_use
                     for entity in entities
@@ -139,21 +159,23 @@ class Orchestrator:
                     extra={"run_id": self.run_id},
                 )
 
-            # Launch all pipeline types concurrently; dependency ordering is handled
-            # internally via done_events.wait()
             await asyncio.gather(*[run_pipeline_type(cfg) for cfg in PIPELINE_REGISTRY])
 
+            total_duration_ms = int((time.monotonic() - run_start) * 1000)
+            await run_logger.run_end(total_duration_ms=total_duration_ms)
             await self._set_status("completed")
             logger.info("Orchestrator completed", extra={"run_id": self.run_id})
 
         except Exception:
             logger.exception("Orchestrator failed", extra={"run_id": self.run_id})
             await self._set_status("failed")
+        finally:
+            await run_logger.close()
 
     def _make_run_dir(self) -> str:
-        """Create and return a timestamped output subfolder for this run."""
-        dt_str = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
-        run_dir = str(Path(settings.output_dir) / dt_str)
+        """Create and return a timestamped output subfolder under outputs/runs/."""
+        self._dt_str = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
+        run_dir = str(Path(settings.output_dir) / "runs" / self._dt_str)
         Path(run_dir).mkdir(parents=True, exist_ok=True)
         return run_dir
 
@@ -183,7 +205,6 @@ class Orchestrator:
                 for output in outputs
             ])
         else:
-            # single_file: combine all entity outputs under their name as the key
             combined = {
                 out.ticker: {
                     "agents": out.agents,

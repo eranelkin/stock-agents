@@ -12,6 +12,7 @@ class PromptCreate(BaseModel):
     category: str = "agents"  # "system" | "agents" | "once" | "market"
     search_enabled: bool = False
     search_query_template: str | None = None
+    is_active: bool = True
 
 
 class PromptUpdate(BaseModel):
@@ -20,6 +21,11 @@ class PromptUpdate(BaseModel):
     category: str | None = None
     search_enabled: bool | None = None
     search_query_template: str | None = None
+    is_active: bool | None = None
+
+
+class PromptActiveUpdate(BaseModel):
+    is_active: bool
 
 
 class PromptResponse(BaseModel):
@@ -29,6 +35,7 @@ class PromptResponse(BaseModel):
     category: str
     search_enabled: bool
     search_query_template: str | None
+    is_active: bool
     created_at: datetime
     updated_at: datetime
 

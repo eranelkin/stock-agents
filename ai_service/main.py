@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, AsyncGenerator
 
 from dotenv import load_dotenv
@@ -10,6 +11,7 @@ load_dotenv()  # must run before litellm is imported so API keys are in os.envir
 from fastapi import BackgroundTasks, FastAPI
 from pydantic import BaseModel
 
+from ai_service.config import settings
 from ai_service.orchestrator import Orchestrator
 from ai_service.schemas.run import ModelConfig, PromptConfig
 from ai_service.utils.logger import get_logger
@@ -19,6 +21,8 @@ logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    Path(settings.output_dir, "runs").mkdir(parents=True, exist_ok=True)
+    Path(settings.output_dir, "logs").mkdir(parents=True, exist_ok=True)
     yield
 
 

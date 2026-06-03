@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -16,6 +17,7 @@ from tenacity import (
 from ai_service.config import settings
 from ai_service.schemas.run import ModelConfig
 from ai_service.utils.logger import get_logger
+from ai_service.utils.run_logger import RunLogger
 
 logger = get_logger(__name__)
 
@@ -27,29 +29,66 @@ class LLMError(Exception):
 class LLMClient:
     """Provider-agnostic async LLM client backed by litellm.acompletion."""
 
-    def __init__(self, model_config: ModelConfig) -> None:
+    def __init__(self, model_config: ModelConfig, run_logger: RunLogger | None = None) -> None:
         self._model = model_config.model_id
         self._base_url = model_config.base_url
         self._api_key = model_config.api_key
+        self._run_logger = run_logger
 
-    async def complete(self, system_prompt: str, user_message: str) -> str:
-        """Send a chat completion and return the response text.
+    async def complete(
+        self,
+        system_prompt: str,
+        user_message: str,
+        log_context: dict[str, Any] | None = None,
+    ) -> str:
+        """Send a chat completion and return the response text."""
+        ctx = log_context or {}
+        agent_id = ctx.get("agent_id", "")
+        prompt_title = ctx.get("prompt_title", "")
 
-        Args:
-            system_prompt: Content for the system role.
-            user_message: Content for the user role.
-
-        Returns:
-            Raw response string from the model.
-        """
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message},
         ]
+
+        if self._run_logger:
+            await self._run_logger.llm_request(
+                agent_id=agent_id,
+                prompt_title=prompt_title,
+                model=self._model,
+                system_prompt=system_prompt,
+                user_message=user_message,
+            )
+
+        start = time.monotonic()
         try:
             response = await self._call_llm(messages)
-            return response.choices[0].message.content or ""
+            duration_ms = int((time.monotonic() - start) * 1000)
+            text = response.choices[0].message.content or ""
+
+            if self._run_logger:
+                usage = response.usage or {}
+                await self._run_logger.llm_response_ok(
+                    agent_id=agent_id,
+                    prompt_title=prompt_title,
+                    duration_ms=duration_ms,
+                    tokens={
+                        "prompt_tokens": getattr(usage, "prompt_tokens", 0),
+                        "completion_tokens": getattr(usage, "completion_tokens", 0),
+                        "total_tokens": getattr(usage, "total_tokens", 0),
+                    },
+                    response_text=text,
+                )
+            return text
         except Exception as exc:
+            duration_ms = int((time.monotonic() - start) * 1000)
+            if self._run_logger:
+                await self._run_logger.llm_response_error(
+                    agent_id=agent_id,
+                    prompt_title=prompt_title,
+                    duration_ms=duration_ms,
+                    error=str(exc),
+                )
             logger.error("LLM completion failed after retries", exc_info=True)
             raise LLMError(str(exc)) from exc
 
@@ -60,33 +99,60 @@ class LLMClient:
         tools: list[dict],
         tool_handlers: dict[str, Callable[..., Awaitable[str]]],
         max_tool_rounds: int = 5,
+        log_context: dict[str, Any] | None = None,
     ) -> str:
-        """Send a completion request that may invoke tools in a loop.
+        """Send a completion request that may invoke tools in a loop."""
+        ctx = log_context or {}
+        agent_id = ctx.get("agent_id", "")
+        prompt_title = ctx.get("prompt_title", "")
 
-        The LLM may call one or more tools per round. Each tool result is fed
-        back until the model returns a plain content response or max_tool_rounds
-        is exhausted.
-
-        Args:
-            system_prompt: Content for the system role.
-            user_message: Content for the user role.
-            tools: List of tool definitions in OpenAI function-calling format.
-            tool_handlers: Mapping of tool name → async callable that executes it.
-            max_tool_rounds: Maximum number of tool-call/result round trips.
-
-        Returns:
-            Final response string from the model.
-        """
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message},
         ]
         try:
             for round_num in range(max_tool_rounds):
-                response = await self._call_llm(messages, tools=tools, tool_choice="auto")
+                if self._run_logger:
+                    round_title = f"{prompt_title} (round {round_num + 1})" if prompt_title else f"round {round_num + 1}"
+                    await self._run_logger.llm_request(
+                        agent_id=agent_id,
+                        prompt_title=round_title,
+                        model=self._model,
+                        system_prompt=system_prompt,
+                        user_message=json.dumps(messages[-1].get("content", "")),
+                    )
+
+                start = time.monotonic()
+                try:
+                    response = await self._call_llm(messages, tools=tools, tool_choice="auto")
+                    duration_ms = int((time.monotonic() - start) * 1000)
+                except Exception as exc:
+                    duration_ms = int((time.monotonic() - start) * 1000)
+                    if self._run_logger:
+                        await self._run_logger.llm_response_error(
+                            agent_id=agent_id,
+                            prompt_title=prompt_title,
+                            duration_ms=duration_ms,
+                            error=str(exc),
+                        )
+                    raise
+
                 msg = response.choices[0].message
 
                 if not msg.tool_calls:
+                    if self._run_logger:
+                        usage = response.usage or {}
+                        await self._run_logger.llm_response_ok(
+                            agent_id=agent_id,
+                            prompt_title=prompt_title,
+                            duration_ms=duration_ms,
+                            tokens={
+                                "prompt_tokens": getattr(usage, "prompt_tokens", 0),
+                                "completion_tokens": getattr(usage, "completion_tokens", 0),
+                                "total_tokens": getattr(usage, "total_tokens", 0),
+                            },
+                            response_text=msg.content or "",
+                        )
                     return msg.content or ""
 
                 logger.info(
@@ -94,7 +160,6 @@ class LLMClient:
                     extra={"round": round_num + 1, "tools": [tc.function.name for tc in msg.tool_calls]},
                 )
 
-                # Append the assistant's tool-call message
                 messages.append({
                     "role": "assistant",
                     "content": msg.content or "",
@@ -102,16 +167,12 @@ class LLMClient:
                         {
                             "id": tc.id,
                             "type": "function",
-                            "function": {
-                                "name": tc.function.name,
-                                "arguments": tc.function.arguments,
-                            },
+                            "function": {"name": tc.function.name, "arguments": tc.function.arguments},
                         }
                         for tc in msg.tool_calls
                     ],
                 })
 
-                # Execute each tool and append results
                 for tc in msg.tool_calls:
                     tool_name = tc.function.name
                     try:
@@ -125,13 +186,8 @@ class LLMClient:
                         result = f"Unknown tool: {tool_name}"
                         logger.warning("Unknown tool called by LLM", extra={"tool": tool_name})
 
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "content": result,
-                    })
+                    messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
 
-            # max rounds reached without a final answer — return whatever we have
             logger.warning("Tool-use loop reached max rounds without final answer", extra={"max_rounds": max_tool_rounds})
             last_content = response.choices[0].message.content  # type: ignore[possibly-undefined]
             return last_content or ""
@@ -148,15 +204,7 @@ class LLMClient:
         retry=retry_if_exception_type((litellm.RateLimitError, litellm.Timeout)),
     )
     async def _call_llm(self, messages: list[dict[str, Any]], **kwargs: Any) -> Any:
-        """Single LLM call with retry on rate-limit or timeout errors.
-
-        Args:
-            messages: Full messages list to send.
-            **kwargs: Extra params forwarded to litellm (e.g. tools, tool_choice).
-
-        Returns:
-            litellm ModelResponse object.
-        """
+        """Single LLM call with retry on rate-limit or timeout errors."""
         if settings.llm_request_delay_seconds > 0:
             await asyncio.sleep(settings.llm_request_delay_seconds)
 

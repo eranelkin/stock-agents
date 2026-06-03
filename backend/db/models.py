@@ -59,6 +59,7 @@ class Prompt(Base):
     category: Mapped[str] = mapped_column(String(50), nullable=False, default="agents")
     search_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     search_query_template: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
