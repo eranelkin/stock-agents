@@ -45,10 +45,9 @@ def _alembic_cfg() -> Config:
     return cfg
 
 
-async def _prepare_db() -> None:
-    """Detect DB state and stamp Alembic if the DB is not yet tracked."""
+async def _detect_db_state() -> str | None:
+    """Detect DB state and return the revision to stamp, or None if no stamp needed."""
     engine = create_async_engine(settings.database_url)
-    stamp_to: str | None = None
 
     try:
         async with engine.connect() as conn:
@@ -64,7 +63,7 @@ async def _prepare_db() -> None:
                     "SELECT version_num FROM alembic_version LIMIT 1"
                 ))
                 _log(f"Alembic already initialized — current revision: {rev or 'none'}")
-                return
+                return None
 
             # ── Case 2: Fresh database (no tables at all) ──────────────────
             has_runs = await conn.scalar(text(
@@ -75,7 +74,7 @@ async def _prepare_db() -> None:
             ))
             if not has_runs:
                 _log("Fresh database detected — all migrations will run from scratch")
-                return
+                return None
 
             # ── Case 3: Legacy DB (tables exist, Alembic never ran) ────────
             _log("Legacy database detected (tables exist, no Alembic tracking)")
@@ -94,31 +93,20 @@ async def _prepare_db() -> None:
             # Walk markers from newest to oldest to find the highest applied revision
             for table, column, revision in reversed(REVISION_MARKERS):
                 if column in col_cache[table]:
-                    stamp_to = revision
-                    break
-            else:
-                # None of the later columns exist — legacy DB is at base schema
-                stamp_to = "0001"
+                    return revision
+
+            # None of the later columns exist — legacy DB is at base schema
+            return "0001"
 
     finally:
         await engine.dispose()
-
-    _log(f"Stamping database at revision: {stamp_to}")
-    alembic_cmd.stamp(_alembic_cfg(), stamp_to)
-    _log(f"Stamped at {stamp_to}")
-
-
-async def _run_upgrade() -> None:
-    """Run alembic upgrade head (always safe — no-op if already at head)."""
-    _log("Running: alembic upgrade head")
-    alembic_cmd.upgrade(_alembic_cfg(), "head")
 
 
 def _log(msg: str) -> None:
     print(f"  {msg}")
 
 
-async def main() -> None:
+def main() -> None:
     print()
     print("=" * 50)
     print("  Stock-Agents — Database Migration")
@@ -126,8 +114,14 @@ async def main() -> None:
     print()
 
     try:
-        await _prepare_db()
-        await _run_upgrade()
+        stamp_to = asyncio.run(_detect_db_state())
+        if stamp_to is not None:
+            _log(f"Stamping database at revision: {stamp_to}")
+            alembic_cmd.stamp(_alembic_cfg(), stamp_to)
+            _log(f"Stamped at {stamp_to}")
+
+        _log("Running: alembic upgrade head")
+        alembic_cmd.upgrade(_alembic_cfg(), "head")
     except Exception as exc:
         print(f"\n  ERROR: {exc}")
         sys.exit(1)
@@ -138,4 +132,4 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
