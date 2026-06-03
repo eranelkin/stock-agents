@@ -86,6 +86,7 @@ async def create_run(
                             "content": p.content,
                             "search_enabled": p.search_enabled,
                             "search_query_template": p.search_query_template,
+                            "search_mode": p.search_mode,
                         }
                         for p in agent_prompts
                     ],
@@ -96,6 +97,7 @@ async def create_run(
                             "content": p.content,
                             "search_enabled": p.search_enabled,
                             "search_query_template": p.search_query_template,
+                            "search_mode": p.search_mode,
                         }
                         for p in sector_prompts
                     ],

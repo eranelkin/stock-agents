@@ -74,11 +74,13 @@ class Agent:
         prompt: str,
         llm_client: LLMClient,
         run_logger: RunLogger | None = None,
+        search_mode: str | None = None,
     ) -> None:
         self.agent_id = agent_id
         self.prompt = prompt
         self._llm = llm_client
         self._run_logger = run_logger
+        self._search_mode = search_mode
 
     async def run(
         self,
@@ -104,9 +106,10 @@ class Agent:
         }
 
         resolved_prompt = _resolve_placeholders(self.prompt)
+        effective_search_mode = self._search_mode or settings.search_mode
         raw = ""
         try:
-            if settings.search_mode == "tool_call":
+            if effective_search_mode == "tool_call":
                 search_handler = self._make_search_handler(
                     ticker=ticker,
                     prompt_title=prompt_title,

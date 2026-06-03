@@ -12,6 +12,7 @@ class PromptCreate(BaseModel):
     category: str = "agents"  # "system" | "agents" | "once" | "market"
     search_enabled: bool = False
     search_query_template: str | None = None
+    search_mode: str | None = None  # None = use global; "prefetch" | "tool_call"
     is_active: bool = True
 
 
@@ -21,6 +22,7 @@ class PromptUpdate(BaseModel):
     category: str | None = None
     search_enabled: bool | None = None
     search_query_template: str | None = None
+    search_mode: str | None = None
     is_active: bool | None = None
 
 
@@ -35,6 +37,7 @@ class PromptResponse(BaseModel):
     category: str
     search_enabled: bool
     search_query_template: str | None
+    search_mode: str | None
     is_active: bool
     created_at: datetime
     updated_at: datetime

@@ -21,3 +21,4 @@ class PromptConfig(BaseModel):
     content: str
     search_enabled: bool = False
     search_query_template: str | None = None
+    search_mode: str | None = None  # None = use global setting; "prefetch" | "tool_call"

@@ -14,6 +14,9 @@ export async function createPrompt(payload: {
   title: string
   content: string
   category: string
+  search_mode?: string | null
+  search_enabled?: boolean
+  search_query_template?: string | null
 }): Promise<Prompt> {
   const res = await fetch(BASE, {
     method: 'POST',
@@ -29,7 +32,14 @@ export async function createPrompt(payload: {
 
 export async function updatePrompt(
   id: string,
-  payload: Partial<{ title: string; content: string; category: string }>,
+  payload: Partial<{
+    title: string
+    content: string
+    category: string
+    search_mode: string | null
+    search_enabled: boolean
+    search_query_template: string | null
+  }>,
 ): Promise<Prompt> {
   const res = await fetch(`${BASE}/${id}`, {
     method: 'PUT',
