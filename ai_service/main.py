@@ -39,6 +39,7 @@ class RunRequest(BaseModel):
     tickers: list[dict[str, Any]]
     prompts: list[PromptConfig]
     sector_prompts: list[PromptConfig] = []
+    ceo_prompts: list[PromptConfig] = []
 
 
 @app.post("/run", status_code=202)
@@ -51,6 +52,7 @@ async def trigger_run(request: RunRequest) -> dict[str, str]:
             request.tickers,
             request.prompts,
             request.sector_prompts,
+            request.ceo_prompts,
         ),
         name=f"run-{request.run_id}",
     )
@@ -84,6 +86,7 @@ async def _run_orchestrator(
     tickers: list[dict[str, Any]],
     prompts: list[PromptConfig],
     sector_prompts: list[PromptConfig],
+    ceo_prompts: list[PromptConfig] | None = None,
 ) -> None:
     try:
         await Orchestrator(
@@ -92,6 +95,7 @@ async def _run_orchestrator(
             tickers=tickers,
             prompts=prompts,
             sector_prompts=sector_prompts,
+            ceo_prompts=ceo_prompts or [],
         ).run()
     finally:
         _active_tasks.pop(run_id, None)

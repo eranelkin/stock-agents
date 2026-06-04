@@ -25,10 +25,12 @@ import type { Prompt } from "../types/prompt";
 import PromptDialog from "../components/PromptDialog";
 import { resolvePlaceholders } from "../utils/placeholders";
 
-const CATEGORIES = ["system", "agents", "once", "market"] as const;
+const CATEGORIES = ["agents", "ceo", "sectors", "system", "once", "market"] as const;
 const CATEGORY_LABELS: Record<string, string> = {
-  system: "System",
   agents: "Agents",
+  ceo: "CEO",
+  sectors: "Sectors",
+  system: "System",
   once: "Once",
   market: "Market",
 };

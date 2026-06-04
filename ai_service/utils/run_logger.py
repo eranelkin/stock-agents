@@ -105,6 +105,7 @@ class RunLogger:
         tickers: list[str],
         agent_prompts: list[str],
         sector_prompts: list[str],
+        ceo_prompts: list[str] | None = None,
     ) -> None:
         self._mode = mode
         async with self._lock:
@@ -116,6 +117,7 @@ class RunLogger:
                 payload={
                     "mode": mode, "models": models, "tickers": tickers,
                     "agent_prompts": agent_prompts, "sector_prompts": sector_prompts,
+                    "ceo_prompts": ceo_prompts or [],
                 },
             ))
 
@@ -428,6 +430,11 @@ def _is_json(text: str) -> bool:
 
 def _render_row(e: _Event, entity: str, color: str) -> str:
     icon, css_cls, label = _TYPE_META.get(e.type, ("?", "unknown", e.type.upper()))
+    if e.pipeline_type:
+        pt = e.pipeline_type.upper()
+        label = f"{pt} {label}"
+        if e.type in ("pipeline_start", "pipeline_end"):
+            css_cls = f"pipeline-{e.pipeline_type}"
     dur = _fmt_duration(e.duration_ms)
     model_disp = _h(_model_short(e.model)) if e.model else "—"
     entity_disp = _h(entity) if entity else "—"
@@ -436,7 +443,8 @@ def _render_row(e: _Event, entity: str, color: str) -> str:
     extra = ""
     if e.type == "pipeline_end":
         chip_dur = _fmt_duration(e.payload.get("duration_ms", e.duration_ms))
-        chip_json = _h(json.dumps({"entity": entity, "dur": chip_dur, "color": color}))
+        chip_label = f"[{e.pipeline_type.upper()}] {entity}" if e.pipeline_type else entity
+        chip_json = _h(json.dumps({"entity": chip_label, "dur": chip_dur, "color": color}))
         extra = f" data-chip='{chip_json}'"
     elif e.type == "llm_response_ok":
         tok = e.payload.get("tokens", {})
@@ -498,6 +506,7 @@ def _card_body(e: _Event) -> str:
             ("Tickers", ", ".join(p.get("tickers", [])) or "—"),
             ("Agents",  ", ".join(p.get("agent_prompts", [])) or "none"),
             ("Sectors", ", ".join(p.get("sector_prompts", [])) or "none"),
+            ("CEO",     ", ".join(p.get("ceo_prompts", [])) or "none"),
             ("Mode",    p.get("mode", "—")),
         ])
     if e.type == "pipeline_end" and p.get("output_file"):
@@ -775,8 +784,11 @@ table#events-table th{
   padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:.03em;
 }
 .ti{font-size:12px}
-.type-badge.run      {background:rgba(226,232,240,.12);color:#e2e8f0}
-.type-badge.pipeline {background:rgba(107,114,128,.15);color:#9ca3af}
+.type-badge.run             {background:rgba(226,232,240,.12);color:#e2e8f0}
+.type-badge.pipeline        {background:rgba(107,114,128,.15);color:#9ca3af}
+.type-badge.pipeline-stocks {background:rgba(56,189,248,.15); color:#38bdf8}
+.type-badge.pipeline-sectors{background:rgba(167,139,250,.15);color:#a78bfa}
+.type-badge.pipeline-ceo    {background:rgba(251,191,36,.15); color:#fbbf24}
 .type-badge.llm-req  {background:rgba(74,158,255,.15); color:#4a9eff}
 .type-badge.llm-ok   {background:rgba(52,211,153,.15); color:#34d399}
 .type-badge.llm-err  {background:rgba(248,113,113,.15);color:#f87171}

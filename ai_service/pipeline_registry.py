@@ -35,7 +35,7 @@ class PipelineTypeConfig:
     persist_to_db: bool = False
     # triggers_aggregation: if True, each completed per-entity output is forwarded to
     # StockAggregator. Set True for any pipeline whose agent data should appear in
-    # stock_{ticker}.yaml.
+    # agg_{ticker}.yaml.
     triggers_aggregation: bool = False
 
 
@@ -45,7 +45,7 @@ PIPELINE_REGISTRY: list[PipelineTypeConfig] = [
         entity_schema=TickerInput,
         prompt_category="agents",
         output_mode="per_entity",
-        output_prefix="output_",
+        output_prefix="stock_",
         dependencies=[],
         required=True,
         use_request_entities=True,

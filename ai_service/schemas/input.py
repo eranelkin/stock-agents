@@ -1,6 +1,19 @@
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, model_validator
+
+
+class CeoInput(BaseModel):
+    """Input entity for the CEO pipeline (Layer 5).
+
+    Carries the merged agent outputs from all contributing pipelines for one ticker,
+    as produced by the StockAggregator.
+    """
+
+    name: str
+    agents: dict[str, Any]
 
 
 class TickerInput(BaseModel):

@@ -11,6 +11,7 @@ from typing import Any
 import aiofiles
 from sqlalchemy import update
 
+from ai_service.ceo_manager import CeoManager
 from ai_service.config import settings
 from ai_service.db import models
 from ai_service.db.session import AsyncSessionLocal
@@ -38,6 +39,7 @@ class Orchestrator:
         tickers: list[dict[str, Any]],
         prompts: list[PromptConfig],
         sector_prompts: list[PromptConfig],
+        ceo_prompts: list[PromptConfig] | None = None,
     ) -> None:
         self.run_id = run_id
         self.model_configs = model_configs
@@ -45,6 +47,7 @@ class Orchestrator:
         self.prompts_by_category: dict[str, list[PromptConfig]] = {
             "agents": prompts,
             "sectors": sector_prompts,
+            "ceo": ceo_prompts or [],
         }
         self._dt_str: str = ""
 
@@ -64,11 +67,25 @@ class Orchestrator:
         started_at = datetime.now(timezone.utc).strftime("%Y-%m-%d  %H:%M:%S UTC")
         await run_logger.open(run_id=self.run_id, started_at=started_at)
 
+        ceo_prompts = self.prompts_by_category.get("ceo", [])
+        ceo_manager: CeoManager | None = None
+        if ceo_prompts:
+            ceo_manager = CeoManager(
+                total_tickers=len(self.tickers),
+                model_configs=self.model_configs,
+                prompts=ceo_prompts,
+                semaphore=asyncio.Semaphore(settings.max_concurrent_ceo_pipelines),
+                run_dir=run_dir,
+                output_format=settings.output_format,
+                run_logger=run_logger,
+            )
+
         stock_aggregator = StockAggregator(
             expected_pipelines=["stocks"],
             run_dir=run_dir,
             output_format=settings.output_format,
             run_logger=run_logger,
+            ceo_manager=ceo_manager,
         )
 
         run_start = time.monotonic()
@@ -81,6 +98,7 @@ class Orchestrator:
                 tickers=[t.get("name") or t.get("symbol", str(t)) for t in self.tickers],
                 agent_prompts=[p.title for p in agent_prompts],
                 sector_prompts=[p.title for p in sector_prompts],
+                ceo_prompts=[p.title for p in ceo_prompts],
             )
 
             semaphore = asyncio.Semaphore(settings.max_concurrent_pipelines)
@@ -187,7 +205,10 @@ class Orchestrator:
                     extra={"run_id": self.run_id},
                 )
 
-            await asyncio.gather(*[run_pipeline_type(cfg) for cfg in PIPELINE_REGISTRY])
+            pipeline_tasks = [run_pipeline_type(cfg) for cfg in PIPELINE_REGISTRY]
+            if ceo_manager:
+                pipeline_tasks.append(ceo_manager.run())
+            await asyncio.gather(*pipeline_tasks)
 
             total_duration_ms = int((time.monotonic() - run_start) * 1000)
             await run_logger.run_end(total_duration_ms=total_duration_ms)

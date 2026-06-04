@@ -202,7 +202,7 @@ export default function PromptDialog({
           : null,
       }
       if (isEdit && editPrompt) {
-        await updatePrompt(editPrompt.id, { title: form.title, content: form.content, ...searchPayload })
+        await updatePrompt(editPrompt.id, { title: form.title, content: form.content, category: defaultCategory, ...searchPayload })
       } else {
         await createPrompt({ title: form.title, content: form.content, category: defaultCategory, ...searchPayload })
       }

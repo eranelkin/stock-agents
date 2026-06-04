@@ -9,7 +9,7 @@ from pydantic import BaseModel
 class PromptCreate(BaseModel):
     title: str
     content: str
-    category: str = "agents"  # "system" | "agents" | "once" | "market"
+    category: str = "agents"  # "agents" | "ceo" | "sectors" | "system" | "once" | "market"
     search_enabled: bool = False
     search_query_template: str | None = None
     search_mode: str | None = None  # None = use global; "prefetch" | "tool_call"

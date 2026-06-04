@@ -62,6 +62,11 @@ async def create_run(
     )
     sector_prompts = sector_prompt_result.scalars().all()
 
+    ceo_prompt_result = await session.execute(
+        select(Prompt).where(Prompt.category == "ceo", Prompt.is_active == True)  # noqa: E712
+    )
+    ceo_prompts = ceo_prompt_result.scalars().all()
+
     model_configs = [
         {
             "id": str(m.id),
@@ -107,6 +112,17 @@ async def create_run(
                             "search_mode": p.search_mode,
                         }
                         for p in sector_prompts
+                    ],
+                    "ceo_prompts": [
+                        {
+                            "id": str(p.id),
+                            "title": p.title,
+                            "content": p.content,
+                            "search_enabled": p.search_enabled,
+                            "search_query_template": p.search_query_template,
+                            "search_mode": p.search_mode,
+                        }
+                        for p in ceo_prompts
                     ],
                 },
                 timeout=10.0,

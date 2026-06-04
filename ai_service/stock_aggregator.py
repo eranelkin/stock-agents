@@ -3,11 +3,14 @@ from __future__ import annotations
 import asyncio
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ai_service.schemas.stock_output import StockAggregatedMetadata, StockAggregatedOutput
 from ai_service.utils.logger import get_logger
 from ai_service.utils.output_writer import write_output
+
+if TYPE_CHECKING:
+    from ai_service.ceo_manager import CeoManager
 
 logger = get_logger(__name__)
 
@@ -19,11 +22,15 @@ class StockAggregator:
     Phase 2: expected_pipelines=["stocks"] — writes immediately on stocks completion.
     Future:  expected_pipelines=["stocks", "sectors", "macro"] — waits for all three.
 
+    When a CEO manager is provided, it is notified immediately after each ticker is
+    written so the CEO pipeline for that ticker can start without waiting for others.
+
     Args:
         expected_pipelines: Pipeline names that must contribute before writing.
         run_dir: Output directory for the current run.
         output_format: "yaml" or "json".
         run_logger: Optional run logger for HTML log output.
+        ceo_manager: Optional CeoManager to notify on each ticker completion.
     """
 
     def __init__(
@@ -32,11 +39,13 @@ class StockAggregator:
         run_dir: str,
         output_format: str,
         run_logger: Any | None = None,
+        ceo_manager: CeoManager | None = None,
     ) -> None:
         self._expected = set(expected_pipelines)
         self._run_dir = run_dir
         self._output_format = output_format
         self._run_logger = run_logger
+        self._ceo_manager = ceo_manager
         self._contributions: dict[str, dict[str, Any]] = defaultdict(dict)
         self._lock = asyncio.Lock()
 
@@ -81,9 +90,11 @@ class StockAggregator:
             entity_name=ticker,
             output_dir=self._run_dir,
             output_format=self._output_format,
-            output_prefix="stock_",
+            output_prefix="agg_",
         )
         logger.info(
             "Stock aggregated output written",
             extra={"ticker": ticker, "source_pipelines": sorted(contributions.keys())},
         )
+        if self._ceo_manager:
+            await self._ceo_manager.on_ticker_ready(ticker, merged_agents)

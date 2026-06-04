@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     # Concurrency
     max_concurrent_pipelines: int = 5
     max_concurrent_agents: int = 2
+    max_concurrent_ceo_pipelines: int = 4
 
     # Output
     output_format: str = "yaml"
