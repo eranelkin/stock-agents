@@ -10,7 +10,6 @@ Usage (from the project root):
 """
 from __future__ import annotations
 
-import asyncio
 import os
 import sys
 from pathlib import Path
@@ -20,8 +19,7 @@ ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 os.chdir(ROOT)
 
-from sqlalchemy import inspect, text
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy import create_engine, inspect, text
 
 from alembic import command as alembic_cmd
 from alembic.config import Config
@@ -45,29 +43,31 @@ def _alembic_cfg() -> Config:
     return cfg
 
 
-async def _prepare_db() -> None:
+def _prepare_db() -> None:
     """Detect DB state and stamp Alembic if the DB is not yet tracked."""
-    engine = create_async_engine(settings.database_url)
+    # Convert async database URL to sync
+    sync_url = settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
+    engine = create_engine(sync_url)
     stamp_to: str | None = None
 
     try:
-        async with engine.connect() as conn:
+        with engine.connect() as conn:
             # ── Case 1: Alembic already tracking this DB ──────────────────
-            has_alembic = await conn.scalar(text(
+            has_alembic = conn.scalar(text(
                 "SELECT EXISTS ("
                 "  SELECT 1 FROM information_schema.tables"
                 "  WHERE table_name = 'alembic_version'"
                 ")"
             ))
             if has_alembic:
-                rev = await conn.scalar(text(
+                rev = conn.scalar(text(
                     "SELECT version_num FROM alembic_version LIMIT 1"
                 ))
                 _log(f"Alembic already initialized — current revision: {rev or 'none'}")
                 return
 
             # ── Case 2: Fresh database (no tables at all) ──────────────────
-            has_runs = await conn.scalar(text(
+            has_runs = conn.scalar(text(
                 "SELECT EXISTS ("
                 "  SELECT 1 FROM information_schema.tables"
                 "  WHERE table_name = 'runs'"
@@ -81,15 +81,13 @@ async def _prepare_db() -> None:
             _log("Legacy database detected (tables exist, no Alembic tracking)")
             _log("Inspecting schema to determine the correct starting point...")
 
-            def _get_columns(sync_conn: object, table: str) -> set[str]:
-                return {c["name"] for c in inspect(sync_conn).get_columns(table)}  # type: ignore[arg-type]
+            def _get_columns(table: str) -> set[str]:
+                return {c["name"] for c in inspect(conn).get_columns(table)}
 
             col_cache: dict[str, set[str]] = {}
             for table, column, _ in REVISION_MARKERS:
                 if table not in col_cache:
-                    col_cache[table] = await conn.run_sync(
-                        lambda c, t=table: _get_columns(c, t)
-                    )
+                    col_cache[table] = _get_columns(table)
 
             # Walk markers from newest to oldest to find the highest applied revision
             for table, column, revision in reversed(REVISION_MARKERS):
@@ -101,14 +99,15 @@ async def _prepare_db() -> None:
                 stamp_to = "0001"
 
     finally:
-        await engine.dispose()
+        engine.dispose()
 
-    _log(f"Stamping database at revision: {stamp_to}")
-    alembic_cmd.stamp(_alembic_cfg(), stamp_to)
-    _log(f"Stamped at {stamp_to}")
+    if stamp_to:
+        _log(f"Stamping database at revision: {stamp_to}")
+        alembic_cmd.stamp(_alembic_cfg(), stamp_to)
+        _log(f"Stamped at {stamp_to}")
 
 
-async def _run_upgrade() -> None:
+def _run_upgrade() -> None:
     """Run alembic upgrade head (always safe — no-op if already at head)."""
     _log("Running: alembic upgrade head")
     alembic_cmd.upgrade(_alembic_cfg(), "head")
@@ -118,7 +117,7 @@ def _log(msg: str) -> None:
     print(f"  {msg}")
 
 
-async def main() -> None:
+def main() -> None:
     print()
     print("=" * 50)
     print("  Stock-Agents — Database Migration")
@@ -126,8 +125,8 @@ async def main() -> None:
     print()
 
     try:
-        await _prepare_db()
-        await _run_upgrade()
+        _prepare_db()
+        _run_upgrade()
     except Exception as exc:
         print(f"\n  ERROR: {exc}")
         sys.exit(1)
@@ -138,17 +137,4 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    try:
-        # Check if we're already in an event loop
-        asyncio.get_running_loop()
-        # If we're in an event loop, we need to handle this differently
-        # Create a new event loop and run in it
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(main())
-        finally:
-            loop.close()
-    except RuntimeError:
-        # No event loop running, safe to use asyncio.run()
-        asyncio.run(main())
+    main()
