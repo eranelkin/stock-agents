@@ -348,6 +348,18 @@ class RunLogger:
             f'<span class="stat-label">Prompt</span></div>\n'
             f'  <div class="stat-item"><span class="stat-value" id="stat-ctok">0</span>'
             f'<span class="stat-label">Completion</span></div>\n'
+            f'  <div class="filter-group">\n'
+            f'    <div class="filter-dropdown" id="dd-tickers">\n'
+            f'      <button class="filter-btn" id="dd-tickers-btn" onclick="toggleDropdown(\'dd-tickers\')">'
+            f'<span id="dd-tickers-label">All Tickers</span><span class="dd-arrow">&#x25BE;</span></button>\n'
+            f'      <div class="filter-panel" id="dd-tickers-panel" style="display:none"></div>\n'
+            f'    </div>\n'
+            f'    <div class="filter-dropdown" id="dd-types">\n'
+            f'      <button class="filter-btn" id="dd-types-btn" onclick="toggleDropdown(\'dd-types\')">'
+            f'<span id="dd-types-label">All Types</span><span class="dd-arrow">&#x25BE;</span></button>\n'
+            f'      <div class="filter-panel" id="dd-types-panel" style="display:none"></div>\n'
+            f'    </div>\n'
+            f'  </div>\n'
             f'</div>\n\n'
             f'<div id="chips-bar" class="pipelines-bar"></div>\n\n'
             f'<div class="section-heading" id="events-table-anchor">Events</div>\n'
@@ -458,7 +470,8 @@ def _render_row(e: _Event, entity: str, color: str) -> str:
 
     return (
         f'    <tr id="row-{e.seq}" class="event-row type-{css_cls}"'
-        f' style="--row-color:{color}" onclick="toggleRow({e.seq})"{extra}>'
+        f' style="--row-color:{color}" onclick="toggleRow({e.seq})"{extra}'
+        f' data-entity="{_h(entity)}" data-ptype="{_h(e.pipeline_type)}">'
         f'<td class="col-seq"><span class="row-chevron">&#x25B6;</span>{e.seq}</td>'
         f'<td class="col-ts">{_h(e.ts)}</td>'
         f'<td class="col-type"><span class="type-badge {css_cls}">'
@@ -627,10 +640,13 @@ def _polling_js(run_id: str) -> str:
         "    tb.querySelectorAll('[data-chip]').forEach(addChip);\n"
         "    var mr=tb.querySelector('[data-mode]');\n"
         "    if(mr){var mm=$e('meta-mode');if(mm)mm.textContent=mr.getAttribute('data-mode');mr.removeAttribute('data-mode');}\n"
+        "    updateFilterOptions();\n"
+        "    applyFilters();\n"
         "  }\n"
         "  document.addEventListener('DOMContentLoaded',function(){\n"
         "    document.querySelectorAll('#events-body [data-chip]').forEach(addChip);\n"
         "    document.querySelectorAll('#events-body .json-block').forEach(function(b){highlightJSON(b);b.dataset.hl='1';});\n"
+        "    updateFilterOptions();\n"
         "    if(window.__RUN_DONE__){setBadgeDone();return;}\n"
         "    var sb=window.__INITIAL_BYTES__||0;\n"
         "    var es=new EventSource('/runs/'+RID+'/log-stream?since_bytes='+sb);\n"
@@ -866,6 +882,32 @@ table#events-table th{
 .json-num   {color:#fcd34d}
 .json-bool  {color:#f9a8d4}
 .json-null  {color:#9ca3af}
+
+/* Filter dropdowns */
+.filter-group{display:flex;gap:8px;margin-left:auto;align-items:center}
+.filter-dropdown{position:relative}
+.filter-btn{
+  background:rgba(255,255,255,.06);border:1px solid var(--border);
+  color:var(--text);border-radius:6px;padding:5px 12px;
+  font-size:11px;cursor:pointer;font-family:inherit;
+  white-space:nowrap;display:flex;align-items:center;gap:6px;
+  transition:background .15s;
+}
+.filter-btn:hover{background:rgba(255,255,255,.10)}
+.filter-btn.has-filter{border-color:#1976d2;color:#4a9eff}
+.filter-panel{
+  position:absolute;top:calc(100% + 4px);right:0;
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:6px;min-width:140px;z-index:100;padding:4px 0;
+  box-shadow:0 4px 16px rgba(0,0,0,.4);
+}
+.filter-opt{
+  display:flex;align-items:center;gap:8px;padding:6px 12px;
+  cursor:pointer;font-size:12px;color:var(--text);user-select:none;
+}
+.filter-opt:hover{background:rgba(255,255,255,.06)}
+.filter-opt input[type=checkbox]{accent-color:#1976d2;cursor:pointer}
+.dd-arrow{font-size:10px;color:var(--muted)}
 """
 
 
@@ -918,6 +960,101 @@ function copyBlock(btn) {
 
 function esc(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+var _openDD = null;
+
+function toggleDropdown(id) {
+  var panel = document.getElementById(id + '-panel');
+  if (!panel) return;
+  if (_openDD && _openDD !== id) {
+    var prev = document.getElementById(_openDD + '-panel');
+    if (prev) prev.style.display = 'none';
+  }
+  var isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'block';
+  _openDD = isOpen ? null : id;
+}
+
+document.addEventListener('click', function(e) {
+  if (_openDD && !e.target.closest('.filter-dropdown')) {
+    var p = document.getElementById(_openDD + '-panel');
+    if (p) p.style.display = 'none';
+    _openDD = null;
+  }
+});
+
+function ensureFilterOption(ddId, value) {
+  if (!value) return;
+  var panel = document.getElementById(ddId + '-panel');
+  var optId = 'fopt-' + ddId + '-' + value;
+  if (!panel || document.getElementById(optId)) return;
+  var lbl = document.createElement('label');
+  lbl.className = 'filter-opt';
+  lbl.id = optId;
+  var cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.value = value;
+  cb.addEventListener('change', applyFilters);
+  lbl.appendChild(cb);
+  lbl.appendChild(document.createTextNode(' ' + value.toUpperCase()));
+  panel.appendChild(lbl);
+}
+
+function updateFilterOptions() {
+  document.querySelectorAll('#events-body .event-row').forEach(function(row) {
+    var entity = row.getAttribute('data-entity');
+    var ptype  = row.getAttribute('data-ptype');
+    if (entity) ensureFilterOption('dd-tickers', entity);
+    if (ptype)  ensureFilterOption('dd-types',   ptype);
+  });
+}
+
+function getFilterSelections(ddId) {
+  var panel = document.getElementById(ddId + '-panel');
+  if (!panel) return [];
+  return Array.prototype.map.call(
+    panel.querySelectorAll('input[type=checkbox]:checked'),
+    function(cb) { return cb.value; }
+  );
+}
+
+function updateFilterLabel(ddId, allLabel) {
+  var sel  = getFilterSelections(ddId);
+  var span = document.getElementById(ddId + '-label');
+  var btn  = document.getElementById(ddId + '-btn');
+  if (!span || !btn) return;
+  if (sel.length === 0) {
+    span.textContent = allLabel;
+    btn.classList.remove('has-filter');
+  } else if (sel.length === 1) {
+    span.textContent = sel[0].toUpperCase();
+    btn.classList.add('has-filter');
+  } else {
+    span.textContent = sel.length + ' selected';
+    btn.classList.add('has-filter');
+  }
+}
+
+function applyFilters() {
+  updateFilterLabel('dd-tickers', 'All Tickers');
+  updateFilterLabel('dd-types',   'All Types');
+  var selTickers = getFilterSelections('dd-tickers');
+  var selTypes   = getFilterSelections('dd-types');
+  document.querySelectorAll('#events-body .event-row').forEach(function(row) {
+    var entity = row.getAttribute('data-entity') || '';
+    var ptype  = row.getAttribute('data-ptype')  || '';
+    var seq    = row.id.replace('row-', '');
+    var detail = document.getElementById('detail-row-' + seq);
+    if (!entity && !ptype) { row.style.display = ''; return; }
+    var pass = (selTickers.length === 0 || selTickers.indexOf(entity) !== -1) &&
+               (selTypes.length   === 0 || selTypes.indexOf(ptype)    !== -1);
+    row.style.display = pass ? '' : 'none';
+    if (!pass) {
+      if (detail) detail.style.display = 'none';
+      if (String(_openSeq) === seq) { row.classList.remove('row-open'); _openSeq = null; }
+    }
+  });
 }
 
 function highlightJSON(el) {
