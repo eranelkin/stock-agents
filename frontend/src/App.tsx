@@ -17,6 +17,7 @@ function App() {
   const [selectedModelIds, setSelectedModelIds] = useLocalStorage<string[]>('selectedModelIds', [])
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0)
   const [pendingChatInput, setPendingChatInput] = useState<string | null>(null)
+  const [runInProgress, setRunInProgress] = useState(false)
 
   const refreshModels = () => setModelsRefreshKey((k) => k + 1)
 
@@ -35,9 +36,10 @@ function App() {
           selectedModelIds={selectedModelIds}
           onSelectedModelsChange={setSelectedModelIds}
           refreshKey={modelsRefreshKey}
+          modelsDisabled={runInProgress}
         />
         <Box component="main" sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-          {activeTab === 'run' && <RunPage selectedModelIds={selectedModelIds} />}
+          {activeTab === 'run' && <RunPage selectedModelIds={selectedModelIds} onRunActiveChange={setRunInProgress} />}
           {activeTab === 'prompts' && <PromptsPage onRunPrompt={handleRunPrompt} />}
           {activeTab === 'chat' && <ChatPage selectedModelIds={selectedModelIds} pendingInput={pendingChatInput} onClearPendingInput={() => setPendingChatInput(null)} />}
           {activeTab === 'models' && <ModelsPage onModelsChange={refreshModels} />}

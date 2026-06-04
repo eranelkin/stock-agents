@@ -11,6 +11,23 @@ from typing import Any
 import aiofiles
 
 
+# ── Visual config ──────────────────────────────────────────────────────────────
+
+_TYPE_META: dict[str, tuple[str, str, str]] = {
+    "run_start":          ("▶▶", "run",       "RUN START"),
+    "run_end":            ("■■", "run",       "RUN END"),
+    "pipeline_start":     ("▶",  "pipeline",  "PIPELINE"),
+    "pipeline_end":       ("■",  "pipeline",  "PIPELINE END"),
+    "llm_request":        ("⬆",  "llm-req",   "LLM REQUEST"),
+    "llm_response_ok":    ("✓",  "llm-ok",    "LLM RESPONSE"),
+    "llm_response_error": ("✗",  "llm-err",   "LLM ERROR"),
+    "search_request":     ("⌕",  "srch-req",  "SEARCH REQ"),
+    "search_response":    ("◉",  "srch-resp", "SEARCH RESP"),
+}
+
+_ENTITY_COLORS = ["#4a9eff", "#34d399", "#a78bfa", "#fb923c", "#f472b6", "#38bdf8"]
+
+
 # ── Event dataclass ────────────────────────────────────────────────────────────
 
 @dataclass
@@ -29,46 +46,54 @@ class _Event:
     payload: dict[str, Any]
 
 
-# ── Visual config ──────────────────────────────────────────────────────────────
-
-_TYPE_META: dict[str, tuple[str, str, str]] = {
-    "run_start":          ("▶▶", "run",       "RUN START"),
-    "run_end":            ("■■", "run",       "RUN END"),
-    "pipeline_start":     ("▶",  "pipeline",  "PIPELINE"),
-    "pipeline_end":       ("■",  "pipeline",  "PIPELINE END"),
-    "llm_request":        ("⬆",  "llm-req",   "LLM REQUEST"),
-    "llm_response_ok":    ("✓",  "llm-ok",    "LLM RESPONSE"),
-    "llm_response_error": ("✗",  "llm-err",   "LLM ERROR"),
-    "search_request":     ("⌕",  "srch-req",  "SEARCH REQ"),
-    "search_response":    ("◉",  "srch-resp", "SEARCH RESP"),
-}
-
-_ENTITY_COLORS = ["#4a9eff", "#34d399", "#a78bfa", "#fb923c", "#f472b6", "#38bdf8"]
-
-
 # ── RunLogger ──────────────────────────────────────────────────────────────────
 
 class RunLogger:
-    """Buffers run events in memory and writes a single self-contained HTML log at close()."""
+    """Streams run events to an HTML log file in real time.
 
-    def __init__(self, log_path: str) -> None:
+    Events are flushed to disk immediately as they occur. The HTML page embeds
+    polling JS that fetches new rows every 2 seconds and appends them without a
+    full page reload, enabling live monitoring during an active run.
+
+    Args:
+        log_path: Absolute or relative path for the output HTML file.
+        run_id: The run UUID string; embedded in the polling fetch URL.
+    """
+
+    def __init__(self, log_path: str, run_id: str = "") -> None:
         self._path = log_path
+        self._run_id = run_id
         self._lock = asyncio.Lock()
-        self._events: list[_Event] = []
-        self._seq: int = 0
-        self._run_meta: dict[str, str] = {}
+        self._seq = 0
+        self._entity_colors: dict[str, str] = {}
+        self._fh: Any = None
+        self._mode = ""
+        self._stat_llm = 0
+        self._stat_ok = 0
+        self._stat_err = 0
+        self._stat_ptok = 0
+        self._stat_ctok = 0
+        self._stat_ttok = 0
+        self._total_dur_ms = 0
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
 
     async def open(self, run_id: str, started_at: str) -> None:
+        """Write the HTML header and open the file handle for streaming."""
         async with self._lock:
-            self._run_meta = {"run_id": run_id, "started_at": started_at}
+            Path(self._path).parent.mkdir(parents=True, exist_ok=True)
+            self._fh = await aiofiles.open(self._path, "w", encoding="utf-8")
+            await self._fh.write(self._build_header(run_id, started_at))
+            await self._fh.flush()
 
     async def close(self) -> None:
-        content = self._render_html()
-        Path(self._path).parent.mkdir(parents=True, exist_ok=True)
-        async with aiofiles.open(self._path, "w", encoding="utf-8") as f:
-            await f.write(content)
+        """Write the closing HTML (final stats + done flag) and close the file."""
+        async with self._lock:
+            if self._fh:
+                await self._fh.write(self._build_footer())
+                await self._fh.flush()
+                await self._fh.close()
+                self._fh = None
 
     # ── Run-level events ───────────────────────────────────────────────────────
 
@@ -81,9 +106,10 @@ class RunLogger:
         agent_prompts: list[str],
         sector_prompts: list[str],
     ) -> None:
+        self._mode = mode
         async with self._lock:
             self._seq += 1
-            self._events.append(_Event(
+            await self._append(_Event(
                 seq=self._seq, ts=_ts(), type="run_start",
                 pipeline_type="", entity="", model="", pipeline_id="",
                 agent_id="", prompt_title="", status="started", duration_ms=-1,
@@ -94,9 +120,10 @@ class RunLogger:
             ))
 
     async def run_end(self, *, total_duration_ms: int) -> None:
+        self._total_dur_ms = total_duration_ms
         async with self._lock:
             self._seq += 1
-            self._events.append(_Event(
+            await self._append(_Event(
                 seq=self._seq, ts=_ts(), type="run_end",
                 pipeline_type="", entity="", model="", pipeline_id="",
                 agent_id="", prompt_title="", status="completed",
@@ -116,7 +143,7 @@ class RunLogger:
     ) -> None:
         async with self._lock:
             self._seq += 1
-            self._events.append(_Event(
+            await self._append(_Event(
                 seq=self._seq, ts=_ts(), type="pipeline_start",
                 pipeline_type=pipeline_type, entity=entity, model=model,
                 pipeline_id=pipeline_id, agent_id="", prompt_title="",
@@ -135,7 +162,7 @@ class RunLogger:
     ) -> None:
         async with self._lock:
             self._seq += 1
-            self._events.append(_Event(
+            await self._append(_Event(
                 seq=self._seq, ts=_ts(), type="pipeline_end",
                 pipeline_type=pipeline_type, entity=entity, model=model,
                 pipeline_id=pipeline_id, agent_id="", prompt_title="",
@@ -157,7 +184,7 @@ class RunLogger:
     ) -> None:
         async with self._lock:
             self._seq += 1
-            self._events.append(_Event(
+            await self._append(_Event(
                 seq=self._seq, ts=_ts(), type="search_request",
                 pipeline_type=pipeline_type, entity=entity, model="",
                 pipeline_id=pipeline_id, agent_id=agent_id,
@@ -178,7 +205,7 @@ class RunLogger:
     ) -> None:
         async with self._lock:
             self._seq += 1
-            self._events.append(_Event(
+            await self._append(_Event(
                 seq=self._seq, ts=_ts(), type="search_response",
                 pipeline_type=pipeline_type, entity=entity, model="",
                 pipeline_id=pipeline_id, agent_id=agent_id,
@@ -198,17 +225,15 @@ class RunLogger:
         pipeline_type: str = "",
         entity: str = "",
     ) -> None:
+        self._stat_llm += 1
         async with self._lock:
             self._seq += 1
-            self._events.append(_Event(
+            await self._append(_Event(
                 seq=self._seq, ts=_ts(), type="llm_request",
                 pipeline_type=pipeline_type, entity=entity, model=model,
                 pipeline_id=pipeline_id, agent_id=agent_id,
                 prompt_title=prompt_title, status="", duration_ms=-1,
-                payload={
-                    "system_prompt": system_prompt,
-                    "user_message": user_message,
-                },
+                payload={"system_prompt": system_prompt, "user_message": user_message},
             ))
 
     async def llm_response_ok(
@@ -223,9 +248,16 @@ class RunLogger:
         pipeline_type: str = "",
         entity: str = "",
     ) -> None:
+        pt = tokens.get("prompt_tokens", 0)
+        ct = tokens.get("completion_tokens", 0)
+        tt = tokens.get("total_tokens", 0)
+        self._stat_ok += 1
+        self._stat_ptok += pt
+        self._stat_ctok += ct
+        self._stat_ttok += tt
         async with self._lock:
             self._seq += 1
-            self._events.append(_Event(
+            await self._append(_Event(
                 seq=self._seq, ts=_ts(), type="llm_response_ok",
                 pipeline_type=pipeline_type, entity=entity, model="",
                 pipeline_id=pipeline_id, agent_id=agent_id,
@@ -244,9 +276,10 @@ class RunLogger:
         pipeline_type: str = "",
         entity: str = "",
     ) -> None:
+        self._stat_err += 1
         async with self._lock:
             self._seq += 1
-            self._events.append(_Event(
+            await self._append(_Event(
                 seq=self._seq, ts=_ts(), type="llm_response_error",
                 pipeline_type=pipeline_type, entity=entity, model="",
                 pipeline_id=pipeline_id, agent_id=agent_id,
@@ -254,113 +287,103 @@ class RunLogger:
                 payload={"error": error},
             ))
 
-    # ── Rendering ──────────────────────────────────────────────────────────────
+    # ── Internal ───────────────────────────────────────────────────────────────
 
-    def _compute_stats(self) -> dict[str, Any]:
-        ok = [e for e in self._events if e.type == "llm_response_ok"]
-        err = [e for e in self._events if e.type == "llm_response_error"]
-        pt = sum(e.payload.get("tokens", {}).get("prompt_tokens", 0) for e in ok)
-        ct = sum(e.payload.get("tokens", {}).get("completion_tokens", 0) for e in ok)
-        tt = sum(e.payload.get("tokens", {}).get("total_tokens", 0) for e in ok)
-        return {
-            "llm_calls": len(ok) + len(err),
-            "llm_success": len(ok),
-            "llm_errors": len(err),
-            "prompt_tokens": pt,
-            "completion_tokens": ct,
-            "total_tokens": tt,
-        }
+    async def _append(self, e: _Event) -> None:
+        """Write the two <tr> rows for this event immediately. Must be called within lock."""
+        if not self._fh:
+            return
+        entity, color = self._resolve_color(e)
+        await self._fh.write(_render_row(e, entity, color) + "\n")
+        await self._fh.write(_render_inline_detail(e, entity, color) + "\n")
+        await self._fh.flush()
 
-    def _render_html(self) -> str:
-        run_id = self._run_meta.get("run_id", "—")
-        started_at = self._run_meta.get("started_at", "—")
-        stats = self._compute_stats()
+    def _resolve_color(self, e: _Event) -> tuple[str, str]:
+        entity = e.entity
+        if entity and entity not in self._entity_colors:
+            self._entity_colors[entity] = _ENTITY_COLORS[len(self._entity_colors) % len(_ENTITY_COLORS)]
+        return entity, (self._entity_colors.get(entity, "#6b7280") if entity else "#6b7280")
 
-        # Resolve entity for every event (use pipeline_id → entity lookup as fallback)
-        pid_entity: dict[str, str] = {
-            e.pipeline_id: e.entity
-            for e in self._events
-            if e.type == "pipeline_start" and e.pipeline_id and e.entity
-        }
-        seq_entity: dict[int, str] = {
-            e.seq: e.entity or pid_entity.get(e.pipeline_id, "")
-            for e in self._events
-        }
-
-        # Assign a color to each unique entity in order of first appearance
-        entity_colors: dict[str, str] = {}
-        for entity in seq_entity.values():
-            if entity and entity not in entity_colors:
-                entity_colors[entity] = _ENTITY_COLORS[len(entity_colors) % len(_ENTITY_COLORS)]
-
-        # Run metadata
-        run_end_events = [e for e in self._events if e.type == "run_end"]
-        total_ms = run_end_events[-1].payload.get("total_duration_ms", 0) if run_end_events else 0
-        total_dur = _fmt_duration(total_ms) if total_ms else "—"
-
-        run_start_events = [e for e in self._events if e.type == "run_start"]
-        run_payload = run_start_events[0].payload if run_start_events else {}
-
-        # Build sections
-        chips_html = _render_chips(self._events, entity_colors, seq_entity)
-        table_rows_list: list[str] = []
-        for e in self._events:
-            table_rows_list.append(_render_row(e, entity_colors, seq_entity))
-            table_rows_list.append(_render_inline_detail(e, entity_colors, seq_entity))
-        table_rows = "\n".join(table_rows_list)
-
+    def _build_header(self, run_id: str, started_at: str) -> str:
         run_id_short = run_id[:8] if len(run_id) > 8 else run_id
+        polling_run_id = self._run_id or run_id
+        return (
+            f'<!DOCTYPE html>\n<html lang="en">\n<head>\n'
+            f'<meta charset="UTF-8">\n'
+            f'<meta name="viewport" content="width=device-width,initial-scale=1">\n'
+            f'<title>Run Log — {_h(run_id_short)}</title>\n'
+            f'<style>{_CSS}</style>\n'
+            f'<script>\n{_JS}\n{_polling_js(polling_run_id)}\n</script>\n'
+            f'</head>\n<body>\n\n'
+            f'<div class="header-card">\n'
+            f'  <div class="header-left">\n'
+            f'    <div class="header-title">STOCK-AGENTS &middot; RUN LOG</div>\n'
+            f'    <div class="header-meta">\n'
+            f'      <span class="meta-item"><span class="meta-label">Run ID</span>'
+            f'<span class="meta-value mono">{_h(run_id)}</span></span>\n'
+            f'      <span class="meta-item"><span class="meta-label">Started</span>'
+            f'<span class="meta-value">{_h(started_at)}</span></span>\n'
+            f'      <span class="meta-item"><span class="meta-label">Duration</span>'
+            f'<span class="meta-value" id="meta-duration">—</span></span>\n'
+            f'      <span class="meta-item"><span class="meta-label">Mode</span>'
+            f'<span class="meta-value" id="meta-mode">—</span></span>\n'
+            f'    </div>\n'
+            f'  </div>\n'
+            f'  <div class="run-status-badge" id="run-status-badge">'
+            f'<span class="run-spinner"></span><span>RUNNING</span></div>\n'
+            f'</div>\n\n'
+            f'<div class="stats-bar">\n'
+            f'  <div class="stat-item"><span class="stat-value" id="stat-llm">0</span>'
+            f'<span class="stat-label">LLM Calls</span></div>\n'
+            f'  <div class="stat-item success"><span class="stat-value" id="stat-ok">0</span>'
+            f'<span class="stat-label">Success</span></div>\n'
+            f'  <div class="stat-item error"><span class="stat-value" id="stat-err">0</span>'
+            f'<span class="stat-label">Errors</span></div>\n'
+            f'  <div class="stat-sep"></div>\n'
+            f'  <div class="stat-item"><span class="stat-value" id="stat-ttok">0</span>'
+            f'<span class="stat-label">Total Tokens</span></div>\n'
+            f'  <div class="stat-item"><span class="stat-value" id="stat-ptok">0</span>'
+            f'<span class="stat-label">Prompt</span></div>\n'
+            f'  <div class="stat-item"><span class="stat-value" id="stat-ctok">0</span>'
+            f'<span class="stat-label">Completion</span></div>\n'
+            f'</div>\n\n'
+            f'<div id="chips-bar" class="pipelines-bar"></div>\n\n'
+            f'<div class="section-heading" id="events-table-anchor">Events</div>\n'
+            f'<div class="table-wrapper">\n'
+            f'<table id="events-table">\n'
+            f'  <thead>\n'
+            f'    <tr>\n'
+            f'      <th>#</th><th>Time</th><th>Type</th><th>Entity</th>\n'
+            f'      <th>Prompt / Detail</th><th>Model</th><th>Duration</th>\n'
+            f'    </tr>\n'
+            f'  </thead>\n'
+            f'  <tbody id="events-body">\n'
+        )
 
-        return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Run Log — {_h(run_id_short)}</title>
-<style>{_CSS}</style>
-</head>
-<body>
-
-<div class="header-card">
-  <div class="header-title">STOCK-AGENTS &middot; RUN LOG</div>
-  <div class="header-meta">
-    <span class="meta-item"><span class="meta-label">Run ID</span><span class="meta-value mono">{_h(run_id)}</span></span>
-    <span class="meta-item"><span class="meta-label">Started</span><span class="meta-value">{_h(started_at)}</span></span>
-    <span class="meta-item"><span class="meta-label">Duration</span><span class="meta-value">{total_dur}</span></span>
-    <span class="meta-item"><span class="meta-label">Mode</span><span class="meta-value">{_h(run_payload.get("mode", "—"))}</span></span>
-  </div>
-</div>
-
-<div class="stats-bar">
-  <div class="stat-item"><span class="stat-value">{stats["llm_calls"]}</span><span class="stat-label">LLM Calls</span></div>
-  <div class="stat-item success"><span class="stat-value">{stats["llm_success"]}</span><span class="stat-label">Success</span></div>
-  <div class="stat-item error"><span class="stat-value">{stats["llm_errors"]}</span><span class="stat-label">Errors</span></div>
-  <div class="stat-sep"></div>
-  <div class="stat-item"><span class="stat-value">{stats["total_tokens"]:,}</span><span class="stat-label">Total Tokens</span></div>
-  <div class="stat-item"><span class="stat-value">{stats["prompt_tokens"]:,}</span><span class="stat-label">Prompt</span></div>
-  <div class="stat-item"><span class="stat-value">{stats["completion_tokens"]:,}</span><span class="stat-label">Completion</span></div>
-</div>
-
-{chips_html}
-
-<div class="section-heading" id="events-table-anchor">Events</div>
-<div class="table-wrapper">
-<table id="events-table">
-  <thead>
-    <tr>
-      <th>#</th><th>Time</th><th>Type</th><th>Entity</th>
-      <th>Prompt / Detail</th><th>Model</th><th>Duration</th>
-    </tr>
-  </thead>
-  <tbody>
-{table_rows}
-  </tbody>
-</table>
-</div>
-
-<script>{_JS}</script>
-</body>
-</html>"""
+    def _build_footer(self) -> str:
+        dur = _fmt_duration(self._total_dur_ms) if self._total_dur_ms else "—"
+        vals = {
+            "stat-llm":      str(self._stat_llm),
+            "stat-ok":       str(self._stat_ok),
+            "stat-err":      str(self._stat_err),
+            "stat-ttok":     f"{self._stat_ttok:,}",
+            "stat-ptok":     f"{self._stat_ptok:,}",
+            "stat-ctok":     f"{self._stat_ctok:,}",
+            "meta-duration": _h(dur),
+            "meta-mode":     _h(self._mode),
+        }
+        vals_js = json.dumps(vals)
+        return (
+            "  </tbody>\n</table>\n</div>\n\n"
+            "<script>\n"
+            "window.__RUN_DONE__ = true;\n"
+            f"(function(){{ var v={vals_js};"
+            " function a(){ for(var id in v){ var e=document.getElementById(id); if(e) e.textContent=v[id]; } }"
+            " if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded',a); } else { a(); }"
+            " })();\n"
+            "</script>\n"
+            "</body>\n</html>\n"
+        )
 
 
 # ── Module-level helpers ───────────────────────────────────────────────────────
@@ -403,43 +426,31 @@ def _is_json(text: str) -> bool:
 
 # ── HTML rendering helpers ─────────────────────────────────────────────────────
 
-def _render_chips(
-    events: list[_Event],
-    entity_colors: dict[str, str],
-    seq_entity: dict[int, str],
-) -> str:
-    ends = [e for e in events if e.type == "pipeline_end"]
-    if not ends:
-        return ""
-    chips = []
-    for e in ends:
-        entity = seq_entity.get(e.seq, e.entity)
-        color = entity_colors.get(entity, "#6b7280")
-        dur = _fmt_duration(e.payload.get("duration_ms", e.duration_ms))
-        chips.append(
-            f'<span class="pipeline-chip" style="border-color:{color};color:{color}">'
-            f'{_h(entity)} &#x2713; {dur}'
-            f'</span>'
-        )
-    return f'<div class="pipelines-bar">{"".join(chips)}</div>'
-
-
-def _render_row(
-    e: _Event,
-    entity_colors: dict[str, str],
-    seq_entity: dict[int, str],
-) -> str:
+def _render_row(e: _Event, entity: str, color: str) -> str:
     icon, css_cls, label = _TYPE_META.get(e.type, ("?", "unknown", e.type.upper()))
-    entity = seq_entity.get(e.seq, e.entity)
-    color = entity_colors.get(entity, "#6b7280")
     dur = _fmt_duration(e.duration_ms)
     model_disp = _h(_model_short(e.model)) if e.model else "—"
     entity_disp = _h(entity) if entity else "—"
     prompt_disp = _h(e.prompt_title) if e.prompt_title else "—"
 
+    extra = ""
+    if e.type == "pipeline_end":
+        chip_dur = _fmt_duration(e.payload.get("duration_ms", e.duration_ms))
+        chip_json = _h(json.dumps({"entity": entity, "dur": chip_dur, "color": color}))
+        extra = f" data-chip='{chip_json}'"
+    elif e.type == "llm_response_ok":
+        tok = e.payload.get("tokens", {})
+        extra = (
+            f' data-prompt-tok="{tok.get("prompt_tokens", 0)}"'
+            f' data-comp-tok="{tok.get("completion_tokens", 0)}"'
+            f' data-total-tok="{tok.get("total_tokens", 0)}"'
+        )
+    elif e.type == "run_start":
+        extra = f' data-mode="{_h(e.payload.get("mode", ""))}"'
+
     return (
         f'    <tr id="row-{e.seq}" class="event-row type-{css_cls}"'
-        f' style="--row-color:{color}" onclick="toggleRow({e.seq})">'
+        f' style="--row-color:{color}" onclick="toggleRow({e.seq})"{extra}>'
         f'<td class="col-seq"><span class="row-chevron">&#x25B6;</span>{e.seq}</td>'
         f'<td class="col-ts">{_h(e.ts)}</td>'
         f'<td class="col-type"><span class="type-badge {css_cls}">'
@@ -453,15 +464,8 @@ def _render_row(
     )
 
 
-def _render_inline_detail(
-    e: _Event,
-    entity_colors: dict[str, str],
-    seq_entity: dict[int, str],
-) -> str:
+def _render_inline_detail(e: _Event, entity: str, color: str) -> str:
     """Collapsed <tr> rendered immediately after its event row; expands on click."""
-    entity = seq_entity.get(e.seq, e.entity)
-    color = entity_colors.get(entity, "#6b7280")
-
     meta_parts: list[str] = []
     if e.ts:
         meta_parts.append(f'time: <span class="mono">{_h(e.ts)}</span>')
@@ -477,9 +481,7 @@ def _render_inline_detail(
         f'<div class="card-meta">{"  ·  ".join(meta_parts)}</div>'
         if meta_parts else ""
     )
-
     body = _card_body(e)
-
     return (
         f'    <tr id="detail-row-{e.seq}" class="detail-row" style="display:none">'
         f'<td colspan="7" class="detail-cell" style="border-left-color:{color}">'
@@ -525,14 +527,11 @@ def _card_body(e: _Event) -> str:
     return ""
 
 
-def _section_kv(
-    pairs: list[tuple[str, str]],
-    mono_val: bool = False,
-) -> str:
+def _section_kv(pairs: list[tuple[str, str]], mono_val: bool = False) -> str:
     rows = "".join(
         f'<div class="kv-row">'
         f'<span class="kv-key">{_h(k)}</span>'
-        f'<span class="kv-val{"  mono" if mono_val else ""}">{_h(v)}</span>'
+        f'<span class="kv-val{" mono" if mono_val else ""}">{_h(v)}</span>'
         f'</div>'
         for k, v in pairs
     )
@@ -542,15 +541,10 @@ def _section_kv(
 def _body_llm_request(p: dict[str, Any]) -> str:
     sys_prompt = p.get("system_prompt", "")
     user_msg = p.get("user_message", "")
-
     char_note = f' <span class="char-count">({len(sys_prompt):,} chars)</span>' if sys_prompt else ""
-
     user_display = _pretty_json(user_msg)
-    user_is_json = _is_json(user_msg)
-    user_block_cls = f'code-block{"  json-block" if user_is_json else ""}'
-
+    user_block_cls = f'code-block{"  json-block" if _is_json(user_msg) else ""}'
     copy_btn = '<button class="copy-btn" onclick="copyBlock(this)">&#x2398; copy</button>'
-
     return (
         f'<div class="card-section">'
         f'<div class="section-label">System Prompt{char_note}{copy_btn}</div>'
@@ -570,15 +564,13 @@ def _body_llm_ok(p: dict[str, Any]) -> str:
     tt = tokens.get("total_tokens", 0)
     resp = p.get("response_text", "")
     display = _pretty_json(resp)
-    is_json = _is_json(resp)
-    resp_cls = f'code-block{"  json-block" if is_json else ""}'
+    resp_cls = f'code-block{"  json-block" if _is_json(resp) else ""}'
     token_str = (
         f'prompt=<strong>{pt:,}</strong>'
         f'&nbsp;&nbsp;completion=<strong>{ct:,}</strong>'
         f'&nbsp;&nbsp;total=<strong class="tok-total">{tt:,}</strong>'
     ) if tt else "tokens not reported"
     copy_btn = '<button class="copy-btn" onclick="copyBlock(this)">&#x2398; copy</button>'
-
     return (
         f'<div class="card-section">'
         f'<div class="token-line">{token_str}</div>'
@@ -590,10 +582,71 @@ def _body_llm_ok(p: dict[str, Any]) -> str:
     )
 
 
+# ── Polling JS ────────────────────────────────────────────────────────────────
+
+def _polling_js(run_id: str) -> str:
+    """Return the self-contained SSE script for live log updates."""
+    return (
+        "(function(){\n"
+        f"  var RID='{run_id}';\n"
+        "  var llm=0,ok=0,err=0,ttok=0,ptok=0,ctok=0;\n"
+        "  function $e(id){return document.getElementById(id);}\n"
+        "  function addChip(row){\n"
+        "    try{\n"
+        "      var c=JSON.parse(row.getAttribute('data-chip'));\n"
+        "      var bar=$e('chips-bar');\n"
+        "      if(bar){var s=document.createElement('span');s.className='pipeline-chip';\n"
+        "        s.style.borderColor=c.color;s.style.color=c.color;\n"
+        "        s.textContent=c.entity+' ✓ '+c.dur;bar.appendChild(s);}\n"
+        "      row.removeAttribute('data-chip');\n"
+        "    }catch(e){}\n"
+        "  }\n"
+        "  function upStats(){\n"
+        "    var m={'stat-llm':llm,'stat-ok':ok,'stat-err':err,\n"
+        "           'stat-ttok':ttok.toLocaleString(),'stat-ptok':ptok.toLocaleString(),'stat-ctok':ctok.toLocaleString()};\n"
+        "    for(var id in m){var el=$e(id);if(el)el.textContent=m[id];}\n"
+        "  }\n"
+        "  function setBadgeDone(){\n"
+        "    var b=$e('run-status-badge');\n"
+        "    if(b){b.className='run-status-badge done';b.innerHTML='<span style=\"font-size:15px\">✓</span><span>COMPLETED</span>';}\n"
+        "  }\n"
+        "  function processRows(html){\n"
+        "    var tb=$e('events-body');\n"
+        "    if(!tb||!html)return;\n"
+        "    tb.insertAdjacentHTML('beforeend',html);\n"
+        "    tb.querySelectorAll('.json-block:not([data-hl])').forEach(function(b){highlightJSON(b);b.dataset.hl='1';});\n"
+        "    tb.querySelectorAll('[data-chip]').forEach(addChip);\n"
+        "    var mr=tb.querySelector('[data-mode]');\n"
+        "    if(mr){var mm=$e('meta-mode');if(mm)mm.textContent=mr.getAttribute('data-mode');mr.removeAttribute('data-mode');}\n"
+        "  }\n"
+        "  document.addEventListener('DOMContentLoaded',function(){\n"
+        "    document.querySelectorAll('#events-body [data-chip]').forEach(addChip);\n"
+        "    document.querySelectorAll('#events-body .json-block').forEach(function(b){highlightJSON(b);b.dataset.hl='1';});\n"
+        "    if(window.__RUN_DONE__){setBadgeDone();return;}\n"
+        "    var sb=window.__INITIAL_BYTES__||0;\n"
+        "    var es=new EventSource('/runs/'+RID+'/log-stream?since_bytes='+sb);\n"
+        "    es.onmessage=function(ev){\n"
+        "      try{\n"
+        "        var d=JSON.parse(ev.data);\n"
+        "        if(d.html)processRows(d.html);\n"
+        "        if(d.stats){llm+=d.stats.llm||0;ok+=d.stats.ok||0;err+=d.stats.err||0;\n"
+        "          ttok+=d.stats.ttok||0;ptok+=d.stats.ptok||0;ctok+=d.stats.ctok||0;upStats();}\n"
+        "      }catch(ignore){}\n"
+        "    };\n"
+        "    es.addEventListener('done',function(){\n"
+        "      es.close();\n"
+        "      setBadgeDone();\n"
+        "    });\n"
+        "  });\n"
+        "})();"
+    )
+
+
 # ── CSS ────────────────────────────────────────────────────────────────────────
 
 _CSS = """
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{height:100%}
 :root{
   --bg:#0f1117;--surface:#1a1d27;--surface2:#21253a;--border:#2d3147;
   --text:#e2e8f0;--muted:#8892a4;
@@ -603,7 +656,9 @@ _CSS = """
 body{
   background:var(--bg);color:var(--text);
   font-family:'SF Mono','Fira Code','Cascadia Code','Consolas',monospace;
-  font-size:12px;line-height:1.6;padding:20px;max-width:1440px;margin:0 auto;
+  font-size:12px;line-height:1.6;
+  height:100%;display:flex;flex-direction:column;overflow:hidden;
+  padding:20px;max-width:1440px;margin:0 auto;
 }
 a{color:inherit;text-decoration:none}
 .mono{font-family:'SF Mono','Fira Code','Consolas',monospace}
@@ -612,7 +667,9 @@ a{color:inherit;text-decoration:none}
 .header-card{
   background:var(--surface);border:1px solid var(--border);border-radius:8px;
   padding:20px 24px;margin-bottom:10px;
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
 }
+.header-left{flex:1}
 .header-title{
   font-size:15px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
   margin-bottom:12px;
@@ -621,6 +678,31 @@ a{color:inherit;text-decoration:none}
 .meta-item{display:flex;flex-direction:column;gap:2px}
 .meta-label{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
 .meta-value{font-size:13px}
+
+/* Running status badge */
+.run-status-badge{
+  display:flex;align-items:center;gap:9px;
+  padding:9px 20px;border-radius:24px;
+  border:1.5px solid var(--green);color:var(--green);
+  font-size:11px;font-weight:700;letter-spacing:.1em;white-space:nowrap;
+  flex-shrink:0;
+  animation:badge-glow 2s ease-in-out infinite;
+}
+.run-status-badge.done{border-color:var(--muted);color:var(--muted);animation:none}
+@keyframes badge-glow{
+  0%,100%{box-shadow:0 0 6px rgba(52,211,153,.25)}
+  50%{box-shadow:0 0 20px rgba(52,211,153,.65),0 0 40px rgba(52,211,153,.2)}
+}
+.run-spinner{
+  width:13px;height:13px;
+  border:2px solid rgba(52,211,153,.2);
+  border-top-color:var(--green);
+  border-radius:50%;
+  animation:spin .75s linear infinite;
+  flex-shrink:0;
+}
+.run-status-badge.done .run-spinner{display:none}
+@keyframes spin{to{transform:rotate(360deg)}}
 
 /* Stats bar */
 .stats-bar{
@@ -653,8 +735,8 @@ a{color:inherit;text-decoration:none}
 
 /* Events table */
 .table-wrapper{
-  overflow-x:auto;border:1px solid var(--border);border-radius:8px;
-  margin-bottom:28px;
+  overflow-x:auto;overflow-y:auto;border:1px solid var(--border);border-radius:8px;
+  flex:1;min-height:0;margin-bottom:20px;
 }
 table#events-table{width:100%;border-collapse:collapse;font-size:12px}
 table#events-table thead{position:sticky;top:0;z-index:10}
@@ -775,7 +857,7 @@ table#events-table th{
 """
 
 
-# ── JS ─────────────────────────────────────────────────────────────────────────
+# ── JS (static interactivity — no DOMContentLoaded here) ──────────────────────
 
 _JS = """
 var _openSeq = null;
@@ -784,10 +866,7 @@ function toggleRow(seq) {
   var detailRow = document.getElementById('detail-row-' + seq);
   var headerRow = document.getElementById('row-' + seq);
   if (!detailRow || !headerRow) return;
-
   var isOpen = detailRow.style.display !== 'none';
-
-  // Close the currently open row if it's a different one
   if (_openSeq !== null && _openSeq !== seq) {
     var prevDetail = document.getElementById('detail-row-' + _openSeq);
     var prevHeader = document.getElementById('row-' + _openSeq);
@@ -795,8 +874,6 @@ function toggleRow(seq) {
     if (prevHeader) prevHeader.classList.remove('row-open');
     _openSeq = null;
   }
-
-  // Toggle the clicked row
   if (isOpen) {
     detailRow.style.display = 'none';
     headerRow.classList.remove('row-open');
@@ -816,18 +893,11 @@ function copyBlock(btn) {
   navigator.clipboard.writeText(text).then(function() {
     btn.textContent = 'copied!';
     btn.classList.add('copied');
-    setTimeout(function() {
-      btn.innerHTML = '&#x2398; copy';
-      btn.classList.remove('copied');
-    }, 1500);
+    setTimeout(function() { btn.innerHTML = '&#x2398; copy'; btn.classList.remove('copied'); }, 1500);
   }).catch(function() {
     var ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
     document.body.removeChild(ta);
     btn.textContent = 'copied!';
     setTimeout(function() { btn.innerHTML = '&#x2398; copy'; }, 1500);
@@ -850,19 +920,11 @@ function highlightJSON(el) {
       if (m[0] === '"') {
         cls = /^".*":?$/.test(m) && m[m.length-1] === ':' ? 'json-key' : 'json-str';
         if (cls === 'json-key') m = m.slice(0,-0);
-      } else if (m === 'true' || m === 'false') {
-        cls = 'json-bool';
-      } else if (m === 'null') {
-        cls = 'json-null';
-      } else {
-        cls = 'json-num';
-      }
+      } else if (m === 'true' || m === 'false') { cls = 'json-bool';
+      } else if (m === 'null') { cls = 'json-null';
+      } else { cls = 'json-num'; }
       return '<span class="' + cls + '">' + esc(m) + '</span>';
     }
   );
 }
-
-document.addEventListener('DOMContentLoaded', function() {
-  document.querySelectorAll('.json-block').forEach(highlightJSON);
-});
 """

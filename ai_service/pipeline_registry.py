@@ -33,6 +33,10 @@ class PipelineTypeConfig:
     use_request_entities: bool = False
     # persist_to_db: Phase 1 — only stocks persist. Phase 2 will add SectorResult table.
     persist_to_db: bool = False
+    # triggers_aggregation: if True, each completed per-entity output is forwarded to
+    # StockAggregator. Set True for any pipeline whose agent data should appear in
+    # stock_{ticker}.yaml.
+    triggers_aggregation: bool = False
 
 
 PIPELINE_REGISTRY: list[PipelineTypeConfig] = [
@@ -46,6 +50,7 @@ PIPELINE_REGISTRY: list[PipelineTypeConfig] = [
         required=True,
         use_request_entities=True,
         persist_to_db=True,
+        triggers_aggregation=True,
     ),
     PipelineTypeConfig(
         name="sectors",

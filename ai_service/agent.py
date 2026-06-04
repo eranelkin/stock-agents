@@ -18,8 +18,27 @@ from ai_service.utils.search_tool import WEB_SEARCH_TOOL, execute_search
 logger = get_logger(__name__)
 
 
+def _quote_yaml_values(text: str) -> str:
+    """Quote unquoted block-mapping values that contain ': ' (colon-space).
+
+    PyYAML's scanner treats ': ' inside a plain scalar as a new mapping-key
+    indicator, raising YAMLError. This pass wraps such values in double quotes
+    so the second parse attempt succeeds.
+    """
+    lines = []
+    for line in text.split('\n'):
+        m = re.match(r'^(\s+)(.+?):\s(.+)$', line)
+        if m:
+            indent, key, val = m.group(1), m.group(2), m.group(3)
+            if val and val[0] not in ('"', "'", '{', '[', '|', '>') and ': ' in val:
+                escaped = val.replace('\\', '\\\\').replace('"', '\\"')
+                line = f'{indent}{key}: "{escaped}"'
+        lines.append(line)
+    return '\n'.join(lines)
+
+
 def _parse_response(raw: str) -> dict[str, Any]:
-    """Try JSON → YAML → code-block extraction. Raises ValueError if all fail."""
+    """Try JSON → YAML → sanitised YAML → code-block extraction. Raises ValueError if all fail."""
     text = raw.strip()
 
     # 1. Try JSON directly
@@ -33,6 +52,16 @@ def _parse_response(raw: str) -> dict[str, Any]:
     # 2. Try YAML directly
     try:
         result = yaml.safe_load(text)
+        if isinstance(result, dict):
+            return result
+    except yaml.YAMLError:
+        pass
+
+    # 2b. YAML failed — quote values containing ': ' and retry.
+    # LLMs commonly write plain scalars like "3 scenarios: Bull 50% / Bear 15%"
+    # which PyYAML rejects because ': ' looks like a mapping key indicator.
+    try:
+        result = yaml.safe_load(_quote_yaml_values(text))
         if isinstance(result, dict):
             return result
     except yaml.YAMLError:

@@ -36,3 +36,12 @@ export async function deleteRun(id: string): Promise<void> {
   const res = await fetch(`${BASE}/${id}`, { method: 'DELETE' })
   if (!res.ok) throw new Error(`Failed to delete run: ${res.statusText}`)
 }
+
+export async function stopRun(id: string): Promise<Run> {
+  const res = await fetch(`${BASE}/${id}/stop`, { method: 'POST' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.detail ?? `Failed to stop run: ${res.statusText}`)
+  }
+  return res.json()
+}

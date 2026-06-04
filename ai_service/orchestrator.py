@@ -20,6 +20,7 @@ from ai_service.pipeline import Pipeline
 from ai_service.pipeline_registry import PIPELINE_REGISTRY, PipelineTypeConfig
 from ai_service.schemas.output import PipelineOutput
 from ai_service.schemas.run import ModelConfig, PromptConfig
+from ai_service.stock_aggregator import StockAggregator
 from ai_service.utils.logger import get_logger
 from ai_service.utils.output_writer import write_combined_output, write_output
 from ai_service.utils.run_logger import RunLogger
@@ -59,9 +60,16 @@ class Orchestrator:
         await self._set_output_dir(run_dir)
 
         log_path = str(Path(settings.output_dir) / "logs" / f"{self._dt_str}.html")
-        run_logger = RunLogger(log_path)
+        run_logger = RunLogger(log_path, run_id=self.run_id)
         started_at = datetime.now(timezone.utc).strftime("%Y-%m-%d  %H:%M:%S UTC")
         await run_logger.open(run_id=self.run_id, started_at=started_at)
+
+        stock_aggregator = StockAggregator(
+            expected_pipelines=["stocks"],
+            run_dir=run_dir,
+            output_format=settings.output_format,
+            run_logger=run_logger,
+        )
 
         run_start = time.monotonic()
         try:
@@ -144,11 +152,31 @@ class Orchestrator:
                     f"Pipeline type '{cfg.name}' running {len(pipelines)} pipelines",
                     extra={"run_id": self.run_id},
                 )
+
+                async def run_one(p: Pipeline) -> PipelineOutput:
+                    output = await p.run()
+                    if cfg.output_mode == "per_entity":
+                        await write_output(
+                            data=output.model_dump(),
+                            entity_name=output.ticker,
+                            output_dir=run_dir,
+                            output_format=settings.output_format,
+                            output_prefix=cfg.output_prefix,
+                        )
+                        if cfg.triggers_aggregation:
+                            await stock_aggregator.add_contribution(
+                                ticker=output.ticker,
+                                pipeline_name=cfg.name,
+                                agents=output.agents,
+                            )
+                    return output
+
                 outputs: list[PipelineOutput] = list(
-                    await asyncio.gather(*[p.run() for p in pipelines])
+                    await asyncio.gather(*[run_one(p) for p in pipelines])
                 )
 
-                await self._write_outputs(cfg, outputs, run_dir)
+                if cfg.output_mode == "single_file":
+                    await self._write_outputs(cfg, outputs, run_dir)
 
                 if cfg.persist_to_db:
                     await self._persist_ticker_results(outputs)
@@ -166,6 +194,10 @@ class Orchestrator:
             await self._set_status("completed")
             logger.info("Orchestrator completed", extra={"run_id": self.run_id})
 
+        except asyncio.CancelledError:
+            logger.info("Orchestrator cancelled", extra={"run_id": self.run_id})
+            await self._set_status("cancelled")
+            raise
         except Exception:
             logger.exception("Orchestrator failed", extra={"run_id": self.run_id})
             await self._set_status("failed")

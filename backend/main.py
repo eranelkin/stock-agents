@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import contextlib
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -10,13 +12,21 @@ load_dotenv()  # load .env before pydantic-settings so MODEL_API_KEY_* vars are 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.api.broadcaster import broadcaster
 from backend.api.routes import chat, models, prompts, results, runs
 from backend.config import settings
+from backend.db.session import AsyncSessionLocal
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    yield
+    task = asyncio.create_task(broadcaster.start(AsyncSessionLocal))
+    try:
+        yield
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
 
 
 app = FastAPI(title="Stock-Agents Backend", lifespan=lifespan)

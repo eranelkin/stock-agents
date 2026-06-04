@@ -21,6 +21,7 @@ interface HeaderProps {
   selectedModelIds: string[]
   onSelectedModelsChange: (ids: string[]) => void
   refreshKey: number
+  modelsDisabled?: boolean
 }
 
 const TABS: { id: TabId; label: string }[] = [
@@ -36,6 +37,7 @@ export default function Header({
   selectedModelIds,
   onSelectedModelsChange,
   refreshKey,
+  modelsDisabled = false,
 }: HeaderProps) {
   const [activeModels, setActiveModels] = useState<Model[]>([])
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
@@ -59,6 +61,7 @@ export default function Header({
   const open = Boolean(anchorEl)
 
   const handleTriggerClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (modelsDisabled) return
     setAnchorEl(e.currentTarget)
   }
 
@@ -128,9 +131,10 @@ export default function Header({
             borderRadius: 1,
             border: '1px solid rgba(255,255,255,0.12)',
             bgcolor: 'rgba(255,255,255,0.04)',
-            cursor: 'pointer',
+            cursor: modelsDisabled ? 'not-allowed' : 'pointer',
             flexWrap: 'wrap',
-            '&:hover': { bgcolor: 'rgba(255,255,255,0.08)' },
+            opacity: modelsDisabled ? 0.45 : 1,
+            '&:hover': { bgcolor: modelsDisabled ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.08)' },
           }}
         >
           {selectedModels.length === 0 ? (

@@ -20,5 +20,6 @@ class RunResponse(BaseModel):
     created_at: datetime
     completed_at: datetime | None = None
     error: str | None = None
+    output_dir: str | None = None
 
     model_config = {"from_attributes": True}

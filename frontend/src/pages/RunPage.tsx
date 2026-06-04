@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as jsyaml from 'js-yaml'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
@@ -23,12 +23,14 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import AttachFileIcon from '@mui/icons-material/AttachFile'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import CheckIcon from '@mui/icons-material/Check'
-import { createRun, deleteRun, fetchRuns } from '../api/runs'
+import ArticleIcon from '@mui/icons-material/Article'
+import { createRun, deleteRun, stopRun } from '../api/runs'
 import RunResultsDialog from '../components/RunResultsDialog'
 import type { Run } from '../types/run'
 
 interface RunPageProps {
   selectedModelIds: string[]
+  onRunActiveChange?: (active: boolean) => void
 }
 
 const STATUS_COLOR: Record<string, 'default' | 'info' | 'success' | 'error' | 'warning'> = {
@@ -36,6 +38,7 @@ const STATUS_COLOR: Record<string, 'default' | 'info' | 'success' | 'error' | 'w
   running: 'info',
   completed: 'success',
   failed: 'error',
+  cancelled: 'default',
 }
 
 const isToday = (dateStr: string) =>
@@ -49,7 +52,7 @@ const formatDuration = (ms: number): string => {
   return rem > 0 ? `${m}m ${rem}s` : `${m}m`
 }
 
-export default function RunPage({ selectedModelIds }: RunPageProps) {
+export default function RunPage({ selectedModelIds, onRunActiveChange }: RunPageProps) {
   const [runs, setRuns] = useState<Run[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -63,46 +66,37 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [now, setNow] = useState(() => Date.now())
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const esRef = useRef<EventSource | null>(null)
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const stopPolling = () => {
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
-  }
-
-  const load = useCallback(async () => {
-    try {
-      setRuns(await fetchRuns())
-    } catch {
-      // silent — don't block the page
-    } finally {
-      setLoading(false)
+  // Open SSE connection once on mount; first message delivers current run list
+  useEffect(() => {
+    const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://127.0.0.1:4101'
+    const es = new EventSource(`${BACKEND}/runs/stream`)
+    esRef.current = es
+    es.onmessage = (ev) => {
+      try {
+        setRuns(JSON.parse(ev.data) as Run[])
+        setLoading(false)
+      } catch { /* ignore malformed frame */ }
+    }
+    return () => {
+      es.close()
+      esRef.current = null
+      if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null }
     }
   }, [])
 
-  useEffect(() => {
-    load()
-    return () => { stopPolling(); if (tickRef.current) clearInterval(tickRef.current) }
-  }, [load])
-
-  // Poll while any run is active; tick every second for live duration
+  // Live duration tick + parent notification when active-run state changes
   useEffect(() => {
     const hasActive = runs.some(r => r.status === 'pending' || r.status === 'running')
+    onRunActiveChange?.(hasActive)
     if (hasActive) {
-      if (!pollRef.current) {
-        pollRef.current = setInterval(async () => {
-          const updated = await fetchRuns().catch(() => null)
-          if (updated) setRuns(updated)
-        }, 2000)
-      }
-      if (!tickRef.current) {
-        tickRef.current = setInterval(() => setNow(Date.now()), 1000)
-      }
+      if (!tickRef.current) tickRef.current = setInterval(() => setNow(Date.now()), 1000)
     } else {
-      stopPolling()
       if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null }
     }
-  }, [runs])
+  }, [runs, onRunActiveChange])
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setFileError(null)
@@ -168,6 +162,16 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
     }
   }
 
+  const handleStop = async (run: Run) => {
+    if (!window.confirm(`Stop run "${run.name ?? 'Unnamed'}"? This will cancel all active pipelines.`)) return
+    try {
+      await stopRun(run.id)
+      // SSE broadcaster will push the updated status automatically
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to stop run')
+    }
+  }
+
   const handleDelete = async (run: Run) => {
     if (!window.confirm(`Delete run "${run.name ?? 'Unnamed'}"?`)) return
     await deleteRun(run.id)
@@ -182,8 +186,9 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
   })
   const displayedRuns = sorted
 
+  const runInProgress = runs.some(r => r.status === 'pending' || r.status === 'running')
   const runDisabled =
-    !selectedFile || !rawFileText || selectedModelIds.length === 0 || starting
+    !selectedFile || !rawFileText || selectedModelIds.length === 0 || starting || runInProgress
 
   return (
     <Box sx={{ px: 4, py: 3, display: 'flex', flexDirection: 'column', gap: 2, flex: 1, overflow: 'hidden' }}>
@@ -416,7 +421,59 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
                       sx={{ fontWeight: 700, letterSpacing: 0.5, fontSize: '0.7rem' }}
                     />
                   </TableCell>
-                  <TableCell align="right" sx={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                  <TableCell align="right" sx={{ borderColor: 'rgba(255,255,255,0.06)', whiteSpace: 'nowrap' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.75 }}>
+                    {(run.status === 'pending' || run.status === 'running') && (
+                      <Tooltip title="Stop run">
+                        <Box
+                          component="button"
+                          onClick={() => handleStop(run)}
+                          sx={{
+                            width: 34,
+                            height: 34,
+                            borderRadius: '50%',
+                            background: 'radial-gradient(circle at 38% 32%, #ff5c5c 0%, #e00000 55%, #9a0000 100%)',
+                            border: '2px solid #1a1a1a',
+                            color: '#fff',
+                            fontWeight: 800,
+                            fontSize: '0.6rem',
+                            letterSpacing: '0.02em',
+                            textTransform: 'uppercase',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            verticalAlign: 'middle',
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.6), inset 0 1px 2px rgba(255,255,255,0.25)',
+                            transition: 'transform 0.12s, box-shadow 0.12s',
+                            p: 0,
+                            lineHeight: 1,
+                            '&:hover': {
+                              transform: 'scale(1.12)',
+                              boxShadow: '0 4px 14px rgba(180,0,0,0.55), inset 0 1px 2px rgba(255,255,255,0.25)',
+                            },
+                            '&:active': { transform: 'scale(0.94)' },
+                          }}
+                        >
+                          Stop
+                        </Box>
+                      </Tooltip>
+                    )}
+                    <Tooltip title="View live log">
+                      <span>
+                        <IconButton
+                          size="small"
+                          disabled={!run.output_dir}
+                          onClick={() => window.open(
+                            `${import.meta.env.VITE_BACKEND_URL ?? 'http://127.0.0.1:4101'}/runs/${run.id}/log`,
+                            '_blank'
+                          )}
+                          sx={{ color: 'text.secondary', '&:hover': { color: '#90caf9' }, '&.Mui-disabled': { color: 'text.disabled' } }}
+                        >
+                          <ArticleIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
                     <Tooltip title="Delete">
                       <IconButton
                         size="small"
@@ -426,6 +483,7 @@ export default function RunPage({ selectedModelIds }: RunPageProps) {
                         <DeleteIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
+                    </Box>
                   </TableCell>
                 </TableRow>
               ))}
