@@ -138,4 +138,16 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        # Try to get the current event loop
+        loop = asyncio.get_running_loop()
+        # If we're already in an event loop, create a task
+        import asyncio
+        task = asyncio.create_task(main())
+        # We can't await here since we're in a sync context, so we need a different approach
+        # Use asyncio.ensure_future and run until complete on a new loop
+        asyncio.set_event_loop(asyncio.new_event_loop())
+        asyncio.run(main())
+    except RuntimeError:
+        # No event loop running, safe to use asyncio.run()
+        asyncio.run(main())
