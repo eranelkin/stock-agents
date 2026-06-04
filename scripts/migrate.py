@@ -137,17 +137,34 @@ async def main() -> None:
     print()
 
 
-if __name__ == "__main__":
+def _run_main() -> None:
+    """Run main() handling both sync and async contexts."""
     try:
-        # Try to get the current event loop
-        loop = asyncio.get_running_loop()
-        # If we're already in an event loop, create a task
-        import asyncio
-        task = asyncio.create_task(main())
-        # We can't await here since we're in a sync context, so we need a different approach
-        # Use asyncio.ensure_future and run until complete on a new loop
-        asyncio.set_event_loop(asyncio.new_event_loop())
-        asyncio.run(main())
+        # Check if we're already in an event loop
+        asyncio.get_running_loop()
+        # We're in an event loop, so we can't use asyncio.run()
+        # Instead, we'll run synchronously using asyncio.run_until_complete
+        # on a new event loop in a thread
+        import threading
+        import concurrent.futures
+        
+        def run_in_thread():
+            # Create a new event loop for this thread
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            try:
+                return new_loop.run_until_complete(main())
+            finally:
+                new_loop.close()
+        
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(run_in_thread)
+            future.result()
+            
     except RuntimeError:
         # No event loop running, safe to use asyncio.run()
         asyncio.run(main())
+
+
+if __name__ == "__main__":
+    _run_main()
