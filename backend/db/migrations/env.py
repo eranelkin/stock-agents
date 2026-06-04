@@ -31,7 +31,13 @@ async def run_async_migrations() -> None:
 
 
 def run_migrations_online() -> None:
-    asyncio.run(run_async_migrations())
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(run_async_migrations())
+    finally:
+        loop.close()
+        asyncio.set_event_loop(None)
 
 
 def run_migrations_offline() -> None:
