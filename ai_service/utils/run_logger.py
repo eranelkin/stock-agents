@@ -361,7 +361,6 @@ class RunLogger:
             f'    </div>\n'
             f'  </div>\n'
             f'</div>\n\n'
-            f'<div id="chips-bar" class="pipelines-bar"></div>\n\n'
             f'<div class="section-heading" id="events-table-anchor">Events</div>\n'
             f'<div class="table-wrapper">\n'
             f'<table id="events-table">\n'

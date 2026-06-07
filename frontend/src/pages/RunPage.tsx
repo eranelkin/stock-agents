@@ -25,7 +25,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import CheckIcon from '@mui/icons-material/Check'
 import ArticleIcon from '@mui/icons-material/Article'
 import { createRun, deleteRun, stopRun } from '../api/runs'
-import RunResultsDialog from '../components/RunResultsDialog'
+import CeoResultsPage from '../components/CeoResultsPage'
 import type { Run } from '../types/run'
 
 interface RunPageProps {
@@ -493,7 +493,7 @@ export default function RunPage({ selectedModelIds, onRunActiveChange }: RunPage
       )}
       </Box>
       {resultsRun && (
-        <RunResultsDialog
+        <CeoResultsPage
           open={Boolean(resultsRun)}
           onClose={() => setResultsRun(null)}
           runId={resultsRun.id}

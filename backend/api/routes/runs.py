@@ -166,6 +166,8 @@ async def stream_runs() -> StreamingResponse:
                     yield f"data: {data}\n\n"
                 except asyncio.TimeoutError:
                     yield ": keepalive\n\n"
+                except asyncio.CancelledError:
+                    return
         finally:
             broadcaster.unsubscribe(q)
 
@@ -334,7 +336,10 @@ async def stream_run_log(
         offset = since_bytes
         idle_ticks = 0  # half-second ticks since last data frame
         while True:
-            await asyncio.sleep(0.5)
+            try:
+                await asyncio.sleep(0.5)
+            except asyncio.CancelledError:
+                return
             async with AsyncSessionLocal() as session:
                 run = await session.get(Run, run_id)
             if run is None:
@@ -382,12 +387,90 @@ async def stream_run_log(
     )
 
 
+@router.get("/{run_id}/ceo-stream")
+async def stream_ceo_results(run_id: uuid.UUID) -> StreamingResponse:
+    """SSE: streams CEO analysis rows as CEO_*.yaml files land on disk."""
+    async def generator() -> AsyncGenerator[str, None]:
+        seen: set[str] = set()
+
+        async with AsyncSessionLocal() as session:
+            run = await session.get(Run, run_id)
+        if run is None:
+            yield "event: done\ndata: {}\n\n"
+            return
+
+        if run.output_dir:
+            for f in sorted(Path(run.output_dir).glob("CEO_*.yaml")):
+                ticker = f.stem[4:]
+                data = _parse_ceo_yaml(f)
+                if data:
+                    seen.add(ticker)
+                    yield f"data: {json.dumps({'ticker': ticker, 'data': data})}\n\n"
+
+        if run.status in ("completed", "failed", "cancelled"):
+            yield "event: done\ndata: {}\n\n"
+            return
+
+        idle_ticks = 0
+        while True:
+            try:
+                await asyncio.sleep(1.0)
+            except asyncio.CancelledError:
+                return
+
+            async with AsyncSessionLocal() as session:
+                run = await session.get(Run, run_id)
+            if run is None:
+                yield "event: done\ndata: {}\n\n"
+                break
+
+            if run.output_dir:
+                for f in sorted(Path(run.output_dir).glob("CEO_*.yaml")):
+                    ticker = f.stem[4:]
+                    if ticker not in seen:
+                        data = _parse_ceo_yaml(f)
+                        if data:
+                            seen.add(ticker)
+                            yield f"data: {json.dumps({'ticker': ticker, 'data': data})}\n\n"
+                            idle_ticks = 0
+
+            idle_ticks += 1
+            if idle_ticks >= 15:
+                yield ": keepalive\n\n"
+                idle_ticks = 0
+
+            if run.status in ("completed", "failed", "cancelled"):
+                yield "event: done\ndata: {}\n\n"
+                break
+
+    return StreamingResponse(
+        generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _log_file_path(output_dir: str) -> Path:
     """Derive the HTML log file path from a run's output_dir."""
     ts = Path(output_dir).name  # e.g. "2026-06-04_10-00-00"
     return Path(output_dir).parent.parent / "logs" / f"{ts}.html"
+
+
+def _parse_ceo_yaml(file_path: Path) -> dict | None:
+    """Extract the stock analysis dict from a CEO_*.yaml output file."""
+    import yaml
+    try:
+        with open(file_path) as f:
+            doc = yaml.safe_load(f)
+        for agent_data in doc.get("agents", {}).values():
+            stocks = agent_data.get("stocks", [])
+            if stocks:
+                return stocks[0]
+    except Exception:
+        pass
+    return None
 
 
 def _parse_log_stats(html: str) -> dict[str, int]:
