@@ -136,7 +136,7 @@ export default function CeoResultsPage({ open, onClose, runId, runName }: CeoRes
         const { ticker, data } = JSON.parse(ev.data) as { ticker: string; data: Record<string, unknown> }
         setRows(prev => {
           if (prev.some(r => r._ticker === ticker)) return prev
-          if (prev.length === 0) setColumns(Object.keys(data))
+          if (prev.length === 0) setColumns(Object.keys(data).filter(k => k !== 'symbol'))
           return [...prev, { _ticker: ticker, ...data }].sort((a, b) =>
             a._ticker.localeCompare(b._ticker)
           )
@@ -322,21 +322,21 @@ const sortLabelSx = {
 const headerCellSx = {
   bgcolor: '#161b27',
   color: 'rgba(255,255,255,0.55)',
-  fontSize: '0.72rem',
+  fontSize: '0.8rem',
   fontWeight: 600,
   textTransform: 'uppercase' as const,
   letterSpacing: '0.06em',
   whiteSpace: 'nowrap' as const,
   borderBottom: '1px solid rgba(255,255,255,0.1)',
-  py: 1.2,
-  px: 1.5,
+  py: 1.5,
+  px: 2.5,
 }
 
 const dataCellSx = {
   color: 'rgba(255,255,255,0.82)',
-  fontSize: '0.8rem',
+  fontSize: '0.9rem',
   borderBottom: '1px solid rgba(255,255,255,0.05)',
   whiteSpace: 'nowrap' as const,
-  py: 1,
-  px: 1.5,
+  py: 1.5,
+  px: 2.5,
 }
