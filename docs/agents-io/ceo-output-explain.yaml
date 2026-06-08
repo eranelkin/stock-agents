@@ -1,0 +1,37 @@
+# trading matrix strategy schema
+symbol: 
+ symbol: "aapl" # asset ticker symbol (e.g., aapl, tsla, btcusd)
+ date: "01-06-2026" # analysis date formatted as dd-mm-yyyy
+ current price: 175.50 # current market price (ceo verified)
+ ceo verdict: "a+" # executive grading scale (a+/a/b/c)
+ conviction score: 8.4 # accumulated weighted result from multiple matrix factors
+ confidence: "85%" # percentage confidence level (1-100% after risk review)
+ success prob: "68%" # probabilistic win rate based on historical backtests
+ entry range: "173.50 - 174.20" # ceo-approved limit zone for positioning
+ entry time: "09:45 AM EST" # ceo-selected optimal tactical execution window
+ sl range: "171.00" # hard exit level for risk mitigation
+ tp range: "182.00 - 185.00" # synthesized taking-profit target zones
+ short_ratio: 3.2 # What is the current short float ratio
+ short_float: "12.5%" # What is the current short float(%)
+ institutional_holding: "78.4%" # What is the stock Institutional holding percentage
+ squeeze_risk: 4 # short squeeze vulnerability on a 1-10 scale
+ approximate_gain_pct: "13.5%" # If the scenario will occur what will be the expected gain in percentage
+ conviction_detect:
+   - "Sustained volume above the 20-day moving average during the first hour of trading."
+   - "Bullish engulfing candle formation on the 15-minute chart within the entry range." # How to Detect “High Conviction”: Add Signs for high Conviction show the trade is valid.
+ collapse_trigger: 
+   - "Hourly close below the hard exit SL range with high selling volume."
+   - "Broader market or sector index experiences a sudden sharp breakdown (e.g., SPY drops >1%)."
+   # (Invalidation event) - How to detect “Collapse Conviction”: Add Signs for “Collapse Conviction” - show the trade is NOT valid
+ catalyst reason: "earnings beat paired with macro rate pause" # synthesized news/macro fundamental driver
+ required_volume: 2500000 # The required volume for this trade to be valid
+ r-multiple: 3.5 # reward-to-risk ratio (programmatically calculated)
+ regime: "momentum" # current market environment (momentum vs mean-reversion)
+ rvol: 2.1 # relative volume mapping (specialist status indicator)
+ poc node: 173.80 # point of control (high volume price node from volume profile)
+ absorption: "y" # large institutional hidden orders present (icebergs detected? y/n)
+ bid/ask spread: "l" # transaction friction indicator (execution quality h/m/l)
+ sector sympathy: "leader" # relative industry strength assessment (is it a leader or laggard?)
+ spx/qqq_corr: 1.15 # beta context and market correlation coefficient
+ ai_suggestion: "V" #(mark with “v” if ceo-added beyond specialist list)
+ ai_model_name: "Gemini" # what is your AI model name?
