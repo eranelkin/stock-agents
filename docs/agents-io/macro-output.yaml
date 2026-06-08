@@ -14,3 +14,5 @@ macro_news:
     risk_on_risk_off_explanation  : "" # Explanation of why the news is likely to trigger risk-on or risk-off sentiment
     risk_on_risk_off_rate : "" # 10 == full risk on || 0 == full risk off
     reason: "" # reason for the estimated price affect prediction specifically for today
+    risk_level : "" #Risk-On/Risk-Off Rating (1-10) - 1 being extremely risk-off, 10 being extremely risk-on
+    the_tide_entiment : "" # (Bullish/Bearish/Neutral)
