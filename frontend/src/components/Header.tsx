@@ -11,6 +11,8 @@ import List from '@mui/material/List'
 import ListItemButton from '@mui/material/ListItemButton'
 import ListItemText from '@mui/material/ListItemText'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
+import IconButton from '@mui/material/IconButton'
+import Tooltip from '@mui/material/Tooltip'
 import { fetchModels } from '../api/models'
 import type { Model } from '../types/model'
 import { type TabId } from '../App'
@@ -116,6 +118,25 @@ export default function Header({
 
         <Box sx={{ flex: 1 }} />
 
+        {/* Market Overview icon button */}
+        <Tooltip title="Market Overview">
+          <IconButton
+            onClick={() => onTabChange('market')}
+            size="small"
+            sx={{
+              color: activeTab === 'market' ? '#ff9800' : 'text.secondary',
+              bgcolor: activeTab === 'market' ? 'rgba(255,152,0,0.12)' : 'transparent',
+              border: activeTab === 'market' ? '1px solid rgba(255,152,0,0.3)' : '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 1,
+              width: 36,
+              height: 36,
+              '&:hover': { bgcolor: 'rgba(255,152,0,0.1)', color: '#ff9800' },
+            }}
+          >
+            <SentimentGaugeIcon active={activeTab === 'market'} />
+          </IconButton>
+        </Tooltip>
+
         {/* Model multi-select trigger */}
         <Box
           ref={triggerRef}
@@ -163,6 +184,7 @@ export default function Header({
           />
         </Box>
 
+        {/* ── Popover ── */}
         <Popover
           open={open}
           anchorEl={anchorEl}
@@ -218,5 +240,32 @@ export default function Header({
         </Popover>
       </Toolbar>
     </AppBar>
+  )
+}
+
+function SentimentGaugeIcon({ active }: { active: boolean }) {
+  const color = active ? '#ff9800' : 'currentColor'
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color}
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {/* Gauge arc */}
+      <path d="M5 17A7 7 0 0 1 19 17" />
+      {/* Tick marks */}
+      <line x1="12" y1="10" x2="12" y2="8" />
+      <line x1="7.5" y1="11.5" x2="6.1" y2="10.1" />
+      <line x1="16.5" y1="11.5" x2="17.9" y2="10.1" />
+      {/* Needle pointing slightly right (greed side) */}
+      <line x1="12" y1="17" x2="16" y2="13" strokeWidth="2" />
+      {/* Center dot */}
+      <circle cx="12" cy="17" r="1.2" fill={color} stroke="none" />
+    </svg>
   )
 }

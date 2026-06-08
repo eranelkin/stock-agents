@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.broadcaster import broadcaster
-from backend.api.routes import chat, models, prompts, results, runs
+from backend.api.routes import chat, feargreed, models, prompts, results, runs
 from backend.config import settings
 from backend.db.session import AsyncSessionLocal
 
@@ -44,6 +44,7 @@ app.include_router(results.router)
 app.include_router(models.router)
 app.include_router(prompts.router)
 app.include_router(chat.router)
+app.include_router(feargreed.router)
 
 
 @app.get("/health")
