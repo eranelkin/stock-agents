@@ -66,7 +66,8 @@ Valid YAML: Ensure proper 2-space indentation and valid syntax. Wrap string valu
 
 ### FORMATTING TEMPLATE:
 
-context:
+#### start format
+
 timestamp: "<YYYY-MM-DDTHH:MM:SSZ>"
 ticker: "<String: Stock Ticker>"
 company_name: "<String: Full Company Name>"
@@ -114,3 +115,5 @@ actionable_next_steps:
 - "<String: Actionable directive 2>"
 
 notes: "<String: Add critical info for the trader, leave as '' if none>"
+
+#### end format
