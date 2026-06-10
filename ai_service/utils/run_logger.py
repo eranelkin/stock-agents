@@ -342,6 +342,11 @@ class RunLogger:
             f'  <div class="stat-item error"><span class="stat-value" id="stat-err">0</span>'
             f'<span class="stat-label">Errors</span></div>\n'
             f'  <div class="stat-sep"></div>\n'
+            f'  <div class="stat-item"><span class="stat-value" id="stat-rpm-min">—</span>'
+            f'<span class="stat-label">Min RPM</span></div>\n'
+            f'  <div class="stat-item"><span class="stat-value" id="stat-rpm-max">—</span>'
+            f'<span class="stat-label">Max RPM</span></div>\n'
+            f'  <div class="stat-sep"></div>\n'
             f'  <div class="stat-item"><span class="stat-value" id="stat-ttok">0</span>'
             f'<span class="stat-label">Total Tokens</span></div>\n'
             f'  <div class="stat-item"><span class="stat-value" id="stat-ptok">0</span>'
@@ -349,20 +354,37 @@ class RunLogger:
             f'  <div class="stat-item"><span class="stat-value" id="stat-ctok">0</span>'
             f'<span class="stat-label">Completion</span></div>\n'
             f'  <div class="filter-group">\n'
-            f'    <div class="filter-dropdown" id="dd-tickers">\n'
-            f'      <button class="filter-btn" id="dd-tickers-btn" onclick="toggleDropdown(\'dd-tickers\')">'
+            f'    <div class="filter-col">\n'
+            f'      <span class="filter-label">Ticker</span>\n'
+            f'      <div class="filter-dropdown" id="dd-tickers">\n'
+            f'        <button class="filter-btn" id="dd-tickers-btn" onclick="toggleDropdown(\'dd-tickers\')">'
             f'<span id="dd-tickers-label">All Tickers</span><span class="dd-arrow">&#x25BE;</span></button>\n'
-            f'      <div class="filter-panel" id="dd-tickers-panel" style="display:none"></div>\n'
+            f'        <div class="filter-panel" id="dd-tickers-panel" style="display:none"></div>\n'
+            f'      </div>\n'
             f'    </div>\n'
-            f'    <div class="filter-dropdown" id="dd-types">\n'
-            f'      <button class="filter-btn" id="dd-types-btn" onclick="toggleDropdown(\'dd-types\')">'
+            f'    <div class="filter-col">\n'
+            f'      <span class="filter-label">Pipeline</span>\n'
+            f'      <div class="filter-dropdown" id="dd-types">\n'
+            f'        <button class="filter-btn" id="dd-types-btn" onclick="toggleDropdown(\'dd-types\')">'
             f'<span id="dd-types-label">All Types</span><span class="dd-arrow">&#x25BE;</span></button>\n'
-            f'      <div class="filter-panel" id="dd-types-panel" style="display:none"></div>\n'
+            f'        <div class="filter-panel" id="dd-types-panel" style="display:none"></div>\n'
+            f'      </div>\n'
             f'    </div>\n'
-            f'    <div class="filter-dropdown" id="dd-prompts">\n'
-            f'      <button class="filter-btn" id="dd-prompts-btn" onclick="toggleDropdown(\'dd-prompts\')">'
+            f'    <div class="filter-col">\n'
+            f'      <span class="filter-label">Event Type</span>\n'
+            f'      <div class="filter-dropdown" id="dd-etypes">\n'
+            f'        <button class="filter-btn" id="dd-etypes-btn" onclick="toggleDropdown(\'dd-etypes\')">'
+            f'<span id="dd-etypes-label">All Event Types</span><span class="dd-arrow">&#x25BE;</span></button>\n'
+            f'        <div class="filter-panel" id="dd-etypes-panel" style="display:none"></div>\n'
+            f'      </div>\n'
+            f'    </div>\n'
+            f'    <div class="filter-col">\n'
+            f'      <span class="filter-label">Agent</span>\n'
+            f'      <div class="filter-dropdown" id="dd-prompts">\n'
+            f'        <button class="filter-btn" id="dd-prompts-btn" onclick="toggleDropdown(\'dd-prompts\')">'
             f'<span id="dd-prompts-label">All Prompts</span><span class="dd-arrow">&#x25BE;</span></button>\n'
-            f'      <div class="filter-panel" id="dd-prompts-panel" style="display:none"></div>\n'
+            f'        <div class="filter-panel" id="dd-prompts-panel" style="display:none"></div>\n'
+            f'      </div>\n'
             f'    </div>\n'
             f'  </div>\n'
             f'</div>\n\n'
@@ -483,7 +505,7 @@ def _render_row(e: _Event, entity: str, color: str) -> str:
     return (
         f'    <tr id="row-{e.seq}" class="event-row type-{css_cls}"'
         f' style="--row-color:{color}" onclick="toggleRow({e.seq})"{extra}'
-        f' data-entity="{_h(entity)}" data-ptype="{_h(e.pipeline_type)}" data-prompt="{_h(e.prompt_title)}">'
+        f' data-entity="{_h(entity)}" data-ptype="{_h(e.pipeline_type)}" data-prompt="{_h(e.prompt_title)}" data-etype="{_h(label)}">'
         f'<td class="col-seq"><span class="row-chevron">&#x25B6;</span>{e.seq}</td>'
         f'<td class="col-ts">{_h(e.ts)}</td>'
         f'<td class="col-pipeline">{pipeline_disp}</td>'
@@ -919,7 +941,9 @@ table#events-table th{
 .json-null  {color:#9ca3af}
 
 /* Filter dropdowns */
-.filter-group{display:flex;gap:8px;margin-left:auto;align-items:center}
+.filter-group{display:flex;gap:12px;margin-left:auto;align-items:flex-end}
+.filter-col{display:flex;flex-direction:column;gap:3px;align-items:flex-start}
+.filter-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;padding-left:2px}
 .filter-dropdown{position:relative}
 .filter-btn{
   background:rgba(255,255,255,.06);border:1px solid var(--border);
@@ -942,6 +966,7 @@ table#events-table th{
 }
 .filter-opt:hover{background:rgba(255,255,255,.06)}
 .filter-opt input[type=checkbox]{accent-color:#1976d2;cursor:pointer}
+.filter-opt-dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .dd-arrow{font-size:10px;color:var(--muted)}
 
 /* Pipeline column */
@@ -1070,7 +1095,7 @@ document.addEventListener('click', function(e) {
   }
 });
 
-function ensureFilterOption(ddId, value) {
+function ensureFilterOption(ddId, value, color) {
   if (!value) return;
   var panel = document.getElementById(ddId + '-panel');
   var safeId = value.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -1084,19 +1109,57 @@ function ensureFilterOption(ddId, value) {
   cb.value = value;
   cb.addEventListener('change', applyFilters);
   lbl.appendChild(cb);
+  if (color) {
+    var dot = document.createElement('span');
+    dot.className = 'filter-opt-dot';
+    dot.style.background = color;
+    lbl.appendChild(dot);
+  }
   lbl.appendChild(document.createTextNode(' ' + value.toUpperCase()));
   panel.appendChild(lbl);
 }
 
+var _PTYPE_COLORS = {'stocks':'#38bdf8','sectors':'#a78bfa','ceo':'#fbbf24'};
+var _ETYPE_COLORS = {
+  'LLM REQUEST':'#4a9eff','LLM RESPONSE':'#34d399','LLM ERROR':'#f87171',
+  'SEARCH REQ':'#a78bfa','SEARCH RESP':'#fb923c',
+  'PIPELINE':'#9ca3af','PIPELINE END':'#9ca3af','RUN START':'#e2e8f0','RUN END':'#e2e8f0'
+};
+
+function computeRPM() {
+  var rows = document.querySelectorAll('#events-body tr.type-llm-req');
+  if (!rows.length) return;
+  var buckets = {};
+  rows.forEach(function(row) {
+    var cell = row.querySelector('.col-ts');
+    if (!cell) return;
+    var key = cell.textContent.trim().substring(0, 5);
+    buckets[key] = (buckets[key] || 0) + 1;
+  });
+  var counts = Object.values(buckets);
+  if (!counts.length) return;
+  var mn = Math.min.apply(null, counts);
+  var mx = Math.max.apply(null, counts);
+  var minEl = document.getElementById('stat-rpm-min');
+  var maxEl = document.getElementById('stat-rpm-max');
+  if (minEl) minEl.textContent = mn;
+  if (maxEl) maxEl.textContent = mx;
+}
+
 function updateFilterOptions() {
   document.querySelectorAll('#events-body .event-row').forEach(function(row) {
-    var entity = row.getAttribute('data-entity');
-    var ptype  = row.getAttribute('data-ptype');
-    var prompt = row.getAttribute('data-prompt');
-    if (entity) ensureFilterOption('dd-tickers', entity);
-    if (ptype)  ensureFilterOption('dd-types',   ptype);
-    if (prompt) ensureFilterOption('dd-prompts', prompt);
+    var entity      = row.getAttribute('data-entity');
+    var ptype       = row.getAttribute('data-ptype');
+    var prompt      = row.getAttribute('data-prompt');
+    var etype       = row.getAttribute('data-etype');
+    var promptBase  = prompt ? prompt.replace(/ \(round \d+\)$/, '') : '';
+    var entityColor = row.style.getPropertyValue('--row-color') || '';
+    if (entity)     ensureFilterOption('dd-tickers', entity,     entityColor);
+    if (ptype)      ensureFilterOption('dd-types',   ptype,      _PTYPE_COLORS[(ptype||'').toLowerCase()]);
+    if (etype)      ensureFilterOption('dd-etypes',  etype,      _ETYPE_COLORS[etype]);
+    if (promptBase) ensureFilterOption('dd-prompts', promptBase, '');
   });
+  computeRPM();
 }
 
 function getFilterSelections(ddId) {
@@ -1128,20 +1191,25 @@ function updateFilterLabel(ddId, allLabel) {
 function applyFilters() {
   updateFilterLabel('dd-tickers', 'All Tickers');
   updateFilterLabel('dd-types',   'All Types');
+  updateFilterLabel('dd-etypes',  'All Event Types');
   updateFilterLabel('dd-prompts', 'All Prompts');
   var selTickers = getFilterSelections('dd-tickers');
   var selTypes   = getFilterSelections('dd-types');
+  var selEtypes  = getFilterSelections('dd-etypes');
   var selPrompts = getFilterSelections('dd-prompts');
   document.querySelectorAll('#events-body .event-row').forEach(function(row) {
-    var entity = row.getAttribute('data-entity') || '';
-    var ptype  = row.getAttribute('data-ptype')  || '';
-    var prompt = row.getAttribute('data-prompt')  || '';
-    var seq    = row.id.replace('row-', '');
-    var detail = document.getElementById('detail-row-' + seq);
-    if (!entity && !ptype && !prompt) { row.style.display = ''; return; }
-    var pass = (selTickers.length === 0 || selTickers.indexOf(entity) !== -1) &&
-               (selTypes.length   === 0 || selTypes.indexOf(ptype)    !== -1) &&
-               (selPrompts.length === 0 || selPrompts.indexOf(prompt) !== -1);
+    var entity     = row.getAttribute('data-entity') || '';
+    var ptype      = row.getAttribute('data-ptype')  || '';
+    var prompt     = row.getAttribute('data-prompt')  || '';
+    var etype      = row.getAttribute('data-etype')  || '';
+    var promptBase = prompt.replace(/ \(round \d+\)$/, '');
+    var seq        = row.id.replace('row-', '');
+    var detail     = document.getElementById('detail-row-' + seq);
+    if (!entity && !ptype && !prompt && !etype) { row.style.display = ''; return; }
+    var pass = (selTickers.length === 0 || selTickers.indexOf(entity)     !== -1) &&
+               (selTypes.length   === 0 || selTypes.indexOf(ptype)        !== -1) &&
+               (selEtypes.length  === 0 || selEtypes.indexOf(etype)       !== -1) &&
+               (selPrompts.length === 0 || selPrompts.indexOf(promptBase) !== -1);
     row.style.display = pass ? '' : 'none';
     if (!pass) {
       if (detail) detail.style.display = 'none';
