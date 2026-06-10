@@ -78,7 +78,7 @@ async def create_run(
         for m in ai_models
     ]
 
-    run = Run(name=body.name)
+    run = Run(name=body.name, model_names=[m.name for m in ai_models])
     session.add(run)
     await session.commit()
     await session.refresh(run)

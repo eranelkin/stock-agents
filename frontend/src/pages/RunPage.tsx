@@ -323,7 +323,7 @@ export default function RunPage({ selectedModelIds, onRunActiveChange }: RunPage
                     Date & Time
                   </TableSortLabel>
                 </TableCell>
-                {['Run ID', 'Duration', 'Status'].map((h) => (
+                {['Run ID', 'Models', 'Duration', 'Status'].map((h) => (
                   <TableCell
                     key={h}
                     sx={{ color: 'text.secondary', fontSize: '0.8rem', borderColor: 'rgba(255,255,255,0.08)', fontWeight: 600 }}
@@ -389,6 +389,21 @@ export default function RunPage({ selectedModelIds, onRunActiveChange }: RunPage
                             : <ContentCopyIcon sx={{ fontSize: 14 }} />}
                         </IconButton>
                       </Tooltip>
+                    </Box>
+                  </TableCell>
+                  <TableCell sx={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {run.model_names && run.model_names.length > 0
+                        ? run.model_names.map((name) => (
+                            <Chip
+                              key={name}
+                              label={name}
+                              size="small"
+                              sx={{ bgcolor: 'rgba(25,118,210,0.15)', color: '#90caf9', fontSize: '0.7rem', height: 20 }}
+                            />
+                          ))
+                        : <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.disabled' }}>—</Typography>
+                      }
                     </Box>
                   </TableCell>
                   <TableCell sx={{ borderColor: 'rgba(255,255,255,0.06)', whiteSpace: 'nowrap' }}>

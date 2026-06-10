@@ -21,5 +21,6 @@ class RunResponse(BaseModel):
     completed_at: datetime | None = None
     error: str | None = None
     output_dir: str | None = None
+    model_names: list[str] | None = None
 
     model_config = {"from_attributes": True}

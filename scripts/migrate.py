@@ -29,14 +29,15 @@ from alembic.config import Config
 from backend.config import settings
 
 # The current head revision — update this when new migrations are added
-HEAD = "c198bf666070"
+HEAD = "b7e2d4f83a19"
 
 # Columns that were added by specific revisions (after the initial schema).
 # Used to detect how far a legacy DB has already progressed.
 # Format: (table, column, revision_that_added_it)
 REVISION_MARKERS: list[tuple[str, str, str]] = [
-    ("runs",    "output_dir", "e38104261395"),
-    ("prompts", "is_active",  "c198bf666070"),
+    ("runs",    "output_dir",  "e38104261395"),
+    ("prompts", "is_active",   "c198bf666070"),
+    ("runs",    "model_names", "b7e2d4f83a19"),
 ]
 
 

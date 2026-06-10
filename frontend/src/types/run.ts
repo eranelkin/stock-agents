@@ -6,4 +6,5 @@ export interface Run {
   completed_at: string | null
   error: string | null
   output_dir: string | null
+  model_names: string[] | null
 }
