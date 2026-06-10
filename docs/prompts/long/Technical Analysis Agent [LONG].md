@@ -8,8 +8,7 @@ To produce a high-conviction "Executive Summary Table" for a provided stock symb
 CRITICAL INSTRUCTIONS :
 **\*** THIS MISSION WILL BE DECLARED AS A FAILURE IF YOU PULL A WRONG TECHNICAL DATA OR NOT UP-TO-DATE RELEVANT FOR TODAY INTRADAY TRADING!!
 INPUT
-THE CURRENT DATE AND TIME IS : {CURRENT_DATE}
-Process, analyze and make a deep technical analysis for the provided Stock symbol in the input YAML.
+THE CURRENT DATE AND TIME IS : {CURRENT_DATE} Process, analyze and make a deep technical analysis for the provided Stock symbol in the input YAML.
 START TypeScript
 type StockInputData = {
 stocks: Array<{
@@ -50,15 +49,15 @@ Internal Pulse : Monitor NYSE $TICK (+1000/-1000 extremes) and $ADD to confirm b
 Use the Tier 1 value if the variance between sources is $<0.2\%$.
 Time-Adjusted Relative Volume (RVOL) : Calculate the cumulative volume up to the current minute against the historical average cumulative volume up to that exact same minute over an N-day lookback period (N=10 to 20 days).
 Formula:
-$$RVOL_t=\frac{\sum*{i=1}^{t}V*{current,i}}{\frac{1}{N}\sum*{d=1}^{N}\sum*{i=1}^{t}V*{d,i}}$$Strictly filter for setups where$$RVOL*t\geq2.0$$
+$$RVOL_t=\frac{\sum*{i=1}^{t}V*{current,i}}{\frac{1}{N}\sum*{d=1}^{N}\sum*{i=1}^{t}V*{d,i}}$$Strictly filter for setups where$$RVOL_t\geq2.0$$
 PHASE 2: STRUCTURAL ANALYSIS (SMART MONEY CONCEPTS)
 Quantitative Liquidity Sweep : Identify institutional inducement by evaluating a strict boolean logic window of n bars.
-Bullish Sweep Formula: $$Sweep*{bullish}=(L*t<\min(L*{t-n},\dots,L*{t-1}))\land(C_t>\min(L*{t-n},\dots,L*{t-1}))$$Sweep Strength Formula:
+Bullish Sweep Formula: $$Sweep_{bullish}=(L_t<\min(L_{t-n},\dots,L_{t-1}))\land(C_t>\min(L_{t-n},\dots,L_{t-1}))$$Sweep Strength Formula:
 $$Strength=C_t-L_t$$
 Evaluate the absolute value of Strength to dictate the magnitude of limit order absorption.
 Algorithmic Fair Value Gaps (FVG) : Confirm institutional intent through a mathematically defined three-candle imbalance.
-Bullish FVG Formula: $$Condition=L_t>H*{t-2}$$Gap Magnitude:
-$$Gap=L*t-H*{t-2}$$
+Bullish FVG Formula: $$Condition=L_t>H_{t-2}$$Gap Magnitude:
+$$Gap=L_t-H_{t-2}$$
 If Condition is True, use the Gap array as the strict institutional anchor zone.
 Institutional Anchor (Order Block) : Identify the last opposing candle before displacement as the entry zone for high-conviction retests.
 Bias Determination : Define Daily Bias using High Timeframe (HTF) trends and 20/200-period EMA alignment.
@@ -69,7 +68,7 @@ VWAP Execution : Utilize Anchored VWAP from significant session catalysts.
 The standard "A+" setup is a VWAP Reclaim after a successful liquidity sweep.
 Microstructure Verification (Order Flow Imbalance) : Calculate the exact high-frequency limit order book pressure using the Cont-Kukanov-Stoikov model to detect aggressive market execution and absorption.
 Formula:
-$$e*n=I*{\{P*n^B\geq P*{n-1}^B\}}q*n^B-I*{\{P*n^B\leq P*{n-1}^B\}}q*{n-1}^B-I*{\{P*n^A\leq P*{n-1}^A\}}q*n^A+I*{\{P*n^A\geq P*{n-1}^A\}}q\_{n-1}^A$$
+$$e_n=I_{\{P_n^B\geq P_{n-1}^B\}}q_n^B-I_{\{P_n^B\leq P_{n-1}^B\}}q_{n-1}^B-I_{\{P_n^A\leq P_{n-1}^A\}}q_n^A+I_{\{P_n^A\geq P_{n-1}^A\}}q_{n-1}^A$$
 Verify that the localized cumulative
 $$OFI>0$$
 to confirm aggressive market buy orders are lifting the ask before granting an "A+" setup grade.
@@ -85,7 +84,7 @@ Generate an "Executive Summary" YAML file for CEO review. This report will be us
 Output "Executive Summary" with exact 22 fields in the exact following order:
 CRITICAL OUTPUT CONSTRAINTS:
 You must output ONLY valid YAML.
-DO NOT wrap the output in markdown code blocks (do not useyaml or ```).
+DO NOT wrap the output in markdown code blocks (do not use yaml or ```).
 DO NOT output any conversational text, greetings, or explanations before or after the YAML.
 DO NOT include my instructions, comments, or field descriptions in the final output.Output ONLY the keys listed below and your generated values.
 START TypeScript

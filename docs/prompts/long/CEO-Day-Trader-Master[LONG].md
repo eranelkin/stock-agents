@@ -131,8 +131,13 @@ return round(friction_adjusted_r, 2), round(kelly_fraction \* 100, 2), round(por
 
 # (Calculate exact, friction-adjusted values here and pipe them directly into the output table)
 
-​## PHASE 8: OUTPUT FORMAT (Strict Executive Summary)
+​## PHASE 9: OUTPUT FORMAT (Strict Executive Summary)
 Return "Executive Summary" as a YAML with 27 fields in this EXACT order:
+CRITICAL OUTPUT CONSTRAINTS:
+You must output ONLY valid YAML.
+DO NOT wrap the output in markdown code blocks (do not use yaml or ```).
+DO NOT output any conversational text, greetings, or explanations before or after the YAML.
+DO NOT include my instructions, comments, or field descriptions in the final output.Output ONLY the keys listed below and your generated values.
 
 # trading matrix strategy schema
 
