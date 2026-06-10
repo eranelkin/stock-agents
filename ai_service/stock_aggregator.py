@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
-from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-from ai_service.schemas.stock_output import StockAggregatedMetadata, StockAggregatedOutput
 from ai_service.utils.logger import get_logger
 from ai_service.utils.output_writer import write_output
 
@@ -15,9 +13,20 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+def _flatten_agent_output(agent_output: dict[str, Any]) -> dict[str, Any]:
+    """Unwrap stocks[0] if present and drop the symbol field."""
+    if isinstance(agent_output, dict):
+        stocks_list = agent_output.get("stocks")
+        if isinstance(stocks_list, list) and stocks_list:
+            flat = dict(stocks_list[0])
+            flat.pop("symbol", None)
+            return flat
+    return agent_output
+
+
 class StockAggregator:
     """Collects per-pipeline agent contributions for each ticker and writes
-    stock_{ticker}.yaml as soon as all expected pipelines have contributed.
+    agg_{ticker}.yaml as soon as all expected pipelines have contributed.
 
     Phase 2: expected_pipelines=["stocks"] — writes immediately on stocks completion.
     Future:  expected_pipelines=["stocks", "sectors", "macro"] — waits for all three.
@@ -47,6 +56,7 @@ class StockAggregator:
         self._run_logger = run_logger
         self._ceo_manager = ceo_manager
         self._contributions: dict[str, dict[str, Any]] = defaultdict(dict)
+        self._entity_dicts: dict[str, dict[str, Any]] = {}
         self._lock = asyncio.Lock()
 
     async def add_contribution(
@@ -54,39 +64,55 @@ class StockAggregator:
         ticker: str,
         pipeline_name: str,
         agents: dict[str, Any],
+        entity_dict: dict[str, Any] | None = None,
     ) -> None:
         """Register one pipeline's agent data for a ticker.
 
-        Writes stock_{ticker}.yaml immediately when all expected pipeline
+        Writes agg_{ticker}.yaml immediately when all expected pipeline
         contributions have been received for this ticker.
 
         Args:
             ticker: The stock ticker symbol.
             pipeline_name: Name of the contributing pipeline (e.g. "stocks").
             agents: The agents dict from the pipeline's PipelineOutput.
+            entity_dict: The raw input entity fields (stored on first call per ticker).
         """
         async with self._lock:
             self._contributions[ticker][pipeline_name] = agents
+            if entity_dict and ticker not in self._entity_dicts:
+                self._entity_dicts[ticker] = entity_dict
             if self._expected.issubset(self._contributions[ticker].keys()):
                 await self._write(ticker)
 
     async def _write(self, ticker: str) -> None:
-        """Merge all contributions for a ticker and write stock_{ticker}.yaml."""
+        """Build the new agg_{ticker}.yaml structure and write it."""
         contributions = self._contributions[ticker]
+        entity_dict = self._entity_dicts.get(ticker, {})
+
+        # Build stock section: input fields + agent outputs from stocks pipeline
+        stock: dict[str, Any] = {}
+        stock["company_name"] = entity_dict.get("company_name", "")
+        for k, v in entity_dict.items():
+            if k not in {"name", "company_name"}:
+                stock[k] = v
+        for agent_title, agent_output in contributions.get("stocks", {}).items():
+            key = agent_title.lower().replace(" ", "_")
+            stock[key] = _flatten_agent_output(agent_output)
+
+        # Merge all agents for CEO notification
         merged_agents: dict[str, Any] = {}
         for agents_data in contributions.values():
             merged_agents.update(agents_data)
 
-        output = StockAggregatedOutput(
-            ticker=ticker,
-            agents=merged_agents,
-            metadata=StockAggregatedMetadata(
-                aggregated_at=datetime.now(timezone.utc).isoformat(),
-                source_pipelines=sorted(contributions.keys()),
-            ),
-        )
+        output: dict[str, Any] = {
+            "symbol": ticker,
+            "stock": stock,
+            "sectors": contributions.get("sectors"),
+            "macro": contributions.get("macro"),
+        }
+
         await write_output(
-            data=output.model_dump(),
+            data=output,
             entity_name=ticker,
             output_dir=self._run_dir,
             output_format=self._output_format,

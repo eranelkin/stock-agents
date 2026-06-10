@@ -25,8 +25,20 @@ interface CeoResultsPageProps {
 
 type Row = Record<string, unknown> & { _ticker: string }
 
-const LONG_TEXT_COLS = new Set(['conviction_detect', 'collapse_trigger', 'catalyst_reason'])
-const MAX_CELL_LEN = 60
+const LONG_TEXT_COLS = new Set([
+  'analysis_strategy',
+  'conviction_detect',
+  'collapse_conviction',
+  'collapse_trigger',
+  'catalyst_reason',
+  'volume',
+  'ai_suggestion',
+  'notes',
+])
+
+function isLongCol(col: string): boolean {
+  return LONG_TEXT_COLS.has(col) || /^reason_\d+$/.test(col)
+}
 
 function sortKey(val: unknown): number | string {
   if (val === null || val === undefined) return '￿'
@@ -48,10 +60,24 @@ function cellText(value: unknown): string {
 
 function CellValue({ col, value }: { col: string; value: unknown }) {
   const text = cellText(value)
-  if (LONG_TEXT_COLS.has(col) && text.length > MAX_CELL_LEN) {
+  if (isLongCol(col)) {
     return (
-      <Tooltip title={text} placement="top" arrow>
-        <span style={{ cursor: 'default' }}>{text.slice(0, MAX_CELL_LEN)}…</span>
+      <Tooltip
+        title={text}
+        placement="top"
+        arrow
+        slotProps={{ tooltip: { sx: { fontSize: '0.8rem' } } }}
+      >
+        <span style={{
+          display: 'block',
+          maxWidth: 300,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          cursor: 'default',
+        }}>
+          {text}
+        </span>
       </Tooltip>
     )
   }

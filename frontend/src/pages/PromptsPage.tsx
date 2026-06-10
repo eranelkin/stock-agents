@@ -25,9 +25,16 @@ import type { Prompt } from "../types/prompt";
 import PromptDialog from "../components/PromptDialog";
 import { resolvePlaceholders } from "../utils/placeholders";
 
-const CATEGORIES = ["agents", "ceo", "sectors", "system", "once", "market"] as const;
+const CATEGORIES = [
+  "agents",
+  "ceo",
+  "sectors",
+  "system",
+  "once",
+  "market",
+] as const;
 const CATEGORY_LABELS: Record<string, string> = {
-  agents: "Agents",
+  agents: "Stocks",
   ceo: "CEO",
   sectors: "Sectors",
   system: "System",
@@ -44,7 +51,7 @@ function PlayIcon() {
 }
 
 interface PromptsPageProps {
-  onRunPrompt: (content: string) => void
+  onRunPrompt: (content: string) => void;
 }
 
 export default function PromptsPage({ onRunPrompt }: PromptsPageProps) {
@@ -108,7 +115,15 @@ export default function PromptsPage({ onRunPrompt }: PromptsPageProps) {
 
   return (
     <Box
-      sx={{ px: 4, py: 3, display: "flex", flexDirection: "column", gap: 2, flex: 1, overflow: "hidden" }}
+      sx={{
+        px: 4,
+        py: 3,
+        display: "flex",
+        flexDirection: "column",
+        gap: 2,
+        flex: 1,
+        overflow: "hidden",
+      }}
     >
       {/* Page header */}
       <Box
@@ -172,24 +187,35 @@ export default function PromptsPage({ onRunPrompt }: PromptsPageProps) {
 
       {/* Table */}
       <Box sx={{ flex: 1, overflow: "auto" }}>
-      {loading ? (
-        <Box sx={{ display: "flex", justifyContent: "center", pt: 6 }}>
-          <CircularProgress size={28} />
-        </Box>
-      ) : prompts.length === 0 ? (
-        <Box sx={{ display: "flex", justifyContent: "center", pt: 6 }}>
-          <Typography variant="h6" color="text.secondary">
-            No {CATEGORY_LABELS[currentCategory]} prompts yet
-          </Typography>
-        </Box>
-      ) : (
-        <TableContainer>
-          <Table size="small" sx={{ width: "100%" }}>
-            <TableHead>
-              <TableRow>
-                {["Title", "Prompt", "Created"].map((h) => (
+        {loading ? (
+          <Box sx={{ display: "flex", justifyContent: "center", pt: 6 }}>
+            <CircularProgress size={28} />
+          </Box>
+        ) : prompts.length === 0 ? (
+          <Box sx={{ display: "flex", justifyContent: "center", pt: 6 }}>
+            <Typography variant="h6" color="text.secondary">
+              No {CATEGORY_LABELS[currentCategory]} prompts yet
+            </Typography>
+          </Box>
+        ) : (
+          <TableContainer>
+            <Table size="small" sx={{ width: "100%" }}>
+              <TableHead>
+                <TableRow>
+                  {["Title", "Prompt", "Created"].map((h) => (
+                    <TableCell
+                      key={h}
+                      sx={{
+                        color: "text.secondary",
+                        fontSize: "0.8rem",
+                        borderColor: "rgba(255,255,255,0.08)",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {h}
+                    </TableCell>
+                  ))}
                   <TableCell
-                    key={h}
                     sx={{
                       color: "text.secondary",
                       fontSize: "0.8rem",
@@ -197,117 +223,115 @@ export default function PromptsPage({ onRunPrompt }: PromptsPageProps) {
                       fontWeight: 600,
                     }}
                   >
-                    {h}
-                  </TableCell>
-                ))}
-                <TableCell
-                  sx={{
-                    color: "text.secondary",
-                    fontSize: "0.8rem",
-                    borderColor: "rgba(255,255,255,0.08)",
-                    fontWeight: 600,
-                  }}
-                >
-                  Active
-                </TableCell>
-                <TableCell
-                  align="right"
-                  sx={{
-                    color: "text.secondary",
-                    fontSize: "0.8rem",
-                    borderColor: "rgba(255,255,255,0.08)",
-                    fontWeight: 600,
-                  }}
-                >
-                  Actions
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {prompts.map((prompt) => (
-                <TableRow
-                  key={prompt.id}
-                  sx={{ "&:hover": { bgcolor: "rgba(255,255,255,0.03)" } }}
-                >
-                  <TableCell
-                    sx={{
-                      ...cellBorder,
-                      color: "text.primary",
-                      fontWeight: 500,
-                      whiteSpace: "nowrap",
-                      maxWidth: 200,
-                    }}
-                  >
-                    {prompt.title}
-                  </TableCell>
-                  <TableCell
-                    sx={{
-                      ...cellBorder,
-                      color: "text.secondary",
-                      fontSize: "0.85rem",
-                      maxWidth: 480,
-                    }}
-                  >
-                    {prompt.content.length > 100
-                      ? `${prompt.content.slice(0, 100)}…`
-                      : prompt.content}
-                  </TableCell>
-                  <TableCell
-                    sx={{
-                      ...cellBorder,
-                      color: "text.secondary",
-                      fontSize: "0.85rem",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {new Date(prompt.created_at).toLocaleString()}
-                  </TableCell>
-                  <TableCell sx={{ ...cellBorder }}>
-                    <Switch
-                      size="small"
-                      checked={prompt.is_active}
-                      onChange={() => handleToggleActive(prompt)}
-                    />
+                    Active
                   </TableCell>
                   <TableCell
                     align="right"
-                    sx={{ ...cellBorder, whiteSpace: "nowrap" }}
+                    sx={{
+                      color: "text.secondary",
+                      fontSize: "0.8rem",
+                      borderColor: "rgba(255,255,255,0.08)",
+                      fontWeight: 600,
+                    }}
                   >
-                    <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 0.5 }}>
-                      <Tooltip title="Run">
-                        <IconButton size="small" onClick={() => handleRun(prompt)}>
-                          <PlayIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Edit">
-                        <IconButton
-                          size="small"
-                          onClick={() => handleEditClick(prompt)}
-                          sx={{
-                            color: "text.secondary",
-                            "&:hover": { color: "#fff" },
-                          }}
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Delete">
-                        <IconButton
-                          size="small"
-                          onClick={() => handleDelete(prompt)}
-                          sx={{ color: "#f44336" }}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
+                    Actions
                   </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
+              </TableHead>
+              <TableBody>
+                {prompts.map((prompt) => (
+                  <TableRow
+                    key={prompt.id}
+                    sx={{ "&:hover": { bgcolor: "rgba(255,255,255,0.03)" } }}
+                  >
+                    <TableCell
+                      sx={{
+                        ...cellBorder,
+                        color: "text.primary",
+                        fontWeight: 500,
+                        whiteSpace: "nowrap",
+                        maxWidth: 200,
+                      }}
+                    >
+                      {prompt.title}
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        ...cellBorder,
+                        color: "text.secondary",
+                        fontSize: "0.85rem",
+                        maxWidth: 480,
+                      }}
+                    >
+                      {prompt.content.length > 100
+                        ? `${prompt.content.slice(0, 100)}…`
+                        : prompt.content}
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        ...cellBorder,
+                        color: "text.secondary",
+                        fontSize: "0.85rem",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {new Date(prompt.created_at).toLocaleString()}
+                    </TableCell>
+                    <TableCell sx={{ ...cellBorder }}>
+                      <Switch
+                        size="small"
+                        checked={prompt.is_active}
+                        onChange={() => handleToggleActive(prompt)}
+                      />
+                    </TableCell>
+                    <TableCell
+                      align="right"
+                      sx={{ ...cellBorder, whiteSpace: "nowrap" }}
+                    >
+                      <Box
+                        sx={{
+                          display: "flex",
+                          justifyContent: "flex-end",
+                          gap: 0.5,
+                        }}
+                      >
+                        <Tooltip title="Run">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleRun(prompt)}
+                          >
+                            <PlayIcon />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Edit">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleEditClick(prompt)}
+                            sx={{
+                              color: "text.secondary",
+                              "&:hover": { color: "#fff" },
+                            }}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Delete">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleDelete(prompt)}
+                            sx={{ color: "#f44336" }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
       </Box>
 
       <PromptDialog

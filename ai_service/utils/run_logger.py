@@ -359,6 +359,11 @@ class RunLogger:
             f'<span id="dd-types-label">All Types</span><span class="dd-arrow">&#x25BE;</span></button>\n'
             f'      <div class="filter-panel" id="dd-types-panel" style="display:none"></div>\n'
             f'    </div>\n'
+            f'    <div class="filter-dropdown" id="dd-prompts">\n'
+            f'      <button class="filter-btn" id="dd-prompts-btn" onclick="toggleDropdown(\'dd-prompts\')">'
+            f'<span id="dd-prompts-label">All Prompts</span><span class="dd-arrow">&#x25BE;</span></button>\n'
+            f'      <div class="filter-panel" id="dd-prompts-panel" style="display:none"></div>\n'
+            f'    </div>\n'
             f'  </div>\n'
             f'</div>\n\n'
             f'<div class="section-heading" id="events-table-anchor">Events</div>\n'
@@ -366,8 +371,8 @@ class RunLogger:
             f'<table id="events-table">\n'
             f'  <thead>\n'
             f'    <tr>\n'
-            f'      <th>#</th><th>Time</th><th>Type</th><th>Entity</th>\n'
-            f'      <th>Prompt / Detail</th><th>Model</th><th>Duration</th>\n'
+            f'      <th>#</th><th>Time</th><th>Pipeline</th>\n'
+            f'      <th>Prompt / Detail</th><th>Entity</th><th>Type</th><th>Model</th><th>Duration</th>\n'
             f'    </tr>\n'
             f'  </thead>\n'
             f'  <tbody id="events-body">\n'
@@ -442,8 +447,6 @@ def _is_json(text: str) -> bool:
 def _render_row(e: _Event, entity: str, color: str) -> str:
     icon, css_cls, label = _TYPE_META.get(e.type, ("?", "unknown", e.type.upper()))
     if e.pipeline_type:
-        pt = e.pipeline_type.upper()
-        label = f"{pt} {label}"
         if e.type in ("pipeline_start", "pipeline_end"):
             css_cls = f"pipeline-{e.pipeline_type}"
     dur = _fmt_duration(e.duration_ms)
@@ -466,18 +469,37 @@ def _render_row(e: _Event, entity: str, color: str) -> str:
         )
     elif e.type == "run_start":
         extra = f' data-mode="{_h(e.payload.get("mode", ""))}"'
+    elif e.type == "search_request":
+        extra = f' data-search-query="{_h(e.payload.get("query", ""))}"'
+
+    if e.pipeline_type:
+        pipeline_disp = (
+            f'<span class="pipeline-badge pipeline-badge-{e.pipeline_type}">'
+            f'{e.pipeline_type.upper()}</span>'
+        )
+    else:
+        pipeline_disp = '<span class="pipeline-badge-empty">&mdash;</span>'
 
     return (
         f'    <tr id="row-{e.seq}" class="event-row type-{css_cls}"'
         f' style="--row-color:{color}" onclick="toggleRow({e.seq})"{extra}'
-        f' data-entity="{_h(entity)}" data-ptype="{_h(e.pipeline_type)}">'
+        f' data-entity="{_h(entity)}" data-ptype="{_h(e.pipeline_type)}" data-prompt="{_h(e.prompt_title)}">'
         f'<td class="col-seq"><span class="row-chevron">&#x25B6;</span>{e.seq}</td>'
         f'<td class="col-ts">{_h(e.ts)}</td>'
-        f'<td class="col-type"><span class="type-badge {css_cls}">'
-        f'<span class="ti">{icon}</span>{label}</span></td>'
+        f'<td class="col-pipeline">{pipeline_disp}</td>'
+        f'<td class="col-prompt">{prompt_disp}</td>'
         f'<td class="col-entity"><span class="entity-dot" style="background:{color}"></span>'
         f'{entity_disp}</td>'
-        f'<td class="col-prompt">{prompt_disp}</td>'
+        f'<td class="col-type"><span class="type-badge {css_cls}">'
+        f'<span class="ti">{icon}</span>{label}</span>'
+        + (
+            f'<button class="srch-info-btn" title="Show aggregated queries"'
+            f' onmouseenter="showSearchPopup(this,{e.seq})"'
+            f' onmouseleave="scheduleHideSearchPopup()"'
+            f' onclick="event.stopPropagation()">&#x2139;</button>'
+            if e.type == "search_request" else ""
+        )
+        + f'</td>'
         f'<td class="col-model">{model_disp}</td>'
         f'<td class="col-dur">{dur}</td>'
         f'</tr>'
@@ -504,7 +526,7 @@ def _render_inline_detail(e: _Event, entity: str, color: str) -> str:
     body = _card_body(e)
     return (
         f'    <tr id="detail-row-{e.seq}" class="detail-row" style="display:none">'
-        f'<td colspan="7" class="detail-cell" style="border-left-color:{color}">'
+        f'<td colspan="8" class="detail-cell" style="border-left-color:{color}">'
         f'{meta}{body}'
         f'</td></tr>'
     )
@@ -634,7 +656,7 @@ def _polling_js(run_id: str) -> str:
         "  function processRows(html){\n"
         "    var tb=$e('events-body');\n"
         "    if(!tb||!html)return;\n"
-        "    tb.insertAdjacentHTML('beforeend',html);\n"
+        "    tb.insertAdjacentHTML('afterbegin',html);\n"
         "    tb.querySelectorAll('.json-block:not([data-hl])').forEach(function(b){highlightJSON(b);b.dataset.hl='1';});\n"
         "    tb.querySelectorAll('[data-chip]').forEach(addChip);\n"
         "    var mr=tb.querySelector('[data-mode]');\n"
@@ -642,7 +664,21 @@ def _polling_js(run_id: str) -> str:
         "    updateFilterOptions();\n"
         "    applyFilters();\n"
         "  }\n"
+        "  function reverseInitialRows(){\n"
+        "    var tb=$e('events-body');\n"
+        "    if(!tb)return;\n"
+        "    var nodes=Array.from(tb.children);\n"
+        "    if(nodes.length<2)return;\n"
+        "    var pairs=[];\n"
+        "    for(var i=0;i<nodes.length;i+=2){\n"
+        "      pairs.push(nodes[i+1]?[nodes[i],nodes[i+1]]:[nodes[i]]);\n"
+        "    }\n"
+        "    pairs.reverse();\n"
+        "    while(tb.firstChild)tb.removeChild(tb.firstChild);\n"
+        "    pairs.forEach(function(p){p.forEach(function(r){tb.appendChild(r);});});\n"
+        "  }\n"
         "  document.addEventListener('DOMContentLoaded',function(){\n"
+        "    reverseInitialRows();\n"
         "    document.querySelectorAll('#events-body [data-chip]').forEach(addChip);\n"
         "    document.querySelectorAll('#events-body .json-block').forEach(function(b){highlightJSON(b);b.dataset.hl='1';});\n"
         "    updateFilterOptions();\n"
@@ -907,6 +943,57 @@ table#events-table th{
 .filter-opt:hover{background:rgba(255,255,255,.06)}
 .filter-opt input[type=checkbox]{accent-color:#1976d2;cursor:pointer}
 .dd-arrow{font-size:10px;color:var(--muted)}
+
+/* Pipeline column */
+.col-pipeline{white-space:nowrap}
+.pipeline-badge{
+  display:inline-flex;align-items:center;
+  padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.06em;
+}
+.pipeline-badge-stocks  {background:rgba(56,189,248,.15); color:#38bdf8}
+.pipeline-badge-sectors {background:rgba(167,139,250,.15);color:#a78bfa}
+.pipeline-badge-ceo     {background:rgba(251,191,36,.15); color:#fbbf24}
+.pipeline-badge-empty   {color:var(--muted)}
+
+/* Search query info button */
+.srch-info-btn{
+  background:none;border:none;color:#a78bfa;cursor:pointer;
+  font-size:13px;padding:0 3px 0 5px;vertical-align:middle;
+  opacity:.65;line-height:1;border-radius:3px;
+  transition:opacity .15s,background .15s;
+}
+.srch-info-btn:hover{opacity:1;background:rgba(167,139,250,.18)}
+
+/* Search query popup */
+.srch-popup{
+  position:fixed;z-index:9999;
+  background:var(--surface2);border:1px solid rgba(167,139,250,.35);
+  border-radius:8px;min-width:280px;max-width:540px;
+  box-shadow:0 8px 32px rgba(0,0,0,.55);font-size:12px;
+}
+.srch-popup-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 12px;border-bottom:1px solid var(--border);
+  font-size:11px;font-weight:600;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--muted);
+}
+.srch-copy-btn{
+  background:none;border:1px solid var(--border);color:var(--muted);
+  border-radius:4px;padding:1px 8px;font-size:10px;cursor:pointer;
+  font-family:inherit;transition:color .15s,border-color .15s;
+}
+.srch-copy-btn:hover{color:var(--text);border-color:var(--muted)}
+.srch-copy-btn.copied{color:var(--green);border-color:var(--green)}
+.srch-popup-body{
+  padding:8px 12px;max-height:300px;overflow-y:auto;
+  display:flex;flex-direction:column;gap:6px;
+}
+.srch-popup-item{display:flex;gap:8px;align-items:flex-start}
+.srch-popup-num{
+  color:var(--muted);font-size:11px;min-width:18px;
+  flex-shrink:0;padding-top:1px;
+}
+.srch-popup-query{color:var(--text);line-height:1.5;word-break:break-word}
 """
 
 
@@ -986,7 +1073,8 @@ document.addEventListener('click', function(e) {
 function ensureFilterOption(ddId, value) {
   if (!value) return;
   var panel = document.getElementById(ddId + '-panel');
-  var optId = 'fopt-' + ddId + '-' + value;
+  var safeId = value.replace(/[^a-zA-Z0-9_-]/g, '_');
+  var optId = 'fopt-' + ddId + '-' + safeId;
   if (!panel || document.getElementById(optId)) return;
   var lbl = document.createElement('label');
   lbl.className = 'filter-opt';
@@ -1004,8 +1092,10 @@ function updateFilterOptions() {
   document.querySelectorAll('#events-body .event-row').forEach(function(row) {
     var entity = row.getAttribute('data-entity');
     var ptype  = row.getAttribute('data-ptype');
+    var prompt = row.getAttribute('data-prompt');
     if (entity) ensureFilterOption('dd-tickers', entity);
     if (ptype)  ensureFilterOption('dd-types',   ptype);
+    if (prompt) ensureFilterOption('dd-prompts', prompt);
   });
 }
 
@@ -1038,22 +1128,123 @@ function updateFilterLabel(ddId, allLabel) {
 function applyFilters() {
   updateFilterLabel('dd-tickers', 'All Tickers');
   updateFilterLabel('dd-types',   'All Types');
+  updateFilterLabel('dd-prompts', 'All Prompts');
   var selTickers = getFilterSelections('dd-tickers');
   var selTypes   = getFilterSelections('dd-types');
+  var selPrompts = getFilterSelections('dd-prompts');
   document.querySelectorAll('#events-body .event-row').forEach(function(row) {
     var entity = row.getAttribute('data-entity') || '';
     var ptype  = row.getAttribute('data-ptype')  || '';
+    var prompt = row.getAttribute('data-prompt')  || '';
     var seq    = row.id.replace('row-', '');
     var detail = document.getElementById('detail-row-' + seq);
-    if (!entity && !ptype) { row.style.display = ''; return; }
+    if (!entity && !ptype && !prompt) { row.style.display = ''; return; }
     var pass = (selTickers.length === 0 || selTickers.indexOf(entity) !== -1) &&
-               (selTypes.length   === 0 || selTypes.indexOf(ptype)    !== -1);
+               (selTypes.length   === 0 || selTypes.indexOf(ptype)    !== -1) &&
+               (selPrompts.length === 0 || selPrompts.indexOf(prompt) !== -1);
     row.style.display = pass ? '' : 'none';
     if (!pass) {
       if (detail) detail.style.display = 'none';
       if (String(_openSeq) === seq) { row.classList.remove('row-open'); _openSeq = null; }
     }
   });
+}
+
+var _srchPopup = null;
+var _srchHideTimer = null;
+
+function showSearchPopup(btn, seq) {
+  clearTimeout(_srchHideTimer);
+  if (_srchPopup) { _srchPopup.remove(); _srchPopup = null; }
+
+  var row = document.getElementById('row-' + seq);
+  if (!row) return;
+  var entity = row.getAttribute('data-entity');
+
+  var queries = [];
+  document.querySelectorAll('#events-body tr.event-row').forEach(function(r) {
+    var rseq = parseInt(r.id.replace('row-', ''), 10);
+    var q = r.getAttribute('data-search-query');
+    if (q && r.getAttribute('data-entity') === entity && rseq <= seq) {
+      queries.push({ seq: rseq, query: q });
+    }
+  });
+  queries.sort(function(a, b) { return a.seq - b.seq; });
+  if (!queries.length) return;
+
+  var allText = queries.map(function(q) { return q.query; }).join('\\n\\n');
+
+  var popup = document.createElement('div');
+  popup.className = 'srch-popup';
+
+  var hdr = document.createElement('div');
+  hdr.className = 'srch-popup-header';
+  hdr.appendChild(document.createTextNode('Search Queries (' + queries.length + ')'));
+  var cb = document.createElement('button');
+  cb.className = 'srch-copy-btn';
+  cb.innerHTML = '&#x2398; copy';
+  cb.addEventListener('click', function(e) {
+    e.stopPropagation();
+    navigator.clipboard.writeText(allText).then(function() {
+      cb.textContent = 'copied!';
+      cb.classList.add('copied');
+      setTimeout(function() { cb.innerHTML = '&#x2398; copy'; cb.classList.remove('copied'); }, 1500);
+    });
+  });
+  hdr.appendChild(cb);
+  popup.appendChild(hdr);
+
+  var body = document.createElement('div');
+  body.className = 'srch-popup-body';
+  queries.forEach(function(q, i) {
+    var item = document.createElement('div');
+    item.className = 'srch-popup-item';
+    var num = document.createElement('span');
+    num.className = 'srch-popup-num';
+    num.textContent = (i + 1) + '.';
+    var qs = document.createElement('span');
+    qs.className = 'srch-popup-query';
+    qs.textContent = q.query;
+    item.appendChild(num);
+    item.appendChild(qs);
+    body.appendChild(item);
+  });
+  popup.appendChild(body);
+
+  document.body.appendChild(popup);
+  var rect = btn.getBoundingClientRect();
+  var popW = popup.offsetWidth || 300;
+  var popH = popup.offsetHeight || 200;
+
+  // Horizontal: center on button, clamp to viewport edges
+  var left = rect.left - popW / 2 + 12;
+  if (left < 8) left = 8;
+  if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+
+  // Vertical: prefer above; fall back to below or clamp if neither fits
+  var spaceAbove = rect.top - 8;
+  var spaceBelow = window.innerHeight - rect.bottom - 8;
+  var top;
+  if (popH <= spaceAbove) {
+    top = rect.top - popH - 6;
+  } else if (spaceBelow >= spaceAbove) {
+    top = rect.bottom + 6;
+    if (top + popH > window.innerHeight - 8) top = window.innerHeight - popH - 8;
+  } else {
+    top = 8;
+  }
+  popup.style.top = top + 'px';
+  popup.style.left = left + 'px';
+
+  popup.addEventListener('mouseenter', function() { clearTimeout(_srchHideTimer); });
+  popup.addEventListener('mouseleave', function() { scheduleHideSearchPopup(); });
+  _srchPopup = popup;
+}
+
+function scheduleHideSearchPopup() {
+  _srchHideTimer = setTimeout(function() {
+    if (_srchPopup) { _srchPopup.remove(); _srchPopup = null; }
+  }, 200);
 }
 
 function highlightJSON(el) {

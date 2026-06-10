@@ -29,6 +29,31 @@ from ai_service.utils.run_logger import RunLogger
 logger = get_logger(__name__)
 
 
+def _flatten_agent_output(agent_output: dict[str, Any]) -> dict[str, Any]:
+    """Unwrap stocks[0] if present and drop the symbol field."""
+    if isinstance(agent_output, dict):
+        stocks_list = agent_output.get("stocks")
+        if isinstance(stocks_list, list) and stocks_list:
+            flat = dict(stocks_list[0])
+            flat.pop("symbol", None)
+            return flat
+    return agent_output
+
+
+def _build_stock_yaml(output: PipelineOutput, entity_dict: dict[str, Any]) -> dict[str, Any]:
+    """Build the new stock:{} YAML structure from a pipeline output + input entity dict."""
+    symbol = entity_dict.get("name") or entity_dict.get("symbol", "")
+    stock: dict[str, Any] = {}
+    stock["company_name"] = entity_dict.get("company_name", "")
+    for k, v in entity_dict.items():
+        if k not in {"name", "company_name"}:
+            stock[k] = v
+    for agent_title, agent_output in output.agents.items():
+        key = agent_title.lower().replace(" ", "_")
+        stock[key] = _flatten_agent_output(agent_output)
+    return {"symbol": symbol, "stock": stock}
+
+
 class Orchestrator:
     """Runs all registered pipeline types concurrently, respecting dependency ordering."""
 
@@ -175,7 +200,7 @@ class Orchestrator:
                     output = await p.run()
                     if cfg.output_mode == "per_entity":
                         await write_output(
-                            data=output.model_dump(),
+                            data=_build_stock_yaml(output, p.entity.model_dump()),
                             entity_name=output.ticker,
                             output_dir=run_dir,
                             output_format=settings.output_format,
@@ -186,6 +211,7 @@ class Orchestrator:
                                 ticker=output.ticker,
                                 pipeline_name=cfg.name,
                                 agents=output.agents,
+                                entity_dict=p.entity.model_dump(),
                             )
                     return output
 

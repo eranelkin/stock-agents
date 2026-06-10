@@ -38,7 +38,7 @@ def _quote_yaml_values(text: str) -> str:
 
 
 def _parse_response(raw: str) -> dict[str, Any]:
-    """Try JSON → YAML → sanitised YAML → code-block extraction. Raises ValueError if all fail."""
+    """Try JSON → YAML → sanitised YAML → code-block → prose-stripped YAML. Raises ValueError if all fail."""
     text = raw.strip()
 
     # 1. Try JSON directly
@@ -83,6 +83,21 @@ def _parse_response(raw: str) -> dict[str, Any]:
                 return result
         except yaml.YAMLError:
             pass
+
+    # 4. LLM prefixed narrative prose before the actual YAML data (no code fences).
+    #    Scan for lines that look like top-level YAML mapping keys and try parsing
+    #    from each match position. Covers the common "think-then-dump-YAML" pattern.
+    for m in re.finditer(r'^[a-z_][a-zA-Z0-9_]*:\s*', text, re.MULTILINE):
+        candidate = text[m.start():]
+        if candidate.count('\n') < 2:
+            continue
+        for attempt in (candidate, _quote_yaml_values(candidate)):
+            try:
+                result = yaml.safe_load(attempt)
+                if isinstance(result, dict):
+                    return result
+            except yaml.YAMLError:
+                pass
 
     raise ValueError("Response is not parseable as JSON or YAML")
 

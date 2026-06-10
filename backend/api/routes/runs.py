@@ -459,15 +459,36 @@ def _log_file_path(output_dir: str) -> Path:
 
 
 def _parse_ceo_yaml(file_path: Path) -> dict | None:
-    """Extract the stock analysis dict from a CEO_*.yaml output file."""
+    """Extract the stock analysis dict from a CEO_*.yaml output file.
+
+    Handles two LLM output patterns:
+    - Each analysis field as a separate list item under `stocks`
+    - Analysis fields as siblings of `stocks` at the agent level
+    Both are merged into one flat dict.
+    """
     import yaml
     try:
         with open(file_path) as f:
             doc = yaml.safe_load(f)
         for agent_data in doc.get("agents", {}).values():
-            stocks = agent_data.get("stocks", [])
-            if stocks:
-                return stocks[0]
+            if not isinstance(agent_data, dict):
+                continue
+            merged: dict = {}
+            # Merge all items in the stocks list (handles LLM pattern where each
+            # field is its own list entry: [{symbol: X}, {confidence: 72}, ...])
+            for item in agent_data.get("stocks") or []:
+                if isinstance(item, dict):
+                    merged.update(item)
+            # Also pull in analysis fields sitting directly on agent_data
+            # (LLM sometimes places them outside the stocks list)
+            _SKIP = {"stocks", "raw_output", "parse_error", "reasoning"}
+            for k, v in agent_data.items():
+                if k in _SKIP:
+                    continue
+                if isinstance(k, str) and len(k) < 100:
+                    merged.setdefault(k, v)
+            if merged:
+                return merged
     except Exception:
         pass
     return None
