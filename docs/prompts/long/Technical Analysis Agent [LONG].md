@@ -1,6 +1,3 @@
-Transform the input output to type script - https://gemini.google.com/app/30bbf8bfcf322701
-Static data required from IBK : https://gemini.google.com/app/2ae9d02246848013
-
 Technical Analysis Agent
 
 ### AGENT ROLE
@@ -96,7 +93,7 @@ CRITICAL OUTPUT CONSTRAINTS:
 STRICT REQUIREMENTS:
 
 - Output ONLY valid YAML.
-- Do NOT output markdown.
+- Do NOT output markdown or code blocks - do not use yaml or ``` !!!
 - Do NOT output code fences.
 - Do NOT output explanations.
 - Do NOT output analysis.
