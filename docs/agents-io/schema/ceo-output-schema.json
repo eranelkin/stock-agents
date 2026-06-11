@@ -1,59 +1,86 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Trading Matrix Strategy",
   "type": "object",
-  "required": ["stocks"],
   "properties": {
-    "stocks": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["symbol", "date", "strategy_profile", "execution_levels", "short_interest", "conviction_metrics"],
-        "properties": {
-          "symbol": { "type": "string" },
-          "date": { "type": "string", "description": "Format: dd-mm-yyyy" },
-          "strategy_profile": {
-            "type": "object",
-            "required": ["strategy_name", "scenarios", "ai_suggestion"],
-            "properties": {
-              "strategy_name": { "type": "string", "description": "e.g., VWAP Reversal, ORB Breakout" },
-              "scenarios": { "type": "string", "description": "Detail 3 distinct scenarios (Bullish, Bearish, Sideways) with mathematical probabilities." },
-              "ai_suggestion": { "type": "string", "description": "Core action item and analytical notes." }
-            }
-          },
-          "execution_levels": {
-            "type": "object",
-            "required": ["confidence_percent", "entry_range", "tp_range", "sl_range", "tp_time", "target_gain_percent"],
-            "properties": {
-              "confidence_percent": { "type": "string" },
-              "entry_range": { "type": "string" },
-              "tp_range": { "type": "string" },
-              "sl_range": { "type": "string" },
-              "tp_time": { "type": "string", "description": "Optimal exit time before close" },
-              "target_gain_percent": { "type": "string" }
-            }
-          },
-          "short_interest": {
-            "type": "object",
-            "required": ["short_ratio", "short_float", "institutional_holding", "squeeze_risk_score", "required_rvol"],
-            "properties": {
-              "short_ratio": { "type": "string", "description": "Days to cover" },
-              "short_float": { "type": "string", "description": "%" },
-              "institutional_holding": { "type": "string", "description": "%" },
-              "squeeze_risk_score": { "type": "string", "enum": ["1","2","3","4","5","6","7","8","9","10"] },
-              "required_rvol": { "type": "string", "description": "Relative volume threshold required to validate breakout" }
-            }
-          },
-          "conviction_metrics": {
-            "type": "object",
-            "required": ["trigger_indicators", "invalidation_points", "key_reasons"],
-            "properties": {
-              "trigger_indicators": { "type": "string", "description": "What patterns show strong entry conviction." },
-              "invalidation_points": { "type": "string", "description": "What price action collapses the trade thesis." },
-              "key_reasons": { "type": "array", "items": { "type": "string" }, "description": "List up to 3 distinct technical reasons for taking this trade." }
-            }
-          }
-        }
-      }
+    "symbol": {
+      "type": "object",
+      "description": "Trading matrix strategy container",
+      "properties": {
+        "symbol": { "type": "string", "description": "asset ticker symbol (e.g., aapl, tsla, btcusd)" },
+        "date": { "type": "string", "description": "analysis date formatted as dd-mm-yyyy" },
+        "current price": { "type": "number", "description": "current market price (ceo verified)" },
+        "ceo verdict": { "type": "string", "description": "executive grading scale (a+/a/b/c)" },
+        "conviction score": { "type": "number", "description": "accumulated weighted result from multiple matrix factors" },
+        "confidence": { "type": "string", "description": "percentage confidence level (1-100% after risk review)" },
+        "success prob": { "type": "string", "description": "probabilistic win rate based on historical backtests" },
+        "entry range": { "type": "string", "description": "ceo-approved limit zone for positioning" },
+        "entry time": { "type": "string", "description": "ceo-selected optimal tactical execution window" },
+        "sl range": { "type": "string", "description": "hard exit level for risk mitigation" },
+        "tp range": { "type": "string", "description": "synthesized taking-profit target zones" },
+        "short_ratio": { "type": "number", "description": "What is the current short float ratio" },
+        "short_float": { "type": "string", "description": "What is the current short float(%)" },
+        "institutional_holding": { "type": "string", "description": "What is the stock Institutional holding percentage" },
+        "squeeze_risk": { "type": "integer", "description": "short squeeze vulnerability on a 1-10 scale" },
+        "approximate_gain_pct": { "type": "string", "description": "If the scenario will occur what will be the expected gain in percentage" },
+        "conviction_detect": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "How to Detect “High Conviction”: Add Signs for high Conviction show the trade is valid."
+        },
+        "collapse_trigger": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "(Invalidation event) - How to detect “Collapse Conviction”: Add Signs for “Collapse Conviction” - show the trade is NOT valid"
+        },
+        "catalyst reason": { "type": "string", "description": "synthesized news/macro fundamental driver" },
+        "required_volume": { "type": "integer", "description": "The required volume for this trade to be valid" },
+        "r-multiple": { "type": "number", "description": "reward-to-risk ratio (programmatically calculated)" },
+        "regime": { "type": "string", "description": "current market environment (momentum vs mean-reversion)" },
+        "rvol": { "type": "number", "description": "relative volume mapping (specialist status indicator)" },
+        "poc node": { "type": "number", "description": "point of control (high volume price node from volume profile)" },
+        "absorption": { "type": "string", "description": "large institutional hidden orders present (icebergs detected? y/n)" },
+        "bid/ask spread": { "type": "string", "description": "transaction friction indicator (execution quality h/m/l)" },
+        "sector sympathy": { "type": "string", "description": "relative industry strength assessment (is it a leader or laggard?)" },
+        "spx/qqq_corr": { "type": "number", "description": "beta context and market correlation coefficient" },
+        "ai_suggestion": { "type": "string", "description": "(mark with “v” if ceo-added beyond specialist list)" },
+        "ai_model_name": { "type": "string", "description": "what is your AI model name?" }
+      },
+      "required": [
+        "symbol",
+        "date",
+        "current price",
+        "ceo verdict",
+        "conviction score",
+        "confidence",
+        "success prob",
+        "entry range",
+        "entry time",
+        "sl range",
+        "tp range",
+        "short_ratio",
+        "short_float",
+        "institutional_holding",
+        "squeeze_risk",
+        "approximate_gain_pct",
+        "conviction_detect",
+        "collapse_trigger",
+        "catalyst reason",
+        "required_volume",
+        "r-multiple",
+        "regime",
+        "rvol",
+        "poc node",
+        "absorption",
+        "bid/ask spread",
+        "sector sympathy",
+        "spx/qqq_corr",
+        "ai_suggestion",
+        "ai_model_name"
+      ],
+      "additionalProperties": false
     }
-  }
+  },
+  "required": ["symbol"],
+  "additionalProperties": false
 }
