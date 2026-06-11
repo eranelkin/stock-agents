@@ -13,10 +13,16 @@ import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Chip from '@mui/material/Chip'
+import Checkbox from '@mui/material/Checkbox'
 import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Alert from '@mui/material/Alert'
+import Dialog from '@mui/material/Dialog'
+import DialogTitle from '@mui/material/DialogTitle'
+import DialogContent from '@mui/material/DialogContent'
+import DialogContentText from '@mui/material/DialogContentText'
+import DialogActions from '@mui/material/DialogActions'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import TableSortLabel from '@mui/material/TableSortLabel'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -24,7 +30,7 @@ import AttachFileIcon from '@mui/icons-material/AttachFile'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import CheckIcon from '@mui/icons-material/Check'
 import ArticleIcon from '@mui/icons-material/Article'
-import { createRun, deleteRun, stopRun } from '../api/runs'
+import { createRun, deleteRun, deleteRuns, stopRun } from '../api/runs'
 import CeoResultsPage from '../components/CeoResultsPage'
 import type { Run } from '../types/run'
 
@@ -65,6 +71,8 @@ export default function RunPage({ selectedModelIds, onRunActiveChange }: RunPage
   const [resultsRun, setResultsRun] = useState<Run | null>(null)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [now, setNow] = useState(() => Date.now())
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const esRef = useRef<EventSource | null>(null)
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -176,6 +184,43 @@ export default function RunPage({ selectedModelIds, onRunActiveChange }: RunPage
     if (!window.confirm(`Delete run "${run.name ?? 'Unnamed'}"?`)) return
     await deleteRun(run.id)
     setRuns(prev => prev.filter(r => r.id !== run.id))
+    setSelectedIds(prev => { const next = new Set(prev); next.delete(run.id); return next })
+  }
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds)
+    setConfirmBulkDelete(false)
+    try {
+      await deleteRuns(ids)
+      setRuns(prev => prev.filter(r => !selectedIds.has(r.id)))
+      setSelectedIds(new Set())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete runs')
+    }
+  }
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const handleToggleAll = () => {
+    if (displayedRuns.every(r => selectedIds.has(r.id))) {
+      setSelectedIds(prev => {
+        const next = new Set(prev)
+        displayedRuns.forEach(r => next.delete(r.id))
+        return next
+      })
+    } else {
+      setSelectedIds(prev => {
+        const next = new Set(prev)
+        displayedRuns.forEach(r => next.add(r.id))
+        return next
+      })
+    }
   }
 
   const todayRuns = runs.filter(r => isToday(r.created_at))
@@ -267,29 +312,49 @@ export default function RunPage({ selectedModelIds, onRunActiveChange }: RunPage
 
       <Divider />
 
-      {/* Inner tabs */}
-      <Tabs
-        value={innerTab}
-        onChange={(_, v: number) => setInnerTab(v)}
-        TabIndicatorProps={{ style: { backgroundColor: '#1976d2', height: 2 } }}
-        sx={{ minHeight: 40 }}
-      >
-        {(['Today', 'History'] as const).map((label) => (
-          <Tab
-            key={label}
-            label={label}
-            sx={{
-              minHeight: 40,
-              textTransform: 'none',
-              fontWeight: 500,
-              fontSize: '0.875rem',
-              color: 'text.secondary',
-              px: 2,
-              '&.Mui-selected': { color: '#1976d2' },
-            }}
-          />
-        ))}
-      </Tabs>
+      {/* Inner tabs + bulk delete */}
+      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Tabs
+          value={innerTab}
+          onChange={(_, v: number) => { setInnerTab(v); setSelectedIds(new Set()) }}
+          TabIndicatorProps={{ style: { backgroundColor: '#1976d2', height: 2 } }}
+          sx={{ minHeight: 40 }}
+        >
+          {(['Today', 'History'] as const).map((label) => (
+            <Tab
+              key={label}
+              label={label}
+              sx={{
+                minHeight: 40,
+                textTransform: 'none',
+                fontWeight: 500,
+                fontSize: '0.875rem',
+                color: 'text.secondary',
+                px: 2,
+                '&.Mui-selected': { color: '#1976d2' },
+              }}
+            />
+          ))}
+        </Tabs>
+        <Box sx={{ ml: 'auto' }}>
+          <Tooltip title={selectedIds.size === 0 ? 'Select rows to delete' : `Delete ${selectedIds.size} selected run${selectedIds.size > 1 ? 's' : ''}`}>
+            <span>
+              <IconButton
+                size="small"
+                disabled={selectedIds.size === 0}
+                onClick={() => setConfirmBulkDelete(true)}
+                sx={{
+                  color: '#f44336',
+                  '&.Mui-disabled': { color: 'rgba(244,67,54,0.25)' },
+                  '&:hover': { bgcolor: 'rgba(244,67,54,0.08)' },
+                }}
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        </Box>
+      </Box>
 
       {/* Table */}
       <Box sx={{ flex: 1, overflow: 'auto' }}>
@@ -308,6 +373,15 @@ export default function RunPage({ selectedModelIds, onRunActiveChange }: RunPage
           <Table size="small" sx={{ width: '100%' }}>
             <TableHead>
               <TableRow>
+                <TableCell padding="checkbox" sx={{ borderColor: 'rgba(255,255,255,0.08)', width: 40 }}>
+                  <Checkbox
+                    size="small"
+                    indeterminate={displayedRuns.some(r => selectedIds.has(r.id)) && !displayedRuns.every(r => selectedIds.has(r.id))}
+                    checked={displayedRuns.length > 0 && displayedRuns.every(r => selectedIds.has(r.id))}
+                    onChange={handleToggleAll}
+                    sx={{ color: 'rgba(255,255,255,0.3)', '&.Mui-checked, &.MuiCheckbox-indeterminate': { color: '#1976d2' } }}
+                  />
+                </TableCell>
                 <TableCell
                   sx={{ color: 'text.secondary', fontSize: '0.8rem', borderColor: 'rgba(255,255,255,0.08)', fontWeight: 600 }}
                 >
@@ -323,7 +397,7 @@ export default function RunPage({ selectedModelIds, onRunActiveChange }: RunPage
                     Date & Time
                   </TableSortLabel>
                 </TableCell>
-                {['Run ID', 'Models', 'Duration', 'Status'].map((h) => (
+                {['Stocks', 'Run ID', 'Models', 'Duration', 'Status'].map((h) => (
                   <TableCell
                     key={h}
                     sx={{ color: 'text.secondary', fontSize: '0.8rem', borderColor: 'rgba(255,255,255,0.08)', fontWeight: 600 }}
@@ -343,8 +417,22 @@ export default function RunPage({ selectedModelIds, onRunActiveChange }: RunPage
               {displayedRuns.map((run) => (
                 <TableRow
                   key={run.id}
-                  sx={{ '&:hover': { bgcolor: 'rgba(255,255,255,0.03)' } }}
+                  selected={selectedIds.has(run.id)}
+                  sx={{
+                    '&:hover': { bgcolor: 'rgba(255,255,255,0.03)' },
+                    '&.Mui-selected': { bgcolor: 'rgba(25,118,210,0.06)' },
+                    '&.Mui-selected:hover': { bgcolor: 'rgba(25,118,210,0.10)' },
+                  }}
                 >
+                  <TableCell padding="checkbox" sx={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                    <Checkbox
+                      size="small"
+                      checked={selectedIds.has(run.id)}
+                      onChange={() => handleToggleSelect(run.id)}
+                      onClick={e => e.stopPropagation()}
+                      sx={{ color: 'rgba(255,255,255,0.3)', '&.Mui-checked': { color: '#1976d2' } }}
+                    />
+                  </TableCell>
                   <TableCell
                     sx={{
                       color: '#ffffff',
@@ -354,6 +442,12 @@ export default function RunPage({ selectedModelIds, onRunActiveChange }: RunPage
                     }}
                   >
                     {new Date(run.created_at).toLocaleString()}
+                  </TableCell>
+                  <TableCell sx={{ borderColor: 'rgba(255,255,255,0.06)', whiteSpace: 'nowrap' }}>
+                    {run.ticker_count != null
+                      ? <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'text.secondary' }}>{run.ticker_count}</Typography>
+                      : <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.disabled' }}>—</Typography>
+                    }
                   </TableCell>
                   <TableCell
                     sx={{
@@ -511,10 +605,44 @@ export default function RunPage({ selectedModelIds, onRunActiveChange }: RunPage
         <CeoResultsPage
           open={Boolean(resultsRun)}
           onClose={() => setResultsRun(null)}
-          runId={resultsRun.id}
-          runName={resultsRun.name}
+          run={resultsRun}
         />
       )}
+
+      <Dialog
+        open={confirmBulkDelete}
+        onClose={() => setConfirmBulkDelete(false)}
+        PaperProps={{ sx: { bgcolor: '#1a1d27', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 2 } }}
+      >
+        <DialogTitle sx={{ color: 'text.primary', fontWeight: 700 }}>
+          Delete {selectedIds.size} Run{selectedIds.size > 1 ? 's' : ''}?
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ color: 'text.secondary' }}>
+            You are about to permanently delete{' '}
+            <strong style={{ color: '#f44336' }}>{selectedIds.size}</strong>{' '}
+            run report{selectedIds.size > 1 ? 's' : ''} and all associated output files.
+            This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button
+            variant="outlined"
+            onClick={() => setConfirmBulkDelete(false)}
+            sx={{ textTransform: 'none', borderColor: 'rgba(255,255,255,0.2)', color: 'text.secondary' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleBulkDelete}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            Delete {selectedIds.size > 1 ? `all ${selectedIds.size}` : ''}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

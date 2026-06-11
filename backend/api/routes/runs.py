@@ -20,7 +20,7 @@ from backend.api.broadcaster import broadcaster
 from backend.config import settings
 from backend.db.models import AIModel, Prompt, Run, TickerResult
 from backend.db.session import AsyncSessionLocal, get_session
-from backend.schemas.run import RunCreate, RunResponse
+from backend.schemas.run import BulkDeleteRequest, RunCreate, RunResponse
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -78,7 +78,7 @@ async def create_run(
         for m in ai_models
     ]
 
-    run = Run(name=body.name, model_names=[m.name for m in ai_models])
+    run = Run(name=body.name, model_names=[m.name for m in ai_models], ticker_count=len(body.tickers))
     session.add(run)
     await session.commit()
     await session.refresh(run)
@@ -217,6 +217,41 @@ async def stop_run(
     await session.commit()
     await session.refresh(run)
     return run
+
+
+@router.delete("/bulk", status_code=204, response_class=Response)
+async def delete_runs_bulk(
+    body: BulkDeleteRequest, session: AsyncSession = Depends(get_session)
+) -> Response:
+    """Delete multiple runs by ID, cancelling any that are still active."""
+    for run_id in body.run_ids:
+        run = await session.get(Run, run_id)
+        if run is None:
+            continue
+
+        if run.status in ("pending", "running"):
+            async with httpx.AsyncClient() as client:
+                try:
+                    await client.post(
+                        f"{settings.ai_service_url}/stop/{run_id}", timeout=5.0
+                    )
+                except httpx.HTTPError:
+                    pass
+
+        output_dir = run.output_dir
+        await session.execute(sql_delete(TickerResult).where(TickerResult.run_id == run_id))
+        await session.delete(run)
+
+        if output_dir:
+            output_path = Path(output_dir)
+            if output_path.exists() and output_path.is_dir():
+                shutil.rmtree(output_path)
+            log_path = output_path.parent.parent / "logs" / (output_path.name + ".html")
+            if log_path.exists():
+                log_path.unlink()
+
+    await session.commit()
+    return Response(status_code=204)
 
 
 @router.delete("/{run_id}", status_code=204, response_class=Response)

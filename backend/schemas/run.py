@@ -13,6 +13,10 @@ class RunCreate(BaseModel):
     tickers: list[dict[str, Any]]
 
 
+class BulkDeleteRequest(BaseModel):
+    run_ids: list[uuid.UUID]
+
+
 class RunResponse(BaseModel):
     id: uuid.UUID
     status: str
@@ -22,5 +26,6 @@ class RunResponse(BaseModel):
     error: str | None = None
     output_dir: str | None = None
     model_names: list[str] | None = None
+    ticker_count: int | None = None
 
     model_config = {"from_attributes": True}

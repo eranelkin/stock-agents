@@ -75,12 +75,14 @@ class RunLogger:
         self._stat_ctok = 0
         self._stat_ttok = 0
         self._total_dur_ms = 0
+        self._started_ms = 0
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
 
     async def open(self, run_id: str, started_at: str) -> None:
         """Write the HTML header and open the file handle for streaming."""
         async with self._lock:
+            self._started_ms = int(__import__("datetime").datetime.now(__import__("datetime").timezone.utc).timestamp() * 1000)
             Path(self._path).parent.mkdir(parents=True, exist_ok=True)
             self._fh = await aiofiles.open(self._path, "w", encoding="utf-8")
             await self._fh.write(self._build_header(run_id, started_at))
@@ -315,6 +317,7 @@ class RunLogger:
             f'<meta name="viewport" content="width=device-width,initial-scale=1">\n'
             f'<title>Run Log — {_h(run_id_short)}</title>\n'
             f'<style>{_CSS}</style>\n'
+            f'<script>window.__RUN_START_MS__={self._started_ms};</script>\n'
             f'<script>\n{_JS}\n{_polling_js(polling_run_id)}\n</script>\n'
             f'</head>\n<body>\n\n'
             f'<div class="header-card">\n'
@@ -331,6 +334,22 @@ class RunLogger:
             f'<span class="meta-value" id="meta-mode">—</span></span>\n'
             f'    </div>\n'
             f'  </div>\n'
+            f'  <div class="header-stats">\n'
+            f'    <div class="hstat-item"><span class="hstat-value" id="hstat-rpm-min">—</span>'
+            f'<span class="hstat-label">Min RPM</span></div>\n'
+            f'    <div class="hstat-item"><span class="hstat-value" id="hstat-rpm-max">—</span>'
+            f'<span class="hstat-label">Max RPM</span></div>\n'
+            f'    <div class="hstat-sep"></div>\n'
+            f'    <div class="hstat-item"><span class="hstat-value" id="hstat-ttok">0</span>'
+            f'<span class="hstat-label">Total Tokens</span></div>\n'
+            f'    <div class="hstat-item"><span class="hstat-value" id="hstat-ptok">0</span>'
+            f'<span class="hstat-label">Prompt</span></div>\n'
+            f'    <div class="hstat-item"><span class="hstat-value" id="hstat-ctok">0</span>'
+            f'<span class="hstat-label">Completion</span></div>\n'
+            f'    <div class="hstat-sep"></div>\n'
+            f'    <div class="hstat-item"><span class="hstat-value" id="hstat-tpm">—</span>'
+            f'<span class="hstat-label">Tokens / min</span></div>\n'
+            f'  </div>\n'
             f'  <div class="run-status-badge" id="run-status-badge">'
             f'<span class="run-spinner"></span><span>RUNNING</span></div>\n'
             f'</div>\n\n'
@@ -341,18 +360,6 @@ class RunLogger:
             f'<span class="stat-label">Success</span></div>\n'
             f'  <div class="stat-item error"><span class="stat-value" id="stat-err">0</span>'
             f'<span class="stat-label">Errors</span></div>\n'
-            f'  <div class="stat-sep"></div>\n'
-            f'  <div class="stat-item"><span class="stat-value" id="stat-rpm-min">—</span>'
-            f'<span class="stat-label">Min RPM</span></div>\n'
-            f'  <div class="stat-item"><span class="stat-value" id="stat-rpm-max">—</span>'
-            f'<span class="stat-label">Max RPM</span></div>\n'
-            f'  <div class="stat-sep"></div>\n'
-            f'  <div class="stat-item"><span class="stat-value" id="stat-ttok">0</span>'
-            f'<span class="stat-label">Total Tokens</span></div>\n'
-            f'  <div class="stat-item"><span class="stat-value" id="stat-ptok">0</span>'
-            f'<span class="stat-label">Prompt</span></div>\n'
-            f'  <div class="stat-item"><span class="stat-value" id="stat-ctok">0</span>'
-            f'<span class="stat-label">Completion</span></div>\n'
             f'  <div class="filter-group">\n'
             f'    <div class="filter-col">\n'
             f'      <span class="filter-label">Ticker</span>\n'
@@ -386,6 +393,11 @@ class RunLogger:
             f'        <div class="filter-panel" id="dd-prompts-panel" style="display:none"></div>\n'
             f'      </div>\n'
             f'    </div>\n'
+            f'    <div class="filter-col" style="justify-content:flex-end">\n'
+            f'      <span class="filter-label">&nbsp;</span>\n'
+            f'      <button class="clear-filters-btn" id="clear-filters-btn" onclick="clearFilters()" disabled>'
+            f'Clear Filters</button>\n'
+            f'    </div>\n'
             f'  </div>\n'
             f'</div>\n\n'
             f'<div class="section-heading" id="events-table-anchor">Events</div>\n'
@@ -402,13 +414,15 @@ class RunLogger:
 
     def _build_footer(self) -> str:
         dur = _fmt_duration(self._total_dur_ms) if self._total_dur_ms else "—"
+        tpm = round(self._stat_ttok / (self._total_dur_ms / 60000)) if self._total_dur_ms > 0 else 0
         vals = {
             "stat-llm":      str(self._stat_llm),
             "stat-ok":       str(self._stat_ok),
             "stat-err":      str(self._stat_err),
-            "stat-ttok":     f"{self._stat_ttok:,}",
-            "stat-ptok":     f"{self._stat_ptok:,}",
-            "stat-ctok":     f"{self._stat_ctok:,}",
+            "hstat-ttok":    f"{self._stat_ttok:,}",
+            "hstat-ptok":    f"{self._stat_ptok:,}",
+            "hstat-ctok":    f"{self._stat_ctok:,}",
+            "hstat-tpm":     f"{tpm:,}" if tpm > 0 else "—",
             "meta-duration": _h(dur),
             "meta-mode":     _h(self._mode),
         }
@@ -667,8 +681,11 @@ def _polling_js(run_id: str) -> str:
         "    }catch(e){}\n"
         "  }\n"
         "  function upStats(){\n"
+        "    var elapsed=Date.now()-(window.__RUN_START_MS__||Date.now());\n"
+        "    var tpm=elapsed>60000?Math.round(ttok/(elapsed/60000)):0;\n"
         "    var m={'stat-llm':llm,'stat-ok':ok,'stat-err':err,\n"
-        "           'stat-ttok':ttok.toLocaleString(),'stat-ptok':ptok.toLocaleString(),'stat-ctok':ctok.toLocaleString()};\n"
+        "           'hstat-ttok':ttok.toLocaleString(),'hstat-ptok':ptok.toLocaleString(),'hstat-ctok':ctok.toLocaleString(),\n"
+        "           'hstat-tpm':tpm>0?tpm.toLocaleString():'\u2014'};\n"
         "    for(var id in m){var el=$e(id);if(el)el.textContent=m[id];}\n"
         "  }\n"
         "  function setBadgeDone(){\n"
@@ -735,6 +752,14 @@ html{height:100%}
   --blue:#4a9eff;--green:#34d399;--red:#f87171;
   --purple:#a78bfa;--orange:#fb923c;--gray:#6b7280;--yellow:#fbbf24;
 }
+
+/* Scrollbars — dark, thin */
+*{scrollbar-width:thin;scrollbar-color:#3a3f5c #0f1117}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:#0f1117}
+::-webkit-scrollbar-thumb{background:#3a3f5c;border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#4e5580}
+::-webkit-scrollbar-corner{background:#0f1117}
 body{
   background:var(--bg);color:var(--text);
   font-family:'SF Mono','Fira Code','Cascadia Code','Consolas',monospace;
@@ -760,6 +785,18 @@ a{color:inherit;text-decoration:none}
 .meta-item{display:flex;flex-direction:column;gap:2px}
 .meta-label{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
 .meta-value{font-size:13px}
+
+/* Header stats panel */
+.header-stats{
+  display:flex;align-items:center;gap:2px;padding:0 24px;flex-shrink:0;
+}
+.hstat-item{
+  display:flex;flex-direction:column;align-items:center;
+  padding:3px 10px;min-width:52px;
+}
+.hstat-value{font-size:15px;font-weight:700;line-height:1.2}
+.hstat-label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-top:2px}
+.hstat-sep{width:1px;height:26px;background:var(--border);margin:0 4px}
 
 /* Running status badge */
 .run-status-badge{
@@ -960,14 +997,24 @@ table#events-table th{
   border-radius:6px;min-width:140px;z-index:100;padding:4px 0;
   box-shadow:0 4px 16px rgba(0,0,0,.4);
 }
+#dd-etypes .filter-btn{min-width:170px}
+#dd-etypes .filter-panel{min-width:170px}
 .filter-opt{
   display:flex;align-items:center;gap:8px;padding:6px 12px;
   cursor:pointer;font-size:12px;color:var(--text);user-select:none;
 }
 .filter-opt:hover{background:rgba(255,255,255,.06)}
 .filter-opt input[type=checkbox]{accent-color:#1976d2;cursor:pointer}
-.filter-opt-dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .dd-arrow{font-size:10px;color:var(--muted)}
+.clear-filters-btn{
+  background:none;border:none;padding:5px 2px;
+  font-size:11px;font-family:inherit;cursor:pointer;
+  color:var(--blue);letter-spacing:.01em;
+  text-decoration:underline;text-underline-offset:2px;
+  transition:color .15s,opacity .15s;
+}
+.clear-filters-btn:hover{color:#74b4ff}
+.clear-filters-btn:disabled{color:var(--muted);text-decoration:none;cursor:default;opacity:.45}
 
 /* Pipeline column */
 .col-pipeline{white-space:nowrap}
@@ -1110,10 +1157,7 @@ function ensureFilterOption(ddId, value, color) {
   cb.addEventListener('change', applyFilters);
   lbl.appendChild(cb);
   if (color) {
-    var dot = document.createElement('span');
-    dot.className = 'filter-opt-dot';
-    dot.style.background = color;
-    lbl.appendChild(dot);
+    lbl.style.color = color;
   }
   lbl.appendChild(document.createTextNode(' ' + value.toUpperCase()));
   panel.appendChild(lbl);
@@ -1140,8 +1184,8 @@ function computeRPM() {
   if (!counts.length) return;
   var mn = Math.min.apply(null, counts);
   var mx = Math.max.apply(null, counts);
-  var minEl = document.getElementById('stat-rpm-min');
-  var maxEl = document.getElementById('stat-rpm-max');
+  var minEl = document.getElementById('hstat-rpm-min');
+  var maxEl = document.getElementById('hstat-rpm-max');
   if (minEl) minEl.textContent = mn;
   if (maxEl) maxEl.textContent = mx;
 }
@@ -1188,6 +1232,14 @@ function updateFilterLabel(ddId, allLabel) {
   }
 }
 
+function clearFilters() {
+  ['dd-tickers','dd-types','dd-etypes','dd-prompts'].forEach(function(ddId) {
+    var panel = document.getElementById(ddId + '-panel');
+    if (panel) panel.querySelectorAll('input[type=checkbox]').forEach(function(cb) { cb.checked = false; });
+  });
+  applyFilters();
+}
+
 function applyFilters() {
   updateFilterLabel('dd-tickers', 'All Tickers');
   updateFilterLabel('dd-types',   'All Types');
@@ -1197,6 +1249,9 @@ function applyFilters() {
   var selTypes   = getFilterSelections('dd-types');
   var selEtypes  = getFilterSelections('dd-etypes');
   var selPrompts = getFilterSelections('dd-prompts');
+  var hasAny = selTickers.length + selTypes.length + selEtypes.length + selPrompts.length > 0;
+  var clearBtn = document.getElementById('clear-filters-btn');
+  if (clearBtn) clearBtn.disabled = !hasAny;
   document.querySelectorAll('#events-body .event-row').forEach(function(row) {
     var entity     = row.getAttribute('data-entity') || '';
     var ptype      = row.getAttribute('data-ptype')  || '';

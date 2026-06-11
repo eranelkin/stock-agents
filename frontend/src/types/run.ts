@@ -7,4 +7,5 @@ export interface Run {
   error: string | null
   output_dir: string | null
   model_names: string[] | null
+  ticker_count: number | null
 }
