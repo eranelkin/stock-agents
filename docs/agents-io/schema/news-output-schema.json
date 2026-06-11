@@ -1,0 +1,180 @@
+{
+  "$schema": "[http://json-schema.org/draft-07/schema#](http://json-schema.org/draft-07/schema#)",
+  "title": "TickerIntelligencePack",
+  "type": "object",
+  "properties": {
+    "context": {
+      "type": "object",
+      "description": "Metadata regarding the current stock context and timestamp.",
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The ISO 8601 timestamp when the analysis was generated (YYYY-MM-DDTHH:MM:SSZ)."
+        },
+        "ticker": {
+          "type": "string",
+          "description": "The uppercase stock ticker symbol."
+        },
+        "company_name": {
+          "type": "string",
+          "description": "Full official company name."
+        },
+        "previous_close": {
+          "type": "number",
+          "description": "The stock's previous closing price as a float."
+        }
+      },
+      "required": ["timestamp", "ticker", "company_name", "previous_close"],
+      "additionalProperties": false
+    },
+    "analysis": {
+      "type": "object",
+      "description": "Detailed news evaluation and cross-referenced sentiment data.",
+      "properties": {
+        "news_sentiment": {
+          "type": "string",
+          "enum": ["Bullish", "Bearish", "Neutral"],
+          "description": "Overall news-driven sentiment categorization."
+        },
+        "sentiment_score": {
+          "type": "number",
+          "minimum": -1.0,
+          "maximum": 1.0,
+          "description": "Sentiment score normalized between -1.0 (extremely negative) and 1.0 (extremely positive)."
+        },
+        "critical_news_summary": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "A bulleted array of 1-sentence critical news summary points."
+        },
+        "news_reports": {
+          "type": "array",
+          "description": "Individual relevant news articles compiled from verified sources.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "description": "The exact article headline or news release title."
+              },
+              "source": {
+                "type": "string",
+                "description": "The media or regulatory source name."
+              },
+              "published_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The earliest identified publication timestamp to evaluate immediate market impact."
+              },
+              "url": {
+                "type": "string",
+                "description": "The direct URL to the article source if available."
+              },
+              "impact_analysis": {
+                "type": "string",
+                "description": "Contextual impact statement highlighting specific effects on the asset."
+              },
+              "summary_points": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "string"
+                },
+                "description": "Exactly three key takeaways representing the quantitative, structural, and predictive aspects of the report."
+              }
+            },
+            "required": ["title", "source", "published_at", "url", "impact_analysis", "summary_points"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["news_sentiment", "sentiment_score", "critical_news_summary", "news_reports"],
+      "additionalProperties": false
+    },
+    "ceo_impact_assessment": {
+      "type": "object",
+      "description": "Operational and macroeconomic assessments impacting corporate leadership directives.",
+      "properties": {
+        "operational_impact": {
+          "type": "string",
+          "description": "1-2 sentences summarizing how the news directly affects operations, revenue, or guidance."
+        },
+        "macro_headwind_factor": {
+          "type": "string",
+          "description": "1-2 sentences addressing broader sector trends or macroeconomic/geopolitical impacts."
+        }
+      },
+      "required": ["operational_impact", "macro_headwind_factor"],
+      "additionalProperties": false
+    },
+    "price_prediction": {
+      "type": "object",
+      "description": "Quantitative forecast metrics derived from short-term catalysts.",
+      "properties": {
+        "today_trend": {
+          "type": "string",
+          "enum": ["Upward", "Downward", "Flat"],
+          "description": "Predicted intraday direction of the price trend."
+        },
+        "expected_open": {
+          "type": "number",
+          "description": "The projected opening price for the upcoming or active session."
+        },
+        "change_percentage": {
+          "type": "number",
+          "description": "Expected net percentage change for the day."
+        },
+        "estimated_trading_range": {
+          "type": "object",
+          "properties": {
+            "low": {
+              "type": "number",
+              "description": "Price prediction for the low end of the expected intraday trading range."
+            },
+            "low_percentage": {
+              "type": "number",
+              "description": "Percentage variance from the previous close to the projected intraday low."
+            },
+            "high": {
+              "type": "number",
+              "description": "Price prediction for the high end of the expected intraday trading range."
+            },
+            "high_percentage": {
+              "type": "number",
+              "description": "Percentage variance from the previous close to the projected intraday high."
+            },
+            "success_probability": {
+              "type": "string",
+              "description": "Statistical probability that the actual trading range remains within boundaries (e.g., '90%')."
+            },
+            "confidence_level": {
+              "type": "string",
+              "description": "Qualitative confidence level assigned based on data volume and source verification (e.g., '80%')."
+            }
+          },
+          "required": ["low", "low_percentage", "high", "high_percentage", "success_probability", "confidence_level"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["today_trend", "expected_open", "change_percentage", "estimated_trading_range"],
+      "additionalProperties": false
+    },
+    "actionable_next_steps": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Direct, actionable tactical execution paths or warnings tailored for the trader."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Critical edge-case info or high-risk rumor flags. Leave as an empty string if none exist."
+    }
+  },
+  "required": ["context", "analysis", "ceo_impact_assessment", "price_prediction", "actionable_next_steps", "notes"],
+  "additionalProperties": false
+}

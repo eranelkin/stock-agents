@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExecutiveSummaryOutput",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "stocks"
+  ],
+  "properties": {
+    "stocks": {
+      "type": "array",
+      "description": "List of analyzed stock setups.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "symbol",
+          "date",
+          "analysis_strategy",
+          "confidence",
+          "success_probability",
+          "entry_time",
+          "entry_range",
+          "tp_range",
+          "sl_range",
+          "tp_time",
+          "short_ratio",
+          "short_float",
+          "institutional_holding",
+          "squeeze_risk",
+          "approximately_gain_in_pct",
+          "conviction_detect",
+          "collapse_conviction",
+          "reason_1",
+          "reason_2",
+          "reason_3",
+          "volume",
+          "ai_suggestion",
+          "notes"
+        ],
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "description": "Stock ticker symbol."
+          },
+          "date": {
+            "type": "string",
+            "description": "Analysis date in DD-MM-YYYY format.",
+            "pattern": "^\\d{2}-\\d{2}-\\d{4}$"
+          },
+          "analysis_strategy": {
+            "type": "string",
+            "description": "Technical strategy used, analysis summary, and three scenario outcomes with probabilities."
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Overall confidence score from 0 to 100."
+          },
+          "success_probability": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Probability that the setup reaches take-profit before stop-loss."
+          },
+          "entry_time": {
+            "type": "string",
+            "description": "Optimal trade entry time."
+          },
+          "entry_range": {
+            "type": "string",
+            "description": "Recommended entry price range."
+          },
+          "tp_range": {
+            "type": "string",
+            "description": "Recommended take-profit price range."
+          },
+          "sl_range": {
+            "type": "string",
+            "description": "Recommended stop-loss price range."
+          },
+          "tp_time": {
+            "type": "string",
+            "description": "Expected take-profit time before market close."
+          },
+          "short_ratio": {
+            "type": "string",
+            "description": "Days-to-cover metric."
+          },
+          "short_float": {
+            "type": "string",
+            "description": "Percentage of float sold short."
+          },
+          "institutional_holding": {
+            "type": "string",
+            "description": "Institutional ownership percentage."
+          },
+          "squeeze_risk": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "Short squeeze risk score from 1 (low) to 10 (high)."
+          },
+          "approximately_gain_in_pct": {
+            "type": "number",
+            "description": "Expected percentage gain if take-profit is reached."
+          },
+          "conviction_detect": {
+            "type": "string",
+            "description": "Microstructure and order-flow evidence supporting the trade."
+          },
+          "collapse_conviction": {
+            "type": "string",
+            "description": "Signals that invalidate the setup."
+          },
+          "reason_1": {
+            "type": "string",
+            "description": "Primary reason supporting the setup."
+          },
+          "reason_2": {
+            "type": "string",
+            "description": "Secondary reason supporting the setup."
+          },
+          "reason_3": {
+            "type": "string",
+            "description": "Institutional and macro regime alignment assessment."
+          },
+          "volume": {
+            "type": "string",
+            "description": "Relative volume analysis including RVOL."
+          },
+          "ai_suggestion": {
+            "type": "string",
+            "description": "Final AI recommendation."
+          },
+          "notes": {
+            "type": "string",
+            "description": "Important trader notes and risk observations."
+          }
+        }
+      }
+    }
+  }
+}
