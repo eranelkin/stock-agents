@@ -10,6 +10,14 @@ export async function fetchPrompts(category?: string): Promise<Prompt[]> {
   return res.json()
 }
 
+/** Fetch all active agent prompts — used to compute CEO input schema in the UI. */
+export async function fetchActiveAgentPrompts(): Promise<Prompt[]> {
+  const res = await fetch(`${BASE}?category=agents`)
+  if (!res.ok) throw new Error(`Failed to fetch agent prompts: ${res.statusText}`)
+  const all: Prompt[] = await res.json()
+  return all.filter((p) => p.is_active)
+}
+
 export async function createPrompt(payload: {
   title: string
   content: string
@@ -17,6 +25,7 @@ export async function createPrompt(payload: {
   search_mode?: string | null
   search_enabled?: boolean
   search_query_template?: string | null
+  output_schema?: Record<string, unknown> | null
 }): Promise<Prompt> {
   const res = await fetch(BASE, {
     method: 'POST',
@@ -39,6 +48,7 @@ export async function updatePrompt(
     search_mode: string | null
     search_enabled: boolean
     search_query_template: string | null
+    output_schema: Record<string, unknown> | null
   }>,
 ): Promise<Prompt> {
   const res = await fetch(`${BASE}/${id}`, {

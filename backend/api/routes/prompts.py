@@ -39,6 +39,7 @@ async def create_prompt(
         search_enabled=body.search_enabled,
         search_query_template=body.search_query_template,
         search_mode=body.search_mode,
+        output_schema=body.output_schema,
         is_active=body.is_active,
     )
     session.add(prompt)
@@ -70,6 +71,8 @@ async def update_prompt(
         prompt.search_query_template = body.search_query_template
     if body.search_mode is not None:
         prompt.search_mode = body.search_mode
+    if "output_schema" in body.model_fields_set:
+        prompt.output_schema = body.output_schema
     if body.is_active is not None:
         prompt.is_active = body.is_active
 

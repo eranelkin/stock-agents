@@ -238,6 +238,7 @@ class LLMClient:
             "temperature": settings.llm_temperature,
             "max_tokens": settings.llm_max_tokens,
             "timeout": settings.llm_timeout_seconds,
+            "response_format": {"type": "json_object"},
             **kwargs,
         }
         if self._base_url:

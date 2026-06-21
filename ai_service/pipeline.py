@@ -121,6 +121,8 @@ class Pipeline:
                     llm_client=self._llm,
                     run_logger=self._run_logger,
                     search_mode=prompt_config.search_mode,
+                    output_schema=prompt_config.output_schema,
+                    input_schema=prompt_config.input_schema,
                 )
                 result = await agent.run(
                     ticker_input=self.entity.model_dump(),
@@ -155,6 +157,8 @@ class Pipeline:
                 llm_client=self._llm,
                 run_logger=self._run_logger,
                 search_mode=prompt_config.search_mode,
+                output_schema=prompt_config.output_schema,
+                input_schema=prompt_config.input_schema,
             )
             result = await agent.run(
                 ticker_input=self.entity.model_dump(),

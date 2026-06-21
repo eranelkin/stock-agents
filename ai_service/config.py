@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     max_concurrent_ceo_pipelines: int = 4
 
     # Output
-    output_format: str = "yaml"
+    output_format: str = "json"
     output_dir: str = "./outputs"
 
     # Data sources
