@@ -1,0 +1,106 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "macro_news": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Macro News Report Title"
+          },
+          "summary": {
+            "type": "string",
+            "description": "A brief summary of the macro news or report, highlighting key points relevant to the macro"
+          },
+          "brief": {
+            "type": "string",
+            "description": "macro news or report related to the stock released in the last 72 hours"
+          },
+          "release_date": {
+            "type": "string",
+            "description": "macro info released/update date (Format: MMM DD, YYYY, HH:MM EDT)",
+            "pattern": "^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \\d{2}, \\d{4}, \\d{2}:\\d{2} EDT$"
+          },
+          "news_sentiment": {
+            "type": "string",
+            "description": "overall sentiment of the news (positive, negative, neutral)",
+            "enum": [
+              "positive",
+              "negative",
+              "neutral"
+            ]
+          },
+          "market_price_change_prediction": {
+            "type": "string",
+            "description": "predicted spy/market price percentage change for today (+x.x% to +x.x%)"
+          },
+          "confidence": {
+            "type": "number",
+            "description": "your confidence with this price change range (1-10)",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "success_probability": {
+            "type": "number",
+            "description": "success probability for price change range (1-10)",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "collapse_trigger": {
+            "type": "string",
+            "description": "(Invalidation event) - How to detect"
+          },
+          "conviction_detect": {
+            "type": "string",
+            "description": "How to detect prediction with high conviction (signs)"
+          },
+          "source": {
+            "type": "string",
+            "description": "Source of the macro news or report"
+          },
+          "risk_on_risk_off": {
+            "type": "string",
+            "description": "Is the news likely to trigger a risk-on or risk-off market sentiment?"
+          },
+          "risk_on_risk_off_explanation": {
+            "type": "string",
+            "description": "Explanation of why the news is likely to trigger risk-on or risk-off sentiment"
+          },
+          "risk_on_risk_off_rate": {
+            "type": "number",
+            "description": "10 == full risk on || 0 == full risk off",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "reason": {
+            "type": "string",
+            "description": "reason for the estimated price affect prediction specifically for today"
+          }
+        },
+        "required": [
+          "title",
+          "summary",
+          "brief",
+          "release_date",
+          "news_sentiment",
+          "market_price_change_prediction",
+          "confidence",
+          "success_probability",
+          "collapse_trigger",
+          "conviction_detect",
+          "source",
+          "risk_on_risk_off",
+          "risk_on_risk_off_explanation",
+          "risk_on_risk_off_rate",
+          "reason"
+        ]
+      }
+    }
+  },
+  "required": [
+    "macro_news"
+  ]
+}

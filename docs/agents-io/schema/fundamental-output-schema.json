@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "stocks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "description": "stock symbol"
+          },
+          "company_name": {
+            "type": "string",
+            "description": "company name for clarity"
+          },
+          "current_price": {
+            "type": "number",
+            "description": "current stock price"
+          },
+          "fundamental_catalysts_brief": {
+            "type": "string",
+            "description": "main fundamental catalysts news or report causing the stock move"
+          },
+          "fundamental_release_date": {
+            "type": "string",
+            "description": "fundamental info released date (YYYY-MM-DD:HH:MM)"
+          },
+          "reason": {
+            "type": "string",
+            "description": "reason for the estimated price change range for specifically today"
+          },
+          "price_change_prediction": {
+            "type": "string",
+            "description": "\"+x.x% to +x.x%\" percentage predicted price change for today"
+          },
+          "confidence": {
+            "type": "number",
+            "description": "your confidence with this price change range (1-10)",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "success_probability": {
+            "type": "number",
+            "description": "success probability for price change range (1-10)",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "collapse_trigger": {
+            "type": "string",
+            "description": "(Invalidation event) - How to detect"
+          },
+          "conviction_detect": {
+            "type": "string",
+            "description": "How to detect prediction with high conviction (signs)"
+          }
+        },
+        "required": [
+          "symbol",
+          "company_name",
+          "current_price",
+          "fundamental_catalysts_brief",
+          "fundamental_release_date",
+          "reason",
+          "price_change_prediction",
+          "confidence",
+          "success_probability",
+          "collapse_trigger",
+          "conviction_detect"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "stocks"
+  ],
+  "additionalProperties": false
+}
