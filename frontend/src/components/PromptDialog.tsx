@@ -15,7 +15,7 @@ import Typography from '@mui/material/Typography'
 import Box from '@mui/material/Box'
 import CloseIcon from '@mui/icons-material/Close'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
-import { createPrompt, updatePrompt } from '../api/prompts'
+import { createPrompt, updatePrompt, fetchActiveAgentPrompts } from '../api/prompts'
 import type { Prompt } from '../types/prompt'
 
 interface PromptDialogProps {
@@ -26,7 +26,14 @@ interface PromptDialogProps {
   defaultCategory: string
 }
 
-const EMPTY = { title: '', content: '', search_mode: '', search_enabled: false, search_query_template: '' }
+const EMPTY = {
+  title: '',
+  content: '',
+  search_mode: '',
+  search_enabled: false,
+  search_query_template: '',
+  output_schema: '',
+}
 
 const inputSx = {
   '& .MuiOutlinedInput-root': {
@@ -39,10 +46,20 @@ const inputSx = {
   },
   '& .MuiInputBase-input': {
     color: '#e8eaed',
-    fontSize: '0.9rem',
+    fontSize: '0.85rem',
+    fontFamily: 'monospace',
   },
   '& textarea::placeholder': { color: '#555', opacity: 1 },
   '& input::placeholder': { color: '#555', opacity: 1 },
+}
+
+const regularInputSx = {
+  ...inputSx,
+  '& .MuiInputBase-input': {
+    color: '#e8eaed',
+    fontSize: '0.9rem',
+    fontFamily: 'inherit',
+  },
 }
 
 function InfoTooltip({ content }: { content: React.ReactNode }) {
@@ -58,7 +75,7 @@ function InfoTooltip({ content }: { content: React.ReactNode }) {
             border: '1px solid rgba(255,255,255,0.12)',
             borderRadius: '10px',
             p: 2,
-            maxWidth: 340,
+            maxWidth: 360,
             boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
           },
         },
@@ -93,6 +110,28 @@ function Field({ label, tooltip, children }: { label: string; tooltip?: React.Re
   )
 }
 
+/** Build the CEO input schema from the active agent prompts that have output schemas. */
+function buildCeoInputSchema(agentPrompts: Prompt[]): Record<string, unknown> | null {
+  const agentProperties: Record<string, unknown> = {}
+  for (const p of agentPrompts) {
+    if (p.output_schema) {
+      agentProperties[p.title] = p.output_schema
+    }
+  }
+  if (Object.keys(agentProperties).length === 0) return null
+  return {
+    type: 'object',
+    properties: {
+      name: { type: 'string' },
+      agents: {
+        type: 'object',
+        properties: agentProperties,
+      },
+    },
+    required: ['name', 'agents'],
+  }
+}
+
 export default function PromptDialog({
   open,
   onClose,
@@ -101,10 +140,13 @@ export default function PromptDialog({
   defaultCategory,
 }: PromptDialogProps) {
   const [form, setForm] = useState(EMPTY)
+  const [schemaError, setSchemaError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [ceoInputSchema, setCeoInputSchema] = useState<Record<string, unknown> | null>(null)
 
   const isEdit = Boolean(editPrompt)
+  const isCeo = defaultCategory === 'ceo'
 
   useEffect(() => {
     if (editPrompt) {
@@ -114,16 +156,52 @@ export default function PromptDialog({
         search_mode: editPrompt.search_mode ?? '',
         search_enabled: editPrompt.search_enabled ?? false,
         search_query_template: editPrompt.search_query_template ?? '',
+        output_schema: editPrompt.output_schema
+          ? JSON.stringify(editPrompt.output_schema, null, 2)
+          : '',
       })
     } else {
       setForm(EMPTY)
     }
     setError(null)
+    setSchemaError(null)
   }, [editPrompt, open])
+
+  // When the dialog opens for a CEO prompt, fetch active agent prompts to build input schema
+  useEffect(() => {
+    if (!open || !isCeo) {
+      setCeoInputSchema(null)
+      return
+    }
+    fetchActiveAgentPrompts()
+      .then((prompts) => setCeoInputSchema(buildCeoInputSchema(prompts)))
+      .catch(() => setCeoInputSchema(null))
+  }, [open, isCeo])
 
   const set =
     (field: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setForm((f) => ({ ...f, [field]: e.target.value }))
+
+  const handleFormatJson = () => {
+    if (!form.output_schema.trim()) return
+    try {
+      const parsed = JSON.parse(form.output_schema)
+      setForm((f) => ({ ...f, output_schema: JSON.stringify(parsed, null, 2) }))
+      setSchemaError(null)
+    } catch {
+      setSchemaError('Invalid JSON — cannot format')
+    }
+  }
+
+  const parseOutputSchema = (): Record<string, unknown> | null | 'invalid' => {
+    const raw = form.output_schema.trim()
+    if (!raw) return null
+    try {
+      return JSON.parse(raw)
+    } catch {
+      return 'invalid'
+    }
+  }
 
   const searchModeValue = form.search_mode || ''
   const resolvedSearchMode = searchModeValue === '' ? null : searchModeValue
@@ -186,13 +264,48 @@ export default function PromptDialog({
     </Box>
   )
 
+  const outputSchemaTooltip = (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <Typography sx={{ color: '#e2e8f0', fontWeight: 600, fontSize: '0.82rem' }}>Output Schema</Typography>
+      <Typography sx={{ color: '#94a3b8', fontSize: '0.78rem', lineHeight: 1.6 }}>
+        A strict JSON Schema that defines exactly what fields this agent must return. The system injects this into the agent's system prompt and validates every response against it.
+      </Typography>
+      <Typography sx={{ color: '#94a3b8', fontSize: '0.78rem', lineHeight: 1.6 }}>
+        If the response doesn't match, the system retries the LLM call up to 3 times before logging a warning.
+      </Typography>
+      <Box sx={{ bgcolor: 'rgba(255,255,255,0.06)', borderRadius: '6px', p: 1 }}>
+        <Typography sx={{ color: '#86efac', fontFamily: 'monospace', fontSize: '0.73rem', whiteSpace: 'pre' }}>
+{`{
+  "type": "object",
+  "properties": {
+    "ticker": { "type": "string" },
+    "price":  { "type": ["number","null"] }
+  },
+  "required": ["ticker"]
+}`}
+        </Typography>
+      </Box>
+      <Typography sx={{ color: '#64748b', fontSize: '0.75rem', fontStyle: 'italic' }}>
+        Optional — leave empty to skip schema enforcement for this prompt.
+      </Typography>
+    </Box>
+  )
+
   const handleSubmit = async () => {
     if (!form.title.trim() || !form.content.trim()) {
       setError('Title and Prompt are required.')
       return
     }
+
+    const parsedSchema = parseOutputSchema()
+    if (parsedSchema === 'invalid') {
+      setSchemaError('Output Schema contains invalid JSON — fix it before saving.')
+      return
+    }
+
     setSaving(true)
     setError(null)
+    setSchemaError(null)
     try {
       const searchPayload = {
         search_mode: resolvedSearchMode,
@@ -202,9 +315,21 @@ export default function PromptDialog({
           : null,
       }
       if (isEdit && editPrompt) {
-        await updatePrompt(editPrompt.id, { title: form.title, content: form.content, category: defaultCategory, ...searchPayload })
+        await updatePrompt(editPrompt.id, {
+          title: form.title,
+          content: form.content,
+          category: defaultCategory,
+          output_schema: parsedSchema,
+          ...searchPayload,
+        })
       } else {
-        await createPrompt({ title: form.title, content: form.content, category: defaultCategory, ...searchPayload })
+        await createPrompt({
+          title: form.title,
+          content: form.content,
+          category: defaultCategory,
+          output_schema: parsedSchema,
+          ...searchPayload,
+        })
       }
       onSaved()
       onClose()
@@ -259,7 +384,7 @@ export default function PromptDialog({
             onChange={set('title')}
             fullWidth
             size="small"
-            sx={inputSx}
+            sx={regularInputSx}
           />
         </Field>
 
@@ -271,7 +396,7 @@ export default function PromptDialog({
             fullWidth
             multiline
             rows={6}
-            sx={inputSx}
+            sx={regularInputSx}
           />
         </Field>
 
@@ -334,11 +459,104 @@ export default function PromptDialog({
                   size="small"
                   helperText="Use {ticker} as a placeholder — it will be replaced with the stock symbol at runtime"
                   FormHelperTextProps={{ sx: { color: 'rgba(255,255,255,0.35)', fontSize: '0.78rem', ml: 0 } }}
-                  sx={inputSx}
+                  sx={regularInputSx}
                 />
               </Field>
             )}
           </>
+        )}
+
+        {/* ── Output Schema ── */}
+        <Field label="Output Schema" tooltip={outputSchemaTooltip}>
+          <TextField
+            placeholder={'{\n  "type": "object",\n  "properties": {\n    "ticker": { "type": "string" }\n  },\n  "required": ["ticker"]\n}'}
+            value={form.output_schema}
+            onChange={(e) => {
+              set('output_schema')(e)
+              setSchemaError(null)
+            }}
+            fullWidth
+            multiline
+            rows={7}
+            sx={inputSx}
+          />
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.25 }}>
+            {schemaError ? (
+              <Typography sx={{ color: '#f44336', fontSize: '0.78rem' }}>{schemaError}</Typography>
+            ) : (
+              <Typography sx={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.78rem' }}>
+                Optional — leave empty to skip schema enforcement
+              </Typography>
+            )}
+            <Button
+              size="small"
+              onClick={handleFormatJson}
+              disabled={!form.output_schema.trim()}
+              sx={{
+                color: '#90caf9',
+                textTransform: 'none',
+                fontSize: '0.75rem',
+                minWidth: 0,
+                px: 1,
+                '&:hover': { bgcolor: 'rgba(144,202,249,0.08)' },
+                '&.Mui-disabled': { color: 'rgba(255,255,255,0.2)' },
+              }}
+            >
+              Format JSON
+            </Button>
+          </Box>
+        </Field>
+
+        {/* ── CEO input schema (read-only, CEO prompts only) ── */}
+        {isCeo && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+              <Typography sx={{ color: '#cdd1d9', fontWeight: 500, fontSize: '0.875rem' }}>
+                What this agent receives
+              </Typography>
+              <InfoTooltip content={
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Typography sx={{ color: '#e2e8f0', fontWeight: 600, fontSize: '0.82rem' }}>CEO Input Schema</Typography>
+                  <Typography sx={{ color: '#94a3b8', fontSize: '0.78rem', lineHeight: 1.6 }}>
+                    Auto-computed from the output schemas of all currently active stock agents. This is what the CEO agent receives at runtime — use these field names in your prompt text.
+                  </Typography>
+                  <Typography sx={{ color: '#94a3b8', fontSize: '0.78rem', lineHeight: 1.6 }}>
+                    Updates automatically when you add, remove, or change stock agent schemas.
+                  </Typography>
+                </Box>
+              } />
+            </Box>
+            <Box
+              sx={{
+                bgcolor: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '6px',
+                p: 1.5,
+                maxHeight: 200,
+                overflowY: 'auto',
+              }}
+            >
+              {ceoInputSchema ? (
+                <Typography
+                  component="pre"
+                  sx={{
+                    color: '#86efac',
+                    fontFamily: 'monospace',
+                    fontSize: '0.75rem',
+                    m: 0,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {JSON.stringify(ceoInputSchema, null, 2)}
+                </Typography>
+              ) : (
+                <Typography sx={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                  No active stock agents have output schemas defined yet. Add output schemas to your stock agent prompts to see the CEO input schema here.
+                </Typography>
+              )}
+            </Box>
+          </Box>
         )}
 
         {error && (

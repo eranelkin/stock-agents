@@ -25,6 +25,33 @@ from backend.schemas.run import BulkDeleteRequest, RunCreate, RunResponse
 router = APIRouter(prefix="/runs", tags=["runs"])
 
 
+def _build_ceo_input_schema(agent_prompts: list[Prompt]) -> dict | None:
+    """Build the CEO input schema from active stock agent output schemas.
+
+    Returns None if no agent has an output_schema defined yet.
+    The CEO always receives {"name": <ticker>, "agents": {<title>: <agent_output>, ...}}.
+    """
+    agent_properties: dict[str, Any] = {}
+    for p in agent_prompts:
+        if p.output_schema:
+            agent_properties[p.title] = p.output_schema
+
+    if not agent_properties:
+        return None
+
+    return {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "agents": {
+                "type": "object",
+                "properties": agent_properties,
+            },
+        },
+        "required": ["name", "agents"],
+    }
+
+
 @router.post("", response_model=RunResponse, status_code=201)
 async def create_run(
     body: RunCreate, session: AsyncSession = Depends(get_session)
@@ -83,6 +110,8 @@ async def create_run(
     await session.commit()
     await session.refresh(run)
 
+    ceo_input_schema = _build_ceo_input_schema(agent_prompts)
+
     async with httpx.AsyncClient() as client:
         try:
             await client.post(
@@ -99,6 +128,7 @@ async def create_run(
                             "search_enabled": p.search_enabled,
                             "search_query_template": p.search_query_template,
                             "search_mode": p.search_mode,
+                            "output_schema": p.output_schema,
                         }
                         for p in agent_prompts
                     ],
@@ -110,6 +140,7 @@ async def create_run(
                             "search_enabled": p.search_enabled,
                             "search_query_template": p.search_query_template,
                             "search_mode": p.search_mode,
+                            "output_schema": p.output_schema,
                         }
                         for p in sector_prompts
                     ],
@@ -121,6 +152,8 @@ async def create_run(
                             "search_enabled": p.search_enabled,
                             "search_query_template": p.search_query_template,
                             "search_mode": p.search_mode,
+                            "output_schema": p.output_schema,
+                            "input_schema": ceo_input_schema,
                         }
                         for p in ceo_prompts
                     ],
@@ -424,7 +457,7 @@ async def stream_run_log(
 
 @router.get("/{run_id}/ceo-stream")
 async def stream_ceo_results(run_id: uuid.UUID) -> StreamingResponse:
-    """SSE: streams CEO analysis rows as CEO_*.yaml files land on disk."""
+    """SSE: streams CEO analysis rows as CEO_*.json files land on disk."""
     async def generator() -> AsyncGenerator[str, None]:
         seen: set[str] = set()
 
@@ -435,9 +468,9 @@ async def stream_ceo_results(run_id: uuid.UUID) -> StreamingResponse:
             return
 
         if run.output_dir:
-            for f in sorted(Path(run.output_dir).glob("CEO_*.yaml")):
+            for f in sorted(Path(run.output_dir).glob("CEO_*.json")):
                 ticker = f.stem[4:]
-                data = _parse_ceo_yaml(f)
+                data = _parse_ceo_file(f)
                 if data:
                     seen.add(ticker)
                     yield f"data: {json.dumps({'ticker': ticker, 'data': data})}\n\n"
@@ -460,10 +493,10 @@ async def stream_ceo_results(run_id: uuid.UUID) -> StreamingResponse:
                 break
 
             if run.output_dir:
-                for f in sorted(Path(run.output_dir).glob("CEO_*.yaml")):
+                for f in sorted(Path(run.output_dir).glob("CEO_*.json")):
                     ticker = f.stem[4:]
                     if ticker not in seen:
-                        data = _parse_ceo_yaml(f)
+                        data = _parse_ceo_file(f)
                         if data:
                             seen.add(ticker)
                             yield f"data: {json.dumps({'ticker': ticker, 'data': data})}\n\n"
@@ -493,18 +526,17 @@ def _log_file_path(output_dir: str) -> Path:
     return Path(output_dir).parent.parent / "logs" / f"{ts}.html"
 
 
-def _parse_ceo_yaml(file_path: Path) -> dict | None:
-    """Extract the stock analysis dict from a CEO_*.yaml output file.
+def _parse_ceo_file(file_path: Path) -> dict | None:
+    """Extract the stock analysis dict from a CEO_*.json output file.
 
     Handles two LLM output patterns:
     - Each analysis field as a separate list item under `stocks`
     - Analysis fields as siblings of `stocks` at the agent level
     Both are merged into one flat dict.
     """
-    import yaml
     try:
         with open(file_path) as f:
-            doc = yaml.safe_load(f)
+            doc = json.load(f)
         for agent_data in doc.get("agents", {}).values():
             if not isinstance(agent_data, dict):
                 continue

@@ -22,3 +22,5 @@ class PromptConfig(BaseModel):
     search_enabled: bool = False
     search_query_template: str | None = None
     search_mode: str | None = None  # None = use global setting; "prefetch" | "tool_call"
+    output_schema: dict | None = None  # JSON Schema the agent must produce
+    input_schema: dict | None = None   # auto-computed for CEO agents; read-only
