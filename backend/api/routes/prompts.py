@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import select
@@ -12,6 +14,32 @@ from backend.db.session import get_session
 from backend.schemas.prompt import PromptActiveUpdate, PromptCreate, PromptResponse, PromptUpdate
 
 router = APIRouter(prefix="/prompts", tags=["prompts"])
+
+
+def _read_schema(filename: str) -> dict:
+    path = Path(__file__).resolve().parent.parent.parent / filename
+    try:
+        return json.loads(path.read_text())
+    except FileNotFoundError:
+        return {}
+
+
+@router.get("/ticker-schema")
+async def get_ticker_schema() -> dict:
+    """Return the global ticker input schema for display in the UI."""
+    return _read_schema("ticker_schema.json")
+
+
+@router.get("/sector-schema")
+async def get_sector_schema() -> dict:
+    """Return the global sector input schema for display in the UI."""
+    return _read_schema("sector_schema.json")
+
+
+@router.get("/macro-schema")
+async def get_macro_schema() -> dict:
+    """Return the global macro input schema for display in the UI."""
+    return _read_schema("macro_schema.json")
 
 
 @router.get("", response_model=list[PromptResponse])

@@ -24,6 +24,21 @@ from backend.schemas.run import BulkDeleteRequest, RunCreate, RunResponse
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
+def _load_schema(filename: str) -> dict | None:
+    path = Path(__file__).resolve().parent.parent.parent / filename
+    try:
+        return json.loads(path.read_text())
+    except FileNotFoundError:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "%s not found — agents will run without input_schema", path
+        )
+        return None
+
+_TICKER_SCHEMA: dict | None = _load_schema("ticker_schema.json")
+_SECTOR_SCHEMA: dict | None = _load_schema("sector_schema.json")
+_MACRO_SCHEMA: dict | None = _load_schema("macro_schema.json")
+
 
 def _build_ceo_input_schema(agent_prompts: list[Prompt]) -> dict | None:
     """Build the CEO input schema from active stock agent output schemas.
@@ -89,6 +104,11 @@ async def create_run(
     )
     sector_prompts = sector_prompt_result.scalars().all()
 
+    macro_prompt_result = await session.execute(
+        select(Prompt).where(Prompt.category == "macro", Prompt.is_active == True)  # noqa: E712
+    )
+    macro_prompts = macro_prompt_result.scalars().all()
+
     ceo_prompt_result = await session.execute(
         select(Prompt).where(Prompt.category == "ceo", Prompt.is_active == True)  # noqa: E712
     )
@@ -129,6 +149,7 @@ async def create_run(
                             "search_query_template": p.search_query_template,
                             "search_mode": p.search_mode,
                             "output_schema": p.output_schema,
+                            "input_schema": _TICKER_SCHEMA,
                         }
                         for p in agent_prompts
                     ],
@@ -141,8 +162,22 @@ async def create_run(
                             "search_query_template": p.search_query_template,
                             "search_mode": p.search_mode,
                             "output_schema": p.output_schema,
+                            "input_schema": _SECTOR_SCHEMA,
                         }
                         for p in sector_prompts
+                    ],
+                    "macro_prompts": [
+                        {
+                            "id": str(p.id),
+                            "title": p.title,
+                            "content": p.content,
+                            "search_enabled": p.search_enabled,
+                            "search_query_template": p.search_query_template,
+                            "search_mode": p.search_mode,
+                            "output_schema": p.output_schema,
+                            "input_schema": _MACRO_SCHEMA,
+                        }
+                        for p in macro_prompts
                     ],
                     "ceo_prompts": [
                         {

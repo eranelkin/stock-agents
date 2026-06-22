@@ -228,8 +228,130 @@ All output files are now written as **JSON** (changed from YAML):
 | `ai_service/agent.py` | Schema injection, validation, retry logic |
 | `ai_service/models/llm_client.py` | `response_format={"type":"json_object"}` enforcement |
 | `ai_service/schemas/run.py` | `PromptConfig` with `output_schema` and `input_schema` fields |
+| `ai_service/pipeline_registry.py` | Registers all pipeline types (stocks, sectors, macro) — add new types here |
+| `ai_service/config.py` | Data file paths (`mocks/Data.json` etc.) and all runtime settings |
 | `backend/db/models.py` | `Prompt` table with `output_schema` JSONB column |
-| `backend/api/routes/runs.py` | `_build_ceo_input_schema()` — auto-computes CEO input schema |
-| `backend/api/routes/prompts.py` | CRUD for prompts including `output_schema` |
-| `frontend/src/components/PromptDialog.tsx` | UI for editing prompts + output schema textarea + CEO input schema display |
-| `ai_service/config.py` | `output_format = "json"` (default) |
+| `backend/api/routes/runs.py` | `_build_ceo_input_schema()` + loads and injects input schemas for all agent types |
+| `backend/api/routes/prompts.py` | CRUD for prompts + schema endpoints (`/ticker-schema`, `/sector-schema`, `/macro-schema`) |
+| `backend/ticker_schema.json` | Field glossary injected into every stock agent prompt |
+| `backend/sector_schema.json` | Field glossary injected into every sector agent prompt |
+| `backend/macro_schema.json` | Field glossary injected into every macro agent prompt (placeholder — fill when ready) |
+| `mocks/Data.json` | Ticker input data for stock pipeline |
+| `mocks/Sectors.json` | Sector input data for sectors pipeline |
+| `mocks/Macro.json` | Macro input data for macro pipeline (placeholder — fill when ready) |
+| `frontend/src/components/PromptDialog.tsx` | Prompt edit dialog — shows "What this agent receives" for stocks, sectors, macro, and CEO |
+
+---
+
+## NEW: Ticker Input Schema System
+
+A global file `backend/ticker_schema.json` now describes every field in the ticker object (Data.json). This is automatically injected into the system prompt of every stock agent and sector agent at runtime, so the AI understands what each key means precisely.
+
+### Rules for this file
+
+- **When you add a new field to `Data.json`** → you MUST also add it to `backend/ticker_schema.json` with a `description`. Otherwise the AI will see the value but not understand what it means.
+- Each entry must include `"type"` and `"description"` at minimum.
+- The file is loaded once when the backend starts. Restart the backend after editing it.
+
+### Do I need a new schema file for each new agent type?
+
+**One schema file per unique input data shape.** The rule:
+
+| Agent type | Status | Schema file | Data file |
+|---|---|---|---|
+| Stock agents | ✅ Done | `backend/ticker_schema.json` | `mocks/Data.json` |
+| Sector agents | ✅ Done | `backend/sector_schema.json` | `mocks/Sectors.json` |
+| Macro agents | ✅ Done (placeholder) | `backend/macro_schema.json` | `mocks/Macro.json` |
+| Any future type | Follow same pattern | Create `backend/<type>_schema.json`, add entry in `pipeline_registry.py`, load schema in `runs.py` | Create `mocks/<Type>.json` |
+
+### What it looks like in the agent's system prompt
+
+At runtime, this block is automatically appended to every stock agent's instructions:
+```
+--- INPUT SCHEMA — what you will receive ---
+{
+  "title": "TickerInput",
+  "properties": {
+    "atr": {
+      "type": "number",
+      "description": "Average True Range over the last 14 trading days, in USD..."
+    },
+    ...
+  }
+}
+---
+```
+
+### UI
+
+When you open a stock agent prompt in the UI, a read-only **"What this agent receives"** block is shown below the output schema textarea. It displays the content of `backend/ticker_schema.json` live. Use it as a reference while writing prompts.
+
+---
+
+## NEW: Add `description` to Output Schema Properties
+
+This is a writing task — no code change needed. Every time you define or update an output schema for a stock agent in the UI, add a `description` line to each property.
+
+**Why:** The CEO agent receives the outputs of all stock agents. Without descriptions, the CEO sees raw values like `"rsi_estimate": 45.3` with no explanation. With descriptions, the CEO's system prompt includes a full glossary of every field it receives — automatically.
+
+### How to write it
+
+Instead of:
+```json
+"rsi_estimate": { "type": "number", "minimum": 0, "maximum": 100 }
+```
+
+Write:
+```json
+"rsi_estimate": {
+  "type": "number",
+  "minimum": 0,
+  "maximum": 100,
+  "description": "RSI between 0-100. Above 70 = overbought (likely to drop), below 30 = oversold (likely to rise)."
+}
+```
+
+### Rule of thumb for descriptions
+
+- State the **unit** (USD, percent, days, etc.)
+- State the **range or valid values** if relevant
+- State **what it means** in plain English — not just the abbreviation
+
+### Which agents need this
+
+Every active stock agent that has an output schema. The CEO agent's output schema also benefits from descriptions for the same reason.
+
+---
+
+## Updated Checklist: Before Every Run
+
+### .env file
+- [ ] `OUTPUT_FORMAT=json` is set (not `yaml`)
+- [ ] `AGENT_MODE=parallel` (default) or `chain` depending on what you want to test
+- [ ] Correct `LLM_MODEL` is set
+
+### Data files (in `mocks/` folder)
+- [ ] `mocks/Data.json` — contains the tickers you want to process
+- [ ] Every field key in the ticker objects exists in `backend/ticker_schema.json` with a description
+- [ ] `mocks/Sectors.json` — only matters if you have active Sector prompts
+- [ ] `mocks/Macro.json` — only matters if you have active Macro prompts (currently a placeholder)
+
+### Stock Agent Prompts (in the UI)
+- [ ] Output schema exists and is valid JSON Schema
+- [ ] **Every property in the output schema has a `description`** — so the CEO understands it
+- [ ] Required fields include at minimum `ticker`
+- [ ] Prompt text contains behavior instructions only — no format instructions, no schema copy-paste
+- [ ] Open the Edit dialog → verify the "What this agent receives" block shows the ticker field glossary
+
+### CEO Agent Prompt (in the UI)
+- [ ] Output schema exists with descriptions on every property
+- [ ] Open the Edit dialog → verify the "What this agent receives" block shows ALL active stock agents with their schemas
+- [ ] If the CEO prompt references specific field names (e.g. `rsi_estimate`), confirm those field names exist in the relevant stock agent's output schema
+
+### After Adding New Data.json Fields
+- [ ] Add the new field to `backend/ticker_schema.json` with `type` and `description`
+- [ ] Restart the backend so the file is reloaded
+
+---
+
+*Last updated: 2026-06-22 (sectors + macro wired up; data files moved to mocks/; schema path bug fixed)*

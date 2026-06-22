@@ -39,6 +39,7 @@ class RunRequest(BaseModel):
     tickers: list[dict[str, Any]]
     prompts: list[PromptConfig]
     sector_prompts: list[PromptConfig] = []
+    macro_prompts: list[PromptConfig] = []
     ceo_prompts: list[PromptConfig] = []
 
 
@@ -52,6 +53,7 @@ async def trigger_run(request: RunRequest) -> dict[str, str]:
             request.tickers,
             request.prompts,
             request.sector_prompts,
+            request.macro_prompts,
             request.ceo_prompts,
         ),
         name=f"run-{request.run_id}",
@@ -86,6 +88,7 @@ async def _run_orchestrator(
     tickers: list[dict[str, Any]],
     prompts: list[PromptConfig],
     sector_prompts: list[PromptConfig],
+    macro_prompts: list[PromptConfig],
     ceo_prompts: list[PromptConfig] | None = None,
 ) -> None:
     try:
@@ -95,6 +98,7 @@ async def _run_orchestrator(
             tickers=tickers,
             prompts=prompts,
             sector_prompts=sector_prompts,
+            macro_prompts=macro_prompts,
             ceo_prompts=ceo_prompts or [],
         ).run()
     finally:

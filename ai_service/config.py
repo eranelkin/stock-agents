@@ -25,8 +25,9 @@ class Settings(BaseSettings):
     output_dir: str = "./outputs"
 
     # Data sources
-    data_json: str = "./Data.json"
-    sectors_json: str = "./Sectors.json"
+    data_json: str = "./mocks/Data.json"
+    sectors_json: str = "./mocks/Sectors.json"
+    macro_json: str = "./mocks/Macro.json"
 
     # Database
     postgres_host: str = "localhost"

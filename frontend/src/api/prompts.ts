@@ -10,6 +10,27 @@ export async function fetchPrompts(category?: string): Promise<Prompt[]> {
   return res.json()
 }
 
+/** Fetch the global ticker input schema from backend/ticker_schema.json. */
+export async function fetchTickerSchema(): Promise<Record<string, unknown>> {
+  const res = await fetch(`${BASE}/ticker-schema`)
+  if (!res.ok) return {}
+  return res.json()
+}
+
+/** Fetch the global sector input schema from backend/sector_schema.json. */
+export async function fetchSectorSchema(): Promise<Record<string, unknown>> {
+  const res = await fetch(`${BASE}/sector-schema`)
+  if (!res.ok) return {}
+  return res.json()
+}
+
+/** Fetch the global macro input schema from backend/macro_schema.json. */
+export async function fetchMacroSchema(): Promise<Record<string, unknown>> {
+  const res = await fetch(`${BASE}/macro-schema`)
+  if (!res.ok) return {}
+  return res.json()
+}
+
 /** Fetch all active agent prompts — used to compute CEO input schema in the UI. */
 export async function fetchActiveAgentPrompts(): Promise<Prompt[]> {
   const res = await fetch(`${BASE}?category=agents`)

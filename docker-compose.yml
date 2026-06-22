@@ -51,7 +51,7 @@ services:
       - "${AI_SERVICE_PORT:-4102}:4102"
     volumes:
       - ./outputs:/app/outputs
-      - ./Data.json:/app/Data.json:ro
+      - ./mocks:/app/mocks:ro
 
   frontend:
     build:

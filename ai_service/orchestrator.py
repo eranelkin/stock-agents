@@ -64,6 +64,7 @@ class Orchestrator:
         tickers: list[dict[str, Any]],
         prompts: list[PromptConfig],
         sector_prompts: list[PromptConfig],
+        macro_prompts: list[PromptConfig] | None = None,
         ceo_prompts: list[PromptConfig] | None = None,
     ) -> None:
         self.run_id = run_id
@@ -72,6 +73,7 @@ class Orchestrator:
         self.prompts_by_category: dict[str, list[PromptConfig]] = {
             "agents": prompts,
             "sectors": sector_prompts,
+            "macro": macro_prompts or [],
             "ceo": ceo_prompts or [],
         }
         self._dt_str: str = ""

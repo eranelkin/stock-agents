@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SectorInput",
+  "description": "Fields available on each sector object passed to sector agents.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Full sector name (e.g. 'Information Technology'). This is the primary identifier."
+    },
+    "etf_symbol": {
+      "type": ["string", "null"],
+      "description": "Ticker symbol of the ETF that tracks this sector (e.g. 'XLK' for Information Technology). May be null."
+    }
+  },
+  "required": ["name"]
+}

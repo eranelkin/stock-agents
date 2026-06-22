@@ -27,16 +27,18 @@ import { resolvePlaceholders } from "../utils/placeholders";
 
 const CATEGORIES = [
   "agents",
-  "ceo",
   "sectors",
+  "macro",
+  "ceo",
   "system",
   "once",
   "market",
 ] as const;
 const CATEGORY_LABELS: Record<string, string> = {
   agents: "Stocks",
-  ceo: "CEO",
   sectors: "Sectors",
+  macro: "Macro",
+  ceo: "CEO",
   system: "System",
   once: "Once",
   market: "Market",

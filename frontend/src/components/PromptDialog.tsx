@@ -15,7 +15,7 @@ import Typography from '@mui/material/Typography'
 import Box from '@mui/material/Box'
 import CloseIcon from '@mui/icons-material/Close'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
-import { createPrompt, updatePrompt, fetchActiveAgentPrompts } from '../api/prompts'
+import { createPrompt, updatePrompt, fetchActiveAgentPrompts, fetchTickerSchema, fetchSectorSchema, fetchMacroSchema } from '../api/prompts'
 import type { Prompt } from '../types/prompt'
 
 interface PromptDialogProps {
@@ -144,9 +144,15 @@ export default function PromptDialog({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [ceoInputSchema, setCeoInputSchema] = useState<Record<string, unknown> | null>(null)
+  const [tickerInputSchema, setTickerInputSchema] = useState<Record<string, unknown> | null>(null)
+  const [sectorInputSchema, setSectorInputSchema] = useState<Record<string, unknown> | null>(null)
+  const [macroInputSchema, setMacroInputSchema] = useState<Record<string, unknown> | null>(null)
 
   const isEdit = Boolean(editPrompt)
   const isCeo = defaultCategory === 'ceo'
+  const isAgents = defaultCategory === 'agents'
+  const isSectors = defaultCategory === 'sectors'
+  const isMacro = defaultCategory === 'macro'
 
   useEffect(() => {
     if (editPrompt) {
@@ -177,6 +183,39 @@ export default function PromptDialog({
       .then((prompts) => setCeoInputSchema(buildCeoInputSchema(prompts)))
       .catch(() => setCeoInputSchema(null))
   }, [open, isCeo])
+
+  // When the dialog opens for a stock agent prompt, fetch the global ticker input schema
+  useEffect(() => {
+    if (!open || !isAgents) {
+      setTickerInputSchema(null)
+      return
+    }
+    fetchTickerSchema()
+      .then((schema) => setTickerInputSchema(Object.keys(schema).length ? schema : null))
+      .catch(() => setTickerInputSchema(null))
+  }, [open, isAgents])
+
+  // When the dialog opens for a sector prompt, fetch the global sector input schema
+  useEffect(() => {
+    if (!open || !isSectors) {
+      setSectorInputSchema(null)
+      return
+    }
+    fetchSectorSchema()
+      .then((schema) => setSectorInputSchema(Object.keys(schema).length ? schema : null))
+      .catch(() => setSectorInputSchema(null))
+  }, [open, isSectors])
+
+  // When the dialog opens for a macro prompt, fetch the global macro input schema
+  useEffect(() => {
+    if (!open || !isMacro) {
+      setMacroInputSchema(null)
+      return
+    }
+    fetchMacroSchema()
+      .then((schema) => setMacroInputSchema(Object.keys(schema).length ? schema : null))
+      .catch(() => setMacroInputSchema(null))
+  }, [open, isMacro])
 
   const set =
     (field: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -506,6 +545,148 @@ export default function PromptDialog({
             </Button>
           </Box>
         </Field>
+
+        {/* ── Ticker input schema (read-only, stock agent prompts only) ── */}
+        {isAgents && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+              <Typography sx={{ color: '#cdd1d9', fontWeight: 500, fontSize: '0.875rem' }}>
+                What this agent receives
+              </Typography>
+              <InfoTooltip content={
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Typography sx={{ color: '#e2e8f0', fontWeight: 600, fontSize: '0.82rem' }}>Ticker Input Schema</Typography>
+                  <Typography sx={{ color: '#94a3b8', fontSize: '0.78rem', lineHeight: 1.6 }}>
+                    The ticker data object this agent receives at runtime. Each field is described so the AI understands exactly what the values mean.
+                  </Typography>
+                  <Typography sx={{ color: '#94a3b8', fontSize: '0.78rem', lineHeight: 1.6 }}>
+                    Defined in backend/ticker_schema.json — update that file when new fields are added to Data.json.
+                  </Typography>
+                </Box>
+              } />
+            </Box>
+            <Box
+              sx={{
+                bgcolor: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '6px',
+                p: 1.5,
+                maxHeight: 200,
+                overflowY: 'auto',
+              }}
+            >
+              {tickerInputSchema ? (
+                <Typography
+                  component="pre"
+                  sx={{
+                    color: '#86efac',
+                    fontFamily: 'monospace',
+                    fontSize: '0.75rem',
+                    m: 0,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {JSON.stringify(tickerInputSchema, null, 2)}
+                </Typography>
+              ) : (
+                <Typography sx={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                  No ticker schema found. Create backend/ticker_schema.json to populate this field.
+                </Typography>
+              )}
+            </Box>
+          </Box>
+        )}
+
+        {/* ── Sector input schema (read-only, sector prompts only) ── */}
+        {isSectors && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+              <Typography sx={{ color: '#cdd1d9', fontWeight: 500, fontSize: '0.875rem' }}>
+                What this agent receives
+              </Typography>
+              <InfoTooltip content={
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Typography sx={{ color: '#e2e8f0', fontWeight: 600, fontSize: '0.82rem' }}>Sector Input Schema</Typography>
+                  <Typography sx={{ color: '#94a3b8', fontSize: '0.78rem', lineHeight: 1.6 }}>
+                    The sector data object this agent receives at runtime. Each field is described so the AI understands exactly what the values mean.
+                  </Typography>
+                  <Typography sx={{ color: '#94a3b8', fontSize: '0.78rem', lineHeight: 1.6 }}>
+                    Defined in backend/sector_schema.json — update that file when new fields are added to Sectors.json.
+                  </Typography>
+                </Box>
+              } />
+            </Box>
+            <Box
+              sx={{
+                bgcolor: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '6px',
+                p: 1.5,
+                maxHeight: 200,
+                overflowY: 'auto',
+              }}
+            >
+              {sectorInputSchema ? (
+                <Typography
+                  component="pre"
+                  sx={{ color: '#86efac', fontFamily: 'monospace', fontSize: '0.75rem', m: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                >
+                  {JSON.stringify(sectorInputSchema, null, 2)}
+                </Typography>
+              ) : (
+                <Typography sx={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                  No sector schema found. Create backend/sector_schema.json to populate this field.
+                </Typography>
+              )}
+            </Box>
+          </Box>
+        )}
+
+        {/* ── Macro input schema (read-only, macro prompts only) ── */}
+        {isMacro && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+              <Typography sx={{ color: '#cdd1d9', fontWeight: 500, fontSize: '0.875rem' }}>
+                What this agent receives
+              </Typography>
+              <InfoTooltip content={
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Typography sx={{ color: '#e2e8f0', fontWeight: 600, fontSize: '0.82rem' }}>Macro Input Schema</Typography>
+                  <Typography sx={{ color: '#94a3b8', fontSize: '0.78rem', lineHeight: 1.6 }}>
+                    The macro entity object this agent receives at runtime. Each field is described so the AI understands exactly what the values mean.
+                  </Typography>
+                  <Typography sx={{ color: '#94a3b8', fontSize: '0.78rem', lineHeight: 1.6 }}>
+                    Defined in backend/macro_schema.json — update that file when new fields are added to Macro.json.
+                  </Typography>
+                </Box>
+              } />
+            </Box>
+            <Box
+              sx={{
+                bgcolor: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '6px',
+                p: 1.5,
+                maxHeight: 200,
+                overflowY: 'auto',
+              }}
+            >
+              {macroInputSchema ? (
+                <Typography
+                  component="pre"
+                  sx={{ color: '#86efac', fontFamily: 'monospace', fontSize: '0.75rem', m: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                >
+                  {JSON.stringify(macroInputSchema, null, 2)}
+                </Typography>
+              ) : (
+                <Typography sx={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                  No macro schema found. Create backend/macro_schema.json to populate this field.
+                </Typography>
+              )}
+            </Box>
+          </Box>
+        )}
 
         {/* ── CEO input schema (read-only, CEO prompts only) ── */}
         {isCeo && (

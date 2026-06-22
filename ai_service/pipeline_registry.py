@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from ai_service.schemas.input import TickerInput
+from ai_service.schemas.macro_input import MacroInput
 from ai_service.schemas.sector_input import SectorInput
 
 
@@ -63,6 +64,19 @@ PIPELINE_REGISTRY: list[PipelineTypeConfig] = [
         dependencies=[],
         required=False,
         use_request_entities=False,
-        persist_to_db=False,  # TODO Phase 2: add SectorResult table
+        persist_to_db=False,
+    ),
+    PipelineTypeConfig(
+        name="macro",
+        data_source_key="macro_json",
+        entity_schema=MacroInput,
+        prompt_category="macro",
+        output_mode="single_file",
+        output_prefix="",
+        single_file_name="macro",
+        dependencies=[],
+        required=False,
+        use_request_entities=False,
+        persist_to_db=False,
     ),
 ]

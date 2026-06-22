@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MacroInput",
+  "description": "Fields available on each macro entity object passed to macro agents.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Identifier for this macro entity (e.g. 'US_GDP', 'FED_RATE'). Fill in remaining fields when Macro.json is defined."
+    }
+  },
+  "required": ["name"]
+}
