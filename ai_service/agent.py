@@ -72,7 +72,7 @@ def _resolve_placeholders(text: str) -> str:
     """Replace known placeholders in a prompt string before sending to the LLM."""
     now = datetime.now(ZoneInfo("America/New_York"))
     current_date = now.strftime(f"%B {now.day}, %Y, %H:%M %Z")
-    return text.replace("{CURRENT_DATE}", current_date)
+    return text.replace("{CURRENTDATE}", current_date)
 
 
 def _build_system_prompt(

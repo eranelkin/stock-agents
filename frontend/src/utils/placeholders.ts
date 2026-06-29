@@ -10,5 +10,5 @@ export function resolvePlaceholders(text: string): string {
     timeZone: "America/New_York",
     timeZoneName: "short",
   }).format(now);
-  return text.replace(/\{CURRENT_DATE\}/g, formatted);
+  return text.replace(/\{CURRENTDATE\}/g, formatted);
 }

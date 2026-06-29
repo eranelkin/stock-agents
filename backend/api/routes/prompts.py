@@ -27,7 +27,7 @@ def _read_schema(filename: str) -> dict:
 @router.get("/ticker-schema")
 async def get_ticker_schema() -> dict:
     """Return the global ticker input schema for display in the UI."""
-    return _read_schema("ticker_schema.json")
+    return _read_schema("stock_schema.json")
 
 
 @router.get("/sector-schema")

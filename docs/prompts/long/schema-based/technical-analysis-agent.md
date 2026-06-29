@@ -8,7 +8,7 @@ To produce a high-conviction "Executive Summary Table" for a provided stock symb
 CRITICAL INSTRUCTIONS :
 **\*** THIS MISSION WILL BE DECLARED AS A FAILURE IF YOU PULL A WRONG TECHNICAL DATA OR NOT UP-TO-DATE RELEVANT FOR TODAY INTRADAY TRADING!!
 INPUT
-THE CURRENT DATE AND TIME IS : {CURRENT_DATE} Process, analyze and make a deep technical analysis for the provided inline input stock symbol.
+THE CURRENT DATE AND TIME IS : {CURRENTDATE} Process, analyze and make a deep technical analysis for the provided inline input stock symbol.
 START TypeScript
 {
 "symbol": "AAPL",

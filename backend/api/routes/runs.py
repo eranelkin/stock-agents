@@ -35,7 +35,7 @@ def _load_schema(filename: str) -> dict | None:
         )
         return None
 
-_TICKER_SCHEMA: dict | None = _load_schema("ticker_schema.json")
+_TICKER_SCHEMA: dict | None = _load_schema("stock_schema.json")
 _SECTOR_SCHEMA: dict | None = _load_schema("sector_schema.json")
 _MACRO_SCHEMA: dict | None = _load_schema("macro_schema.json")
 
