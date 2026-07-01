@@ -1,5 +1,5 @@
 {
-  "$schema": "[http://json-schema.org/draft-07/schema#](http://json-schema.org/draft-07/schema#)",
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "TickerIntelligencePack",
   "type": "object",
   "properties": {
@@ -22,7 +22,7 @@
         },
         "previous_close": {
           "type": "number",
-          "description": "The stock's previous closing price as a float."
+          "description": "The stock's previous closing price as a float. Taken from the input price field."
         }
       },
       "required": ["timestamp", "ticker", "company_name", "previous_close"],
@@ -48,10 +48,12 @@
           "items": {
             "type": "string"
           },
-          "description": "A bulleted array of 1-sentence critical news summary points."
+          "description": "Array of 3-7 single-sentence headline points summarizing the most material news."
         },
         "news_reports": {
           "type": "array",
+          "minItems": 3,
+          "maxItems": 6,
           "description": "Individual relevant news articles compiled from verified sources.",
           "items": {
             "type": "object",
@@ -67,11 +69,11 @@
               "published_at": {
                 "type": "string",
                 "format": "date-time",
-                "description": "The earliest identified publication timestamp to evaluate immediate market impact."
+                "description": "The earliest identified publication timestamp in YYYY-MM-DDTHH:MM:SSZ format."
               },
               "url": {
                 "type": "string",
-                "description": "The direct URL to the article source if available."
+                "description": "The direct URL to the article. Write URL_NOT_CONFIRMED if the exact URL cannot be verified from a search result."
               },
               "impact_analysis": {
                 "type": "string",
@@ -84,7 +86,7 @@
                 "items": {
                   "type": "string"
                 },
-                "description": "Exactly three key takeaways representing the quantitative, structural, and predictive aspects of the report."
+                "description": "Exactly three key takeaways: (1) a specific metric, (2) structural implication, (3) short-term price impact."
               }
             },
             "required": [
@@ -107,42 +109,17 @@
       ],
       "additionalProperties": false
     },
-    "ceo_impact_assessment": {
-      "type": "object",
-      "description": "Operational and macroeconomic assessments impacting corporate leadership directives.",
-      "properties": {
-        "operational_impact": {
-          "type": "string",
-          "description": "1-2 sentences summarizing how the news directly affects operations, revenue, or guidance."
-        },
-        "macro_headwind_factor": {
-          "type": "string",
-          "description": "1-2 sentences addressing broader sector trends or macroeconomic/geopolitical impacts."
-        }
-      },
-      "required": ["operational_impact", "macro_headwind_factor"],
-      "additionalProperties": false
-    },
-
-    "actionable_next_steps": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "description": "Direct, actionable tactical execution paths or warnings tailored for the trader."
+    "news_price_affect_rank": {
+      "type": "integer",
+      "minimum": -5,
+      "maximum": 5,
+      "description": "Weighted aggregate price impact across ALL news reports. Each report is scored individually (-5 to +5 by catalyst type) then multiplied by a time-decay weight (1.0 for <6h, 0.7 for 6-24h, 0.4 for 24-48h, 0.2 for 48-72h). The weighted sum is clamped to [-5, 5] and rounded to an integer. 0 means no material news found. Sign must be consistent with news_sentiment."
     },
     "notes": {
       "type": "string",
       "description": "Critical edge-case info or high-risk rumor flags. Leave as an empty string if none exist."
     }
   },
-  "required": [
-    "context",
-    "analysis",
-    "ceo_impact_assessment",
-    "price_prediction",
-    "actionable_next_steps",
-    "notes"
-  ],
+  "required": ["context", "analysis", "news_price_affect_rank", "notes"],
   "additionalProperties": false
 }

@@ -1,0 +1,20 @@
+api_metadata:
+  source_name: "Bloomberg API"
+  fetched_at: "2026-05-27T23:39:00Z"
+  article_id: "news_98374291"
+
+asset_context:
+  primary_symbol: "AAPL"
+  company_name: "Apple Inc."
+
+news_content:
+  - headline: "Apple Unveils Next-Gen AI Integration for iOS at Annual Developer Conference"
+    summary_by_source: "Tech giant announces a deep partnership with major AI labs, driving high institutional interest."
+    full_text: "CUPERTINO — Apple Inc. today announced a major leap forward in its software ecosystem... [Full Article Text Here]"
+    author: "Jane Doe"
+    published_at: "2026-05-27T22:15:00Z"
+  - headline: "Apple Unveils new iphone model with groundbreaking features"
+    summary_by_source: "due date will be in 2026, and the new model is expected to have a significant impact on the market."
+    full_text: "Apple Inc. today announced a new iphone model with groundbreaking features... [Full Article Text Here]"
+    author: "Jane Doe"
+    published_at: "2026-05-27T22:17:00Z"

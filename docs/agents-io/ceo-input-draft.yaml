@@ -1,0 +1,43 @@
+symbol: "POET"
+stock:
+  company_name: ""
+  market_cap: "xx.xxB"
+  pre_market_chg: "+xx.xx%"
+  pre_parket_volume: xx.xxM
+  pre_market_price: xx.xx
+  atr: xx.xx
+  price: xx.xx
+
+  tech:
+    date: 04-06-2026
+    analysis_strategy:
+      "Bullish trend with pre-market gain of 8.75% and recent news
+      highlighting POET Technologies stock price surge; 3 scenarios: Bull 50% /
+      Base 35% / Bear 15%"
+    confidence: 55%
+    success_probability: 55%
+    entry_time: 09:45 ET
+    entry_range: 14.96 - 15.26
+    tp_range: 15.41 - 15.41
+    sl_range: 14.81 - 14.81
+    tp_time: 15:30 ET
+    short_ratio: 2.5
+    short_float: 8.00%
+    institutional_holding: ""
+    squeeze_risk: 3
+    approximately_gain_in_%: 2.00%
+    conviction_detect: Basic price momentum
+    collapse_conviction: Price breaks below SL range
+    reasoning:
+      reason_1: Pre-market momentum supports directional bias
+      reason_2: Recent news catalyst identified via web search
+      reason_3: Institutional holding level suggests stable base
+    volume: RVOL > 1.2
+    ai_suggestion: N
+    notes:
+      POET Technologies (POET) Stock price today - quote & chart - Kraken reports
+      POET stock price at $15.15, reflecting a +9.67% move since the market opened.
+  news:
+  fundamental:
+sectors:
+macro:

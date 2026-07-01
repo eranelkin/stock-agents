@@ -1,0 +1,10 @@
+stocks:
+  - symbol: "" 
+    company_name: "" 
+    market_cap: "xx.xxB" 
+    pre_market_chg: "+xx.xx%" 
+    pre_parket_volume: xx.xxM 
+    pre_market_price: xx.xx 
+    atr: xx.xx
+    price: xx.xx 
+

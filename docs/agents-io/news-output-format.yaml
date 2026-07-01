@@ -1,0 +1,45 @@
+context:
+  timestamp: "<YYYY-MM-DDTHH:MM:SSZ>"
+  ticker: "<String: Stock Ticker>"
+  company_name: "<String: Full Company Name>"
+  previous_close: "<Float: 0.00>"
+
+analysis:
+  news_sentiment: "<Enum: Bullish | Bearish | Neutral>" 
+  sentiment_score: "<Float: Between -1.0 and 1.0>" 
+  critical_news_summary:
+    - "<String: 1-sentence critical summary point>"
+    - "<String: 1-sentence critical summary point>"
+  news_reports:
+    - title: "<String: Article Headline>"
+      source: "<String: Source Name>"
+      published_at: "<YYYY-MM-DDTHH:MM:SSZ>"
+      url: "<String: URL>"
+      impact_analysis: "<String: Contextual impact statement regarding the asset>"
+      summary_points:
+        - "<String: Key quantitative takeaway>"
+        - "<String: Key structural takeaway>"
+        - "<String: Key predictive takeaway>"
+    # Add additional news_reports items following the exact same structure
+
+ceo_impact_assessment:
+  operational_impact: "<String: 1-2 sentences on how this affects operations/revenue>"
+  macro_headwind_factor: "<String: 1-2 sentences on broader sector/macro impacts>"
+
+price_prediction:
+  today_trend: "<Enum: Upward | Downward | Flat>"
+  expected_open: "<Float: 0.00>"
+  change_percentage: "<Float: 0.00>"
+  estimated_trading_range:
+    low: "<Float: 0.00>" #price prediction for the low end of the trading range
+    low_percentage: "<Float: 0.00>"  #percentage change from previous close to the low end of the trading range
+    high: "<Float: 0.00>" #price prediction for the high end of the trading range
+    high_percentage: "<Float: 0.00>" #percentage change from previous close to the high end of the trading range
+    success_probability: "<String: e.g., '90%'>" #probability that the actual trading range will fall within the estimated trading range
+    confidence_level: "<String: e.g., '80%'>" #confidence level of the price prediction based on the quality and quantity of news data and analysis
+
+actionable_next_steps:
+  - "<String: Actionable directive 1>"
+  - "<String: Actionable directive 2>"
+
+notes: "<String: Add critical info for the trader, leave as '' if none>"
