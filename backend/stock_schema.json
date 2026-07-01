@@ -4,10 +4,14 @@
   "description": "Fields available on each ticker object passed to stock agents.",
   "type": "object",
   "properties": {
+    "name": {
+      "type": "string",
+      "description": "Ticker symbol."
+    },
     "symbol": {
       "type": "string",
-      "description": "Stock symbol"
+      "description": "Ticker symbol."
     }
   },
-  "required": ["symbol"]
+  "required": ["name", "symbol"]
 }

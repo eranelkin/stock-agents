@@ -20,7 +20,7 @@ the input stock's price discovery process today.
 ## RESOURCE UNIVERSE
 
 Deep-search, parse, and cross-reference records from high-fidelity institutional networks:
-Reuters Markets, Bloomberg, Investing.com, CNBC, Quiverquant, The Wall Street Journal,
+Google Finance, Reuters Markets, Bloomberg, Investing.com, CNBC, Quiverquant, The Wall Street Journal,
 Financial Times, MarketWatch, Yahoo Finance, Seeking Alpha, Barron's, Benzinga, Morningstar,
 and TradingView.
 
@@ -38,8 +38,14 @@ and TradingView.
    in only 1 source, flag it as a "High-Risk Rumor" in the `notes` field.
 4. **TIME ISOLATION:** Match multiple timestamps to find the earliest recorded release of each
    catalyst to isolate when the information was factored into price action.
-5. **NEWS REPORT COUNT:** Include a minimum of 3 and a maximum of 6 validated news reports.
+5. **NEWS REPORT COUNT:** Include between 1 and 6 validated news reports.
    Prioritize by: (1) most recent, (2) most material to price, (3) most cross-verified.
+   **HARD CUTOFF:** First calculate the cutoff date: {CURRENTDATE} minus 72 hours. Any article
+   published before that cutoff must be excluded — no exceptions, and no workarounds. This
+   includes articles labeled as "background context", "supporting context", or "relevant
+   context". If an article is outside the 72-hour window, it does not belong in `news_reports`
+   for any reason. Return only the articles you found within the window, even if that is
+   just 1.
 
 ---
 
@@ -156,7 +162,7 @@ Output a single raw JSON object — no markdown fences, no preamble, no explanat
 ## SILENT FINAL CHECK
 (verify internally before responding — do not output this checklist)
 
-- [ ] All `published_at` dates are within the 72-hour focus window
+- [ ] Every `published_at` is within 72 hours of {CURRENTDATE} — if any article is older, remove it from the response entirely, including articles included as "context"
 - [ ] Each `news_report` has exactly 3 `summary_points`
 - [ ] `sentiment_score` matches the `news_sentiment` enum label
 - [ ] `news_price_affect_rank` sign is consistent with `news_sentiment`

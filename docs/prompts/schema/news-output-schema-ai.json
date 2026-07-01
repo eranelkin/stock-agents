@@ -47,7 +47,7 @@
         },
         "news_reports": {
           "type": "array",
-          "minItems": 3,
+          "minItems": 1,
           "maxItems": 6,
           "description": "Individual relevant news articles compiled from verified sources.",
           "items": {

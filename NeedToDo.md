@@ -390,3 +390,5 @@ _Last updated: 2026-06-22 (sectors + macro wired up; data files moved to mocks/;
 
 
 - output_schema - Try to update the flow dynamically with the file content. Read the files on run time.
+- alert in the logs for the last running proccess, meaning if news agent did  not fetch any post, need to color red.
+- retry if not succeed and the response empty/no news for the symbol (news agent).
