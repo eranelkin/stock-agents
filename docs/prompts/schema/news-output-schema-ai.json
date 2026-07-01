@@ -9,8 +9,7 @@
       "properties": {
         "timestamp": {
           "type": "string",
-          "format": "date-time",
-          "description": "The ISO 8601 timestamp when the analysis was generated (YYYY-MM-DDTHH:MM:SSZ)."
+          "description": "The timestamp when the analysis was generated. Format: MMM DD, YYYY, HH:MM TZ (e.g. Jul 01, 2026, 09:00 EDT)."
         },
         "ticker": {
           "type": "string",
@@ -19,13 +18,9 @@
         "company_name": {
           "type": "string",
           "description": "Full official company name."
-        },
-        "previous_close": {
-          "type": "number",
-          "description": "The stock's previous closing price as a float. Taken from the input price field."
         }
       },
-      "required": ["timestamp", "ticker", "company_name", "previous_close"],
+      "required": ["timestamp", "ticker", "company_name"],
       "additionalProperties": false
     },
     "analysis": {
@@ -68,8 +63,7 @@
               },
               "published_at": {
                 "type": "string",
-                "format": "date-time",
-                "description": "The earliest identified publication timestamp in YYYY-MM-DDTHH:MM:SSZ format."
+                "description": "The earliest identified publication timestamp. Format: MMM DD, YYYY, HH:MM TZ (e.g. Jul 01, 2026, 09:00 EDT). Use 00:00 UTC if exact time is unknown."
               },
               "url": {
                 "type": "string",

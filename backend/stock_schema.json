@@ -4,42 +4,10 @@
   "description": "Fields available on each ticker object passed to stock agents.",
   "type": "object",
   "properties": {
-    "name": {
-      "type": "string",
-      "description": "Ticker symbol (e.g. 'CHWY'). Identical to 'symbol' — both are normalised to this key by the pipeline."
-    },
     "symbol": {
       "type": "string",
-      "description": "Ticker symbol — alias for 'name'. One of the two will be present depending on the data source."
-    },
-    "sector": {
-      "type": ["string", "null"],
-      "description": "GICS sector the company belongs to (e.g. 'Consumer Discretionary'). May be null."
-    },
-    "price": {
-      "type": "number",
-      "description": "Most recent closing price in USD."
-    },
-    "market_cap": {
-      "type": "string",
-      "description": "Market capitalisation as a string with B (billions) or M (millions) suffix, e.g. '8.34B' means $8.34 billion. This is NOT a raw number."
-    },
-    "atr": {
-      "type": "number",
-      "description": "Average True Range over the last 14 trading days, in USD. Measures recent daily price volatility — higher value means larger intraday price swings."
-    },
-    "pre_market_price": {
-      "type": "number",
-      "description": "Latest pre-market trading price in USD (before 9:30 AM ET)."
-    },
-    "pre_market_chg": {
-      "type": "number",
-      "description": "Pre-market price change as a percentage vs the previous regular-session close. Positive = up, negative = down. Example: 6.23 means +6.23%."
-    },
-    "pre_market_volume": {
-      "type": "string",
-      "description": "Pre-market trading volume as a string with K (thousands) or M (millions) suffix, e.g. '1.13M' means 1.13 million shares traded."
+      "description": "Stock symbol"
     }
   },
-  "required": ["name"]
+  "required": ["symbol"]
 }

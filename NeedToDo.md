@@ -387,3 +387,6 @@ Every active stock agent that has an output schema. The CEO agent's output schem
 ---
 
 _Last updated: 2026-06-22 (sectors + macro wired up; data files moved to mocks/; schema path bug fixed)_
+
+
+- output_schema - Try to update the flow dynamically with the file content. Read the files on run time.

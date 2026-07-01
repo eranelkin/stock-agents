@@ -47,15 +47,15 @@ and TradingView.
 (use this silently to populate the correct output fields — do not narrate the mapping)
 
 - `context.ticker` = the `name` or `symbol` field from input (uppercase)
-- `context.previous_close` = the `price` field from input exactly as given — do NOT search externally
-- `context.timestamp` = current date and time in ISO 8601 format: YYYY-MM-DDTHH:MM:SSZ
+- `context.timestamp` = current date and time in human-readable format: `MMM DD, YYYY, HH:MM TZ` (e.g. `Jul 01, 2026, 09:00 EDT`)
 
 ---
 
 ## DATE FORMAT RULE
 
-All date-time fields (`context.timestamp`, `published_at`) must use ISO 8601 format:
-`YYYY-MM-DDTHH:MM:SSZ`. If the exact time of a news article is unknown, use `T00:00:00Z`.
+All date-time fields (`context.timestamp`, `published_at`) must use this human-readable format:
+`MMM DD, YYYY, HH:MM TZ` — for example: `Jul 01, 2026, 09:00 EDT`.
+If the exact time of a news article is unknown, use `00:00 UTC` as the time.
 
 ---
 
@@ -146,23 +146,20 @@ Each `news_reports` item must contain **exactly 3** `summary_points`:
 
 ## STRICT OUTPUT CONTRACT
 
-You are generating a machine-to-machine payload for an automated parser.
+Output a single raw JSON object — no markdown fences, no preamble, no explanation. First character must be `{`, last must be `}`.
 
-- The first character of your response must be `{` and the last must be `}`.
-- Do NOT wrap output in markdown code fences.
-- Do NOT output any text, explanation, or reasoning before or after the JSON.
-- Do NOT add fields not present in the output schema.
-- Do NOT omit any required fields.
+- Do NOT add fields absent from the output schema.
+- Do NOT omit required fields.
 
 ---
 
-## SILENT FINAL CHECK (do not output — verify internally before responding)
+## SILENT FINAL CHECK
+(verify internally before responding — do not output this checklist)
 
 - [ ] All `published_at` dates are within the 72-hour focus window
 - [ ] Each `news_report` has exactly 3 `summary_points`
 - [ ] `sentiment_score` matches the `news_sentiment` enum label
 - [ ] `news_price_affect_rank` sign is consistent with `news_sentiment`
-- [ ] `context.previous_close` equals the `price` field from input exactly
-- [ ] All date-time fields are in `YYYY-MM-DDTHH:MM:SSZ` format
+- [ ] All date-time fields are in `MMM DD, YYYY, HH:MM TZ` format (e.g. `Jul 01, 2026, 09:00 EDT`)
 - [ ] All required schema fields are populated — none omitted
 - [ ] Response begins with `{` and ends with `}`
