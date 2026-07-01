@@ -149,7 +149,7 @@ async def create_run(
                             "search_query_template": p.search_query_template,
                             "search_mode": p.search_mode,
                             "output_schema": p.output_schema,
-                            "input_schema": _TICKER_SCHEMA,
+                            "input_schema": p.input_schema or _TICKER_SCHEMA,
                         }
                         for p in agent_prompts
                     ],
@@ -162,7 +162,7 @@ async def create_run(
                             "search_query_template": p.search_query_template,
                             "search_mode": p.search_mode,
                             "output_schema": p.output_schema,
-                            "input_schema": _SECTOR_SCHEMA,
+                            "input_schema": p.input_schema or _SECTOR_SCHEMA,
                         }
                         for p in sector_prompts
                     ],
@@ -175,7 +175,7 @@ async def create_run(
                             "search_query_template": p.search_query_template,
                             "search_mode": p.search_mode,
                             "output_schema": p.output_schema,
-                            "input_schema": _MACRO_SCHEMA,
+                            "input_schema": p.input_schema or _MACRO_SCHEMA,
                         }
                         for p in macro_prompts
                     ],

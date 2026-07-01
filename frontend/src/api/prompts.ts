@@ -50,6 +50,7 @@ export async function createPrompt(payload: {
   search_enabled?: boolean;
   search_query_template?: string | null;
   output_schema?: Record<string, unknown> | null;
+  input_schema?: Record<string, unknown> | null;
 }): Promise<Prompt> {
   const res = await fetch(BASE, {
     method: "POST",
@@ -75,6 +76,7 @@ export async function updatePrompt(
     search_enabled: boolean;
     search_query_template: string | null;
     output_schema: Record<string, unknown> | null;
+    input_schema: Record<string, unknown> | null;
   }>,
 ): Promise<Prompt> {
   const res = await fetch(`${BASE}/${id}`, {
