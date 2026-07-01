@@ -15,6 +15,7 @@ class PromptCreate(BaseModel):
     search_mode: str | None = None  # None = use global; "prefetch" | "tool_call"
     is_active: bool = True
     output_schema: dict | None = None
+    input_schema: dict | None = None
 
 
 class PromptUpdate(BaseModel):
@@ -26,6 +27,7 @@ class PromptUpdate(BaseModel):
     search_mode: str | None = None
     is_active: bool | None = None
     output_schema: dict | None = None
+    input_schema: dict | None = None
 
 
 class PromptActiveUpdate(BaseModel):
@@ -41,6 +43,7 @@ class PromptResponse(BaseModel):
     search_query_template: str | None
     search_mode: str | None
     output_schema: dict | None
+    input_schema: dict | None
     is_active: bool
     created_at: datetime
     updated_at: datetime

@@ -29,7 +29,7 @@ from alembic.config import Config
 from backend.config import settings
 
 # The current head revision — update this when new migrations are added
-HEAD = "b7e2d4f83a19"
+HEAD = "e5a7b9c34f12"
 
 # Columns that were added by specific revisions (after the initial schema).
 # Used to detect how far a legacy DB has already progressed.

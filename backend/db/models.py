@@ -64,6 +64,7 @@ class Prompt(Base):
     search_query_template: Mapped[str | None] = mapped_column(Text, nullable=True)
     search_mode: Mapped[str | None] = mapped_column(String(20), nullable=True)
     output_schema: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    input_schema: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
