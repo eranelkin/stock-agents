@@ -1,0 +1,151 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "macro_tide": {
+      "type": "object",
+      "description": "Top-level aggregate regime summary for today's trading session",
+      "properties": {
+        "regime": {
+          "type": "string",
+          "enum": ["risk-on", "risk-off", "neutral"],
+          "description": "Dominant risk regime for today's session"
+        },
+        "vix_level": {
+          "type": "number",
+          "description": "Current VIX reading (e.g. 18.4)"
+        },
+        "vix_trend": {
+          "type": "string",
+          "enum": ["rising", "falling", "flat"],
+          "description": "Direction of VIX over the last 24 hours"
+        },
+        "spy_futures_direction": {
+          "type": "string",
+          "enum": ["up", "down", "flat"],
+          "description": "Pre-market SPY futures direction"
+        },
+        "overall_market_bias": {
+          "type": "string",
+          "description": "One sentence describing the dominant force driving the market today"
+        },
+        "key_risk_today": {
+          "type": "string",
+          "description": "The single biggest invalidation risk that could flip the current regime"
+        },
+        "composite_risk_on_rate": {
+          "type": "number",
+          "description": "Simple average of all risk_on_risk_off_rate values across macro_news, clamped to [0, 10]",
+          "minimum": 0,
+          "maximum": 10
+        }
+      },
+      "required": [
+        "regime",
+        "vix_level",
+        "vix_trend",
+        "spy_futures_direction",
+        "overall_market_bias",
+        "key_risk_today",
+        "composite_risk_on_rate"
+      ]
+    },
+    "macro_news": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Macro News Report Title"
+          },
+          "summary": {
+            "type": "string",
+            "description": "Factual summary of what happened — key data points, numbers, and event details"
+          },
+          "brief": {
+            "type": "string",
+            "description": "So-what for today's trading session — how this catalyst affects intraday price action"
+          },
+          "release_date": {
+            "type": "string",
+            "description": "Date and time the macro data or report was released (Format: MMM DD, YYYY, HH:MM EDT)",
+            "pattern": "^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \\d{2}, \\d{4}, \\d{2}:\\d{2} EDT$"
+          },
+          "news_sentiment": {
+            "type": "string",
+            "description": "Overall sentiment of this macro catalyst for the market",
+            "enum": ["positive", "negative", "neutral"]
+          },
+          "market_price_change_prediction": {
+            "type": "string",
+            "description": "Predicted SPY intraday price change range in format: \"-x.x% to +x.x%\" (e.g. \"-0.5% to +0.3%\")"
+          },
+          "confidence": {
+            "type": "number",
+            "description": "Confidence in this price change range (1–10)",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "success_probability": {
+            "type": "number",
+            "description": "Probability that the price change prediction is correct (1–10)",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "collapse_trigger": {
+            "type": "string",
+            "description": "Invalidation event — what would signal this prediction is wrong and how to detect it"
+          },
+          "conviction_detect": {
+            "type": "string",
+            "description": "Signs that confirm this prediction is playing out with high conviction"
+          },
+          "source": {
+            "type": "string",
+            "description": "Source of the macro news or report. Prefix with [UNVERIFIED] if only one source confirms it."
+          },
+          "risk_on_risk_off": {
+            "type": "string",
+            "enum": ["risk-on", "risk-off", "neutral"],
+            "description": "Whether this catalyst triggers risk-on or risk-off market sentiment"
+          },
+          "risk_on_risk_off_explanation": {
+            "type": "string",
+            "description": "Explanation of why this catalyst triggers risk-on or risk-off sentiment"
+          },
+          "risk_on_risk_off_rate": {
+            "type": "number",
+            "description": "Risk sentiment score: 10 = full risk-on, 0 = full risk-off, 5 = neutral",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "reason": {
+            "type": "string",
+            "description": "Specific reasoning for the estimated price impact on today's intraday session"
+          }
+        },
+        "required": [
+          "title",
+          "summary",
+          "brief",
+          "release_date",
+          "news_sentiment",
+          "market_price_change_prediction",
+          "confidence",
+          "success_probability",
+          "collapse_trigger",
+          "conviction_detect",
+          "source",
+          "risk_on_risk_off",
+          "risk_on_risk_off_explanation",
+          "risk_on_risk_off_rate",
+          "reason"
+        ]
+      }
+    }
+  },
+  "required": ["macro_tide", "macro_news"]
+}
