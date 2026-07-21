@@ -1,17 +1,123 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "TickerInput",
-  "description": "Fields available on each ticker object passed to stock agents.",
+  "description": "Fields available on each ticker object passed to stock agents. Enrichment fields are populated before the pipeline runs and are optional (may be absent if enrichment failed).",
   "type": "object",
+  "additionalProperties": true,
   "properties": {
     "name": {
       "type": "string",
-      "description": "Ticker symbol."
+      "description": "Ticker symbol (e.g. AAPL, MSFT)."
     },
     "symbol": {
       "type": "string",
-      "description": "Ticker symbol."
+      "description": "Ticker symbol — same as name, present after enrichment."
+    },
+    "current_price": {
+      "type": ["number", "null"],
+      "description": "Latest closing price in USD."
+    },
+    "candle_frequency": {
+      "type": ["string", "null"],
+      "description": "yfinance interval used to fetch candles (e.g. '1d', '1h', '30m')."
+    },
+    "candle_count": {
+      "type": ["integer", "null"],
+      "description": "Number of OHLCV candles fetched for this ticker."
+    },
+    "enrichment_status": {
+      "type": "string",
+      "enum": ["ok", "failed"],
+      "description": "Whether enrichment succeeded. If 'failed', all indicator fields below will be absent."
+    },
+    "ema_20": {
+      "type": ["number", "null"],
+      "description": "20-period Exponential Moving Average of closing price."
+    },
+    "ema_50": {
+      "type": ["number", "null"],
+      "description": "50-period Exponential Moving Average of closing price."
+    },
+    "ema_200": {
+      "type": ["number", "null"],
+      "description": "200-period Exponential Moving Average of closing price."
+    },
+    "rsi_14": {
+      "type": ["number", "null"],
+      "description": "14-period Relative Strength Index. Range: 0–100. Above 70 = overbought, below 30 = oversold.",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "atr_%": {
+      "type": ["number", "null"],
+      "description": "14-period Average True Range expressed as a percentage of the current price. Measures volatility."
+    },
+    "prev_close": {
+      "type": ["number", "null"],
+      "description": "Previous trading day's closing price."
+    },
+    "prev_day_open": {
+      "type": ["number", "null"],
+      "description": "Previous trading day's opening price."
+    },
+    "prev_day_high": {
+      "type": ["number", "null"],
+      "description": "Previous trading day's intraday high price."
+    },
+    "prev_day_low": {
+      "type": ["number", "null"],
+      "description": "Previous trading day's intraday low price."
+    },
+    "volume": {
+      "type": ["number", "null"],
+      "description": "Previous trading day's total volume (number of shares traded)."
+    },
+    "fifty_two_week_high": {
+      "type": ["number", "null"],
+      "description": "Highest intraday price over the last 252 trading days (~1 year)."
+    },
+    "fifty_two_week_low": {
+      "type": ["number", "null"],
+      "description": "Lowest intraday price over the last 252 trading days (~1 year)."
+    },
+    "prev_session_vwap": {
+      "type": ["number", "null"],
+      "description": "Volume-Weighted Average Price for the previous completed trading session."
+    },
+    "volume_profile": {
+      "type": ["object", "null"],
+      "description": "Volume Profile over the last 252 trading days (~1 year). Shows price levels where the most trading activity occurred.",
+      "properties": {
+        "poc": {
+          "type": "number",
+          "description": "Point of Control — price level with the highest traded volume."
+        },
+        "vah": {
+          "type": "number",
+          "description": "Value Area High — upper boundary of the price range containing 70% of volume."
+        },
+        "val": {
+          "type": "number",
+          "description": "Value Area Low — lower boundary of the price range containing 70% of volume."
+        }
+      }
+    },
+    "market_cap": {
+      "type": ["number", "null"],
+      "description": "Market capitalisation in USD."
+    },
+    "industry": {
+      "type": ["string", "null"],
+      "description": "Industry classification (e.g. 'Semiconductors', 'Software—Application')."
+    },
+    "sector": {
+      "type": ["string", "null"],
+      "description": "Sector classification (e.g. 'Technology', 'Healthcare', 'Industrials')."
+    },
+    "company_name": {
+      "type": ["string", "null"],
+      "description": "Full company name (e.g. 'Apple Inc.', 'Microsoft Corporation')."
     }
   },
-  "required": ["name", "symbol"]
+  "required": ["name"]
 }
