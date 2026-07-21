@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExecutiveSummaryOutput",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "stocks"
+  ],
+  "properties": {
+    "stocks": {
+      "type": "array",
+      "description": "List of analyzed stock setups. One item per input symbol. If no tradable setup exists, still emit the item with grade='no_trade' and direction='none' rather than fabricating a trade.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "symbol",
+          "date",
+          "grade",
+          "direction",
+          "setup_valid",
+          "data_quality",
+          "analysis_strategy",
+          "confidence",
+          "success_probability",
+          "risk_reward_ratio",
+          "expected_value_r",
+          "entry_time",
+          "entry_range",
+          "tp_range",
+          "sl_range",
+          "tp_time",
+          "levels",
+          "relative_strength",
+          "short_ratio",
+          "short_float",
+          "institutional_holding",
+          "squeeze_risk",
+          "approximately_gain_in_pct",
+          "conviction_detect",
+          "collapse_conviction",
+          "reason_1",
+          "reason_2",
+          "reason_3",
+          "volume",
+          "ai_suggestion",
+          "notes"
+        ],
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "description": "Stock ticker symbol (uppercase), copied verbatim from input."
+          },
+          "date": {
+            "type": "string",
+            "description": "Analysis date in DD-MM-YYYY format, derived from the input as_of timestamp.",
+            "pattern": "^\\d{2}-\\d{2}-\\d{4}$"
+          },
+          "grade": {
+            "type": "string",
+            "enum": ["A+", "B", "C", "no_trade"],
+            "description": "Setup grade. 'A+' = full confluence (HTF bias + catalyst + structural trigger + volume/level alignment). 'B'/'C' = partial alignment. 'no_trade' = no qualifying setup or insufficient data; the honest abstain outcome."
+          },
+          "direction": {
+            "type": "string",
+            "enum": ["long", "short", "none"],
+            "description": "Trade direction. 'none' when grade is 'no_trade'."
+          },
+          "setup_valid": {
+            "type": "boolean",
+            "description": "True only when a tradable setup (grade A+/B/C) is present with defined numeric entry/TP/SL. False when grade='no_trade'."
+          },
+          "data_quality": {
+            "type": "string",
+            "enum": ["high", "medium", "low"],
+            "description": "Self-assessed reliability of the data underpinning this analysis. 'high' = key technical levels supplied in input and/or cross-verified; 'low' = many fields estimated or unverifiable. Must be 'low' or 'medium' whenever critical levels were unavailable."
+          },
+          "analysis_strategy": {
+            "type": "string",
+            "description": "Technical strategy used, analysis summary, and three scenario outcomes (bull / base / bear) each with an explicit probability that sums to ~100%. State this is a pre-market forecast."
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Analyst conviction in the technical read (0-100). Distinct from success_probability."
+          },
+          "success_probability": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Modeled probability that price reaches the entry AND then take-profit before stop-loss, during today's regular session. Set to 0 when grade='no_trade'."
+          },
+          "risk_reward_ratio": {
+            "type": ["number", "null"],
+            "description": "Reward-to-risk ratio = (take_profit - entry) / (entry - stop_loss) for longs (inverse for shorts). Null when grade='no_trade'. A+/B setups should be >= 1.5."
+          },
+          "expected_value_r": {
+            "type": ["number", "null"],
+            "description": "Expected value expressed in R multiples = (success_probability/100 * reward_R) - (loss_prob * 1). Must be > 0 for any tradable grade. Null when grade='no_trade'."
+          },
+          "entry_time": {
+            "type": "string",
+            "description": "Optimal entry time window in ET (e.g. '09:35-09:50 ET'). Use 'N/A' when grade='no_trade'."
+          },
+          "entry_range": {
+            "type": "string",
+            "description": "Recommended entry price range as text (e.g. '62.80-63.10'). 'N/A' when no_trade."
+          },
+          "tp_range": {
+            "type": "string",
+            "description": "Recommended take-profit price range as text. 'N/A' when no_trade."
+          },
+          "sl_range": {
+            "type": "string",
+            "description": "Recommended stop-loss price range as text. 'N/A' when no_trade."
+          },
+          "tp_time": {
+            "type": "string",
+            "description": "Expected take-profit time window before market close (ET). 'N/A' when no_trade. Never suggest an overnight hold."
+          },
+          "levels": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Machine-usable numeric levels. Use null for any level that cannot be grounded in provided data (do not fabricate).",
+            "required": [
+              "entry",
+              "take_profit",
+              "stop_loss",
+              "vwap_reference",
+              "poc",
+              "vah",
+              "val",
+              "key_support",
+              "key_resistance"
+            ],
+            "properties": {
+              "entry": { "type": ["number", "null"], "description": "Single representative entry price (mid of entry_range)." },
+              "take_profit": { "type": ["number", "null"], "description": "Single representative take-profit price." },
+              "stop_loss": { "type": ["number", "null"], "description": "Single stop-loss price. Distance from entry should be 1.5-3.0x the intraday ATR." },
+              "vwap_reference": { "type": ["number", "null"], "description": "Anchored/prior-session VWAP used in the read." },
+              "poc": { "type": ["number", "null"], "description": "Volume Profile Point of Control, or null if volume_profile not supplied." },
+              "vah": { "type": ["number", "null"], "description": "Value Area High, or null." },
+              "val": { "type": ["number", "null"], "description": "Value Area Low, or null." },
+              "key_support": { "type": ["number", "null"], "description": "Primary intraday support (e.g. prev_day_low / premarket_low)." },
+              "key_resistance": { "type": ["number", "null"], "description": "Primary intraday resistance (e.g. prev_day_high / premarket_high)." }
+            }
+          },
+          "relative_strength": {
+            "type": "string",
+            "description": "Relative Strength vs the benchmark: describe stock pre-market % change vs benchmark pre-market % change and whether it is showing an 'RS Day'. Say 'benchmark data unavailable' if input benchmark missing."
+          },
+          "short_ratio": {
+            "type": "string",
+            "description": "Days-to-cover metric with as-of date, or 'unknown' if unavailable."
+          },
+          "short_float": {
+            "type": "string",
+            "description": "Percentage of float sold short with as-of date, or 'unknown'."
+          },
+          "institutional_holding": {
+            "type": "string",
+            "description": "Institutional ownership percentage with as-of date, or 'unknown'."
+          },
+          "squeeze_risk": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "Short squeeze risk score from 1 (low) to 10 (high). Base on short_float, days-to-cover and float size; if all unknown, use 1 and note the uncertainty."
+          },
+          "approximately_gain_in_pct": {
+            "type": "number",
+            "description": "Expected percentage gain from entry to take-profit if TP is reached. 0 when no_trade."
+          },
+          "conviction_detect": {
+            "type": "string",
+            "description": "Order-flow / structural evidence supporting the trade. If tick/level-2 order-flow data was not provided, state that OFI could not be computed and rely on volume + level structure instead — do NOT invent order-flow numbers."
+          },
+          "collapse_conviction": {
+            "type": "string",
+            "description": "Concrete signals (price/level/volume) that invalidate the setup and should trigger exit."
+          },
+          "reason_1": {
+            "type": "string",
+            "description": "Primary reason supporting the setup (structural / level-based)."
+          },
+          "reason_2": {
+            "type": "string",
+            "description": "Secondary reason (volume / momentum / VWAP)."
+          },
+          "reason_3": {
+            "type": "string",
+            "description": "Institutional, catalyst, and macro-regime alignment assessment."
+          },
+          "volume": {
+            "type": "string",
+            "description": "Relative-volume analysis. State the RVOL value used and its source (provided vs estimated); if not provided and not derivable, say so explicitly."
+          },
+          "ai_suggestion": {
+            "type": "string",
+            "description": "Final actionable recommendation (e.g. 'Long on VWAP reclaim above 63.00, size to 1R risk, skip if opens below premarket_low'). For no_trade, state why standing aside is correct."
+          },
+          "notes": {
+            "type": "string",
+            "description": "Trader notes, event risk (earnings), data caveats, and cross-source variance flags. Empty string if none."
+          }
+        }
+      }
+    }
+  }
+}
