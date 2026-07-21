@@ -7,11 +7,19 @@ export async function createRun(
   modelIds: string[],
   name: string,
   tickers: Record<string, unknown>[],
+  candleFrequency: string = '1d',
+  enrichmentEnabled: boolean = true,
 ): Promise<Run> {
   const res = await fetch(BASE, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model_ids: modelIds, name, tickers }),
+    body: JSON.stringify({
+      model_ids: modelIds,
+      name,
+      tickers,
+      candle_frequency: candleFrequency,
+      enrichment_enabled: enrichmentEnabled,
+    }),
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
@@ -44,6 +52,22 @@ export async function deleteRuns(ids: string[]): Promise<void> {
     body: JSON.stringify({ run_ids: ids }),
   })
   if (!res.ok) throw new Error(`Failed to delete runs: ${res.statusText}`)
+}
+
+export async function enrichPreview(
+  tickers: Record<string, unknown>[],
+  candleFrequency: string = '1d',
+): Promise<Record<string, unknown>[]> {
+  const res = await fetch(`${BASE}/enrich-preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tickers, candle_frequency: candleFrequency }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.detail ?? `Enrichment failed: ${res.statusText}`)
+  }
+  return res.json()
 }
 
 export async function stopRun(id: string): Promise<Run> {

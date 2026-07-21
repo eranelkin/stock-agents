@@ -66,10 +66,14 @@ class Orchestrator:
         sector_prompts: list[PromptConfig],
         macro_prompts: list[PromptConfig] | None = None,
         ceo_prompts: list[PromptConfig] | None = None,
+        candle_frequency: str = "1d",
+        enrichment_enabled: bool = True,
     ) -> None:
         self.run_id = run_id
         self.model_configs = model_configs
         self.tickers = tickers
+        self.candle_frequency = candle_frequency
+        self.enrichment_enabled = enrichment_enabled
         self.prompts_by_category: dict[str, list[PromptConfig]] = {
             "agents": prompts,
             "sectors": sector_prompts,
@@ -127,6 +131,23 @@ class Orchestrator:
                 sector_prompts=[p.title for p in sector_prompts],
                 ceo_prompts=[p.title for p in ceo_prompts],
             )
+
+            if self.enrichment_enabled:
+                from ai_service.enricher.enricher import Enricher
+                enricher = Enricher(
+                    indicators_path=settings.indicators_json,
+                    period=settings.enrichment_period,
+                    max_concurrent=settings.enrichment_max_concurrent,
+                )
+                logger.info(
+                    "Data enrichment started",
+                    extra={"run_id": self.run_id, "frequency": self.candle_frequency},
+                )
+                self.tickers = await enricher.enrich_all(self.tickers, self.candle_frequency)
+                logger.info(
+                    "Data enrichment completed",
+                    extra={"run_id": self.run_id, "ticker_count": len(self.tickers)},
+                )
 
             semaphore = asyncio.Semaphore(settings.max_concurrent_pipelines)
 

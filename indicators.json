@@ -1,0 +1,25 @@
+{
+  "indicators": [
+    { "name": "ema", "params": { "length": 20  }, "output_key": "ema_20"  },
+    { "name": "ema", "params": { "length": 50  }, "output_key": "ema_50"  },
+    { "name": "ema", "params": { "length": 200 }, "output_key": "ema_200" },
+    { "name": "rsi", "params": { "length": 14  }, "output_key": "rsi_14"  },
+    { "name": "atr", "params": { "length": 14  }, "output_key": "atr_%", "normalize_by": "Close" },
+
+    { "type": "raw",     "source": "Close",  "offset": -1, "output_key": "prev_close"    },
+    { "type": "raw",     "source": "Open",   "offset": -1, "output_key": "prev_day_open" },
+    { "type": "raw",     "source": "High",   "offset": -1, "output_key": "prev_day_high" },
+    { "type": "raw",     "source": "Low",    "offset": -1, "output_key": "prev_day_low"  },
+    { "type": "raw",     "source": "Volume", "offset": -1, "output_key": "volume"        },
+
+    { "type": "rolling", "source": "High", "stat": "max", "window": 252, "output_key": "fifty_two_week_high" },
+    { "type": "rolling", "source": "Low",  "stat": "min", "window": 252, "output_key": "fifty_two_week_low"  },
+
+    { "type": "session_vwap", "session_offset": 0, "output_key": "prev_session_vwap" },
+
+    { "type": "info", "field": "marketCap",  "output_key": "market_cap"    },
+    { "type": "info", "field": "industry",   "output_key": "industry"      },
+    { "type": "info", "field": "sector",     "output_key": "sector"        },
+    { "type": "info", "field": "longName",   "output_key": "company_name"  }
+  ]
+}

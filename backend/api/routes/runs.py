@@ -67,6 +67,26 @@ def _build_ceo_input_schema(agent_prompts: list[Prompt]) -> dict | None:
     }
 
 
+@router.post("/enrich-preview")
+async def enrich_preview(body: dict) -> list[dict]:
+    """Proxy: run enrichment only (no pipeline) and return enriched ticker dicts."""
+    tickers = body.get("tickers", [])
+    candle_frequency = body.get("candle_frequency", "1d")
+    if not tickers:
+        raise HTTPException(status_code=400, detail="Tickers list is empty.")
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(
+                f"{settings.ai_service_url}/enrich",
+                json={"tickers": tickers, "candle_frequency": candle_frequency},
+                timeout=120.0,
+            )
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.HTTPError as exc:
+            raise HTTPException(status_code=502, detail=f"Could not reach ai-service: {exc}") from exc
+
+
 @router.post("", response_model=RunResponse, status_code=201)
 async def create_run(
     body: RunCreate, session: AsyncSession = Depends(get_session)
@@ -140,6 +160,8 @@ async def create_run(
                     "run_id": str(run.id),
                     "models": model_configs,
                     "tickers": body.tickers,
+                    "candle_frequency": body.candle_frequency,
+                    "enrichment_enabled": body.enrichment_enabled,
                     "prompts": [
                         {
                             "id": str(p.id),

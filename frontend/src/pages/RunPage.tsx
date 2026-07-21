@@ -23,6 +23,11 @@ import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
 import DialogActions from "@mui/material/DialogActions";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
+import Switch from "@mui/material/Switch";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import ScienceIcon from "@mui/icons-material/Science";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import TableSortLabel from "@mui/material/TableSortLabel";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -30,7 +35,7 @@ import AttachFileIcon from "@mui/icons-material/AttachFile";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CheckIcon from "@mui/icons-material/Check";
 import ArticleIcon from "@mui/icons-material/Article";
-import { createRun, deleteRun, deleteRuns, stopRun } from "../api/runs";
+import { createRun, deleteRun, deleteRuns, enrichPreview, stopRun } from "../api/runs";
 import CeoResultsPage from "../components/CeoResultsPage";
 import type { Run } from "../types/run";
 
@@ -79,6 +84,10 @@ export default function RunPage({
   const [now, setNow] = useState(() => Date.now());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [candleFrequency, setCandleFrequency] = useState("1d");
+  const [enrichmentEnabled, setEnrichmentEnabled] = useState(true);
+  const [testingEnrich, setTestingEnrich] = useState(false);
+  const [enrichResults, setEnrichResults] = useState<Record<string, unknown>[] | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const esRef = useRef<EventSource | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -206,6 +215,8 @@ export default function RunPage({
         selectedModelIds,
         selectedFile.name,
         tickers,
+        candleFrequency,
+        enrichmentEnabled,
       );
       setRuns((prev) => [created, ...prev]);
       setInnerTab(0); // switch to Today tab so user sees the new run
@@ -213,6 +224,28 @@ export default function RunPage({
       setError(err instanceof Error ? err.message : "Failed to start run");
     } finally {
       setStarting(false);
+    }
+  };
+
+  const handleTestEnrich = async () => {
+    if (!rawFileText || !selectedFile) return;
+    setError(null);
+    setTestingEnrich(true);
+    try {
+      const lower = selectedFile.name.toLowerCase();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let tickers: Record<string, unknown>[];
+      if (lower.endsWith(".yaml") || lower.endsWith(".yml")) {
+        tickers = jsyaml.load(rawFileText) as Record<string, unknown>[];
+      } else {
+        tickers = JSON.parse(rawFileText);
+      }
+      const results = await enrichPreview(tickers, candleFrequency);
+      setEnrichResults(results);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Enrichment test failed");
+    } finally {
+      setTestingEnrich(false);
     }
   };
 
@@ -328,8 +361,54 @@ export default function RunPage({
           </Typography>
         </Box>
 
-        {/* File picker + Run button */}
+        {/* Enrichment controls + File picker + Run button */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mt: 0.5 }}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={enrichmentEnabled}
+                onChange={(e) => setEnrichmentEnabled(e.target.checked)}
+                size="small"
+                sx={{
+                  "& .MuiSwitch-switchBase.Mui-checked": { color: "#1976d2" },
+                  "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
+                    backgroundColor: "#1976d2",
+                  },
+                }}
+              />
+            }
+            label={
+              <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+                Enrich
+              </Typography>
+            }
+            sx={{ mr: 0 }}
+          />
+
+          {enrichmentEnabled && (
+            <Select
+              value={candleFrequency}
+              onChange={(e) => setCandleFrequency(e.target.value)}
+              size="small"
+              sx={{
+                height: 34,
+                fontSize: "0.8rem",
+                color: "text.primary",
+                bgcolor: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.12)",
+                borderRadius: 1.5,
+                "& .MuiOutlinedInput-notchedOutline": { border: "none" },
+                "& .MuiSvgIcon-root": { color: "text.secondary" },
+              }}
+            >
+              <MenuItem value="1d">Daily (1d)</MenuItem>
+              <MenuItem value="1h">1 Hour</MenuItem>
+              <MenuItem value="30m">30 Min</MenuItem>
+              <MenuItem value="15m">15 Min</MenuItem>
+              <MenuItem value="5m">5 Min</MenuItem>
+            </Select>
+          )}
+
           <input
             ref={fileInputRef}
             type="file"
@@ -366,6 +445,38 @@ export default function RunPage({
               {selectedFile ? selectedFile.name : "Choose file…"}
             </Typography>
           </Box>
+
+          <Button
+            variant="outlined"
+            startIcon={
+              testingEnrich ? (
+                <CircularProgress size={16} color="inherit" />
+              ) : (
+                <ScienceIcon />
+              )
+            }
+            onClick={handleTestEnrich}
+            disabled={!selectedFile || !rawFileText || !enrichmentEnabled || testingEnrich}
+            sx={{
+              borderRadius: 1.5,
+              px: 2,
+              textTransform: "none",
+              fontWeight: 600,
+              whiteSpace: "nowrap",
+              borderColor: "rgba(129,212,250,0.4)",
+              color: "#81d4fa",
+              "&:hover": {
+                borderColor: "#81d4fa",
+                bgcolor: "rgba(129,212,250,0.06)",
+              },
+              "&.Mui-disabled": {
+                borderColor: "rgba(255,255,255,0.1)",
+                color: "rgba(255,255,255,0.2)",
+              },
+            }}
+          >
+            {testingEnrich ? "Fetching…" : "Test Enrichment"}
+          </Button>
 
           <Button
             variant="contained"
@@ -871,6 +982,108 @@ export default function RunPage({
           run={resultsRun}
         />
       )}
+
+      {/* Enrichment test results dialog */}
+      <Dialog
+        open={Boolean(enrichResults)}
+        onClose={() => setEnrichResults(null)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            bgcolor: "#1a1d27",
+            border: "1px solid rgba(255,255,255,0.12)",
+            borderRadius: 2,
+          },
+        }}
+      >
+        <DialogTitle sx={{ color: "text.primary", fontWeight: 700, pb: 1 }}>
+          Enrichment Test Results
+          <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 400, mt: 0.5 }}>
+            {enrichResults?.length ?? 0} ticker{enrichResults?.length !== 1 ? "s" : ""} enriched
+            {enrichResults && enrichResults[0] && ` · frequency: ${(enrichResults[0] as Record<string, unknown>).candle_frequency}`}
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ p: 0 }}>
+          <Box
+            sx={{
+              maxHeight: 560,
+              overflow: "auto",
+              px: 3,
+              pb: 2,
+              "& pre": {
+                m: 0,
+                fontFamily: "monospace",
+                fontSize: "0.75rem",
+                color: "#cdd3de",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              },
+            }}
+          >
+            {enrichResults?.map((ticker) => {
+              const t = ticker as Record<string, unknown>;
+              const status = t.enrichment_status as string;
+              return (
+                <Box
+                  key={t.name as string}
+                  sx={{
+                    mb: 2,
+                    p: 2,
+                    borderRadius: 1.5,
+                    bgcolor: "rgba(255,255,255,0.03)",
+                    border: `1px solid ${status === "ok" ? "rgba(129,212,250,0.2)" : "rgba(244,67,54,0.3)"}`,
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                    <Typography
+                      sx={{ fontWeight: 700, fontSize: "0.95rem", color: "#81d4fa" }}
+                    >
+                      {t.name as string}
+                    </Typography>
+                    <Chip
+                      label={status?.toUpperCase()}
+                      size="small"
+                      sx={{
+                        height: 18,
+                        fontSize: "0.65rem",
+                        fontWeight: 700,
+                        bgcolor: status === "ok" ? "rgba(76,175,80,0.15)" : "rgba(244,67,54,0.15)",
+                        color: status === "ok" ? "#81c784" : "#ef9a9a",
+                      }}
+                    />
+                    {status === "ok" && (
+                      <Typography variant="body2" color="text.secondary" sx={{ ml: "auto", fontSize: "0.8rem" }}>
+                        ${t.current_price as number} · {t.candle_count as number} candles
+                      </Typography>
+                    )}
+                  </Box>
+                  <pre>{JSON.stringify(
+                    Object.fromEntries(
+                      Object.entries(t).filter(([k]) => !["name", "sector", "enrichment_status", "enriched_at", "candle_frequency", "candle_count", "current_price"].includes(k))
+                    ),
+                    null,
+                    2
+                  )}</pre>
+                </Box>
+              );
+            })}
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            variant="outlined"
+            onClick={() => setEnrichResults(null)}
+            sx={{
+              textTransform: "none",
+              borderColor: "rgba(255,255,255,0.2)",
+              color: "text.secondary",
+            }}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={confirmBulkDelete}

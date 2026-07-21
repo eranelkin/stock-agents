@@ -41,6 +41,8 @@ class RunRequest(BaseModel):
     sector_prompts: list[PromptConfig] = []
     macro_prompts: list[PromptConfig] = []
     ceo_prompts: list[PromptConfig] = []
+    candle_frequency: str = "1d"
+    enrichment_enabled: bool = True
 
 
 @app.post("/run", status_code=202)
@@ -55,6 +57,8 @@ async def trigger_run(request: RunRequest) -> dict[str, str]:
             request.sector_prompts,
             request.macro_prompts,
             request.ceo_prompts,
+            request.candle_frequency,
+            request.enrichment_enabled,
         ),
         name=f"run-{request.run_id}",
     )
@@ -64,6 +68,24 @@ async def trigger_run(request: RunRequest) -> dict[str, str]:
         extra={"run_id": request.run_id, "models": [m.name for m in request.models]},
     )
     return {"status": "accepted", "run_id": request.run_id}
+
+
+class EnrichRequest(BaseModel):
+    tickers: list[dict[str, Any]]
+    candle_frequency: str = "1d"
+
+
+@app.post("/enrich")
+async def enrich_tickers(request: EnrichRequest) -> list[dict[str, Any]]:
+    """Run the enrichment step in isolation and return enriched ticker dicts."""
+    from ai_service.enricher.enricher import Enricher
+
+    enricher = Enricher(
+        indicators_path=settings.indicators_json,
+        period=settings.enrichment_period,
+        max_concurrent=settings.enrichment_max_concurrent,
+    )
+    return await enricher.enrich_all(request.tickers, request.candle_frequency)
 
 
 @app.post("/stop/{run_id}", status_code=200)
@@ -90,6 +112,8 @@ async def _run_orchestrator(
     sector_prompts: list[PromptConfig],
     macro_prompts: list[PromptConfig],
     ceo_prompts: list[PromptConfig] | None = None,
+    candle_frequency: str = "1d",
+    enrichment_enabled: bool = True,
 ) -> None:
     try:
         await Orchestrator(
@@ -100,6 +124,8 @@ async def _run_orchestrator(
             sector_prompts=sector_prompts,
             macro_prompts=macro_prompts,
             ceo_prompts=ceo_prompts or [],
+            candle_frequency=candle_frequency,
+            enrichment_enabled=enrichment_enabled,
         ).run()
     finally:
         _active_tasks.pop(run_id, None)

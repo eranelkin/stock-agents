@@ -11,6 +11,8 @@ class RunCreate(BaseModel):
     model_ids: list[uuid.UUID]
     name: str
     tickers: list[dict[str, Any]]
+    candle_frequency: str = "1d"
+    enrichment_enabled: bool = True
 
 
 class BulkDeleteRequest(BaseModel):
