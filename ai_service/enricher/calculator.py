@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+import numpy as np
 import pandas as pd
 import pandas_ta  # noqa: F401 — registers the .ta DataFrame accessor
 
@@ -149,6 +150,96 @@ def _resolve_info(info: dict[str, Any], spec: dict[str, Any]) -> Any:
     return val
 
 
+def _resolve_volume_profile(df: pd.DataFrame, spec: dict[str, Any]) -> dict[str, Any] | None:
+    """Calculate Volume Profile: POC, VAH, and VAL over a lookback window.
+
+    spec keys:
+        window          — lookback in trading days (default 252 = ~1 year)
+        num_bins        — price levels to divide the range into (default 100)
+        value_area_pct  — % of volume that defines the value area (default 70)
+
+    Returns {"poc": float, "vah": float, "val": float} or None on failure.
+    """
+    days: int = spec.get("window", 252)
+    num_bins: int = spec.get("num_bins", 100)
+    value_area_pct: float = spec.get("value_area_pct", 70) / 100.0
+
+    try:
+        # Slice to the lookback window (same day→candle conversion as _resolve_rolling)
+        unique_days = len(df.index.normalize().unique()) if hasattr(df.index, "normalize") else len(df)
+        candles_per_day = max(1, len(df) / max(1, unique_days))
+        window_rows = min(int(round(days * candles_per_day)), len(df))
+        dfw = df.tail(window_rows)
+
+        highs   = dfw["High"].to_numpy(dtype=float)
+        lows    = dfw["Low"].to_numpy(dtype=float)
+        volumes = dfw["Volume"].to_numpy(dtype=float)
+
+        price_min = lows.min()
+        price_max = highs.max()
+        if price_min == price_max:
+            return None
+
+        bin_edges = np.linspace(price_min, price_max, num_bins + 1)
+        volume_by_bin = np.zeros(num_bins, dtype=float)
+
+        # Vectorised per-bin overlap for every candle at once
+        # bin_lo shape: (num_bins,)   candle shapes: (n_candles,) → broadcast to (num_bins, n_candles)
+        bin_lo = bin_edges[:-1, np.newaxis]   # (num_bins, 1)
+        bin_hi = bin_edges[1:,  np.newaxis]   # (num_bins, 1)
+        c_lo   = lows[np.newaxis, :]          # (1, n_candles)
+        c_hi   = highs[np.newaxis, :]         # (1, n_candles)
+        c_vol  = volumes[np.newaxis, :]       # (1, n_candles)
+
+        overlap = np.maximum(0.0, np.minimum(c_hi, bin_hi) - np.maximum(c_lo, bin_lo))
+        candle_range = np.maximum(c_hi - c_lo, 1e-10)
+        # Each bin gets volume * (overlap / candle_range); sum across candles axis
+        volume_by_bin = (overlap / candle_range * c_vol).sum(axis=1)
+
+        # POC
+        poc_idx = int(np.argmax(volume_by_bin))
+        poc = float((bin_edges[poc_idx] + bin_edges[poc_idx + 1]) / 2)
+
+        # Value area — expand greedily from POC until value_area_pct is covered
+        total_volume = volume_by_bin.sum()
+        target = total_volume * value_area_pct
+
+        lo_idx = poc_idx - 1
+        hi_idx = poc_idx + 1
+        va_lo  = poc_idx
+        va_hi  = poc_idx
+        cumulative = volume_by_bin[poc_idx]
+
+        while cumulative < target:
+            can_lo = lo_idx >= 0
+            can_hi = hi_idx < num_bins
+            if not can_lo and not can_hi:
+                break
+            vol_lo = volume_by_bin[lo_idx] if can_lo else -1.0
+            vol_hi = volume_by_bin[hi_idx] if can_hi else -1.0
+            if vol_hi >= vol_lo:
+                cumulative += vol_hi
+                va_hi = hi_idx
+                hi_idx += 1
+            else:
+                cumulative += vol_lo
+                va_lo = lo_idx
+                lo_idx -= 1
+
+        vah = float(bin_edges[va_hi + 1])
+        val = float(bin_edges[va_lo])
+
+        return {
+            "poc": round(poc, 4),
+            "vah": round(vah, 4),
+            "val": round(val, 4),
+        }
+
+    except Exception as exc:
+        logger.warning(f"volume_profile calculation failed: {exc}")
+        return None
+
+
 def _maybe_normalize(
     value: float | None, df: pd.DataFrame, spec: dict[str, Any]
 ) -> float | None:
@@ -222,6 +313,9 @@ def calculate_indicators(
 
             elif entry_type == "session_vwap":
                 result[output_key] = _resolve_session_vwap(df, spec)
+
+            elif entry_type == "volume_profile":
+                result[output_key] = _resolve_volume_profile(df, spec)
 
             elif entry_type == "info":
                 result[output_key] = _resolve_info(info, spec)

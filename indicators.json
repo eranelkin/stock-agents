@@ -15,7 +15,8 @@
     { "type": "rolling", "source": "High", "stat": "max", "window": 252, "output_key": "fifty_two_week_high" },
     { "type": "rolling", "source": "Low",  "stat": "min", "window": 252, "output_key": "fifty_two_week_low"  },
 
-    { "type": "session_vwap", "session_offset": 0, "output_key": "prev_session_vwap" },
+    { "type": "session_vwap",   "session_offset": 0,                                          "output_key": "prev_session_vwap" },
+    { "type": "volume_profile", "window": 252, "num_bins": 100, "value_area_pct": 70,         "output_key": "volume_profile"    },
 
     { "type": "info", "field": "marketCap",  "output_key": "market_cap"    },
     { "type": "info", "field": "industry",   "output_key": "industry"      },
