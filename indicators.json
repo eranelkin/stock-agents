@@ -21,6 +21,10 @@
     { "type": "info", "field": "marketCap",  "output_key": "market_cap"    },
     { "type": "info", "field": "industry",   "output_key": "industry"      },
     { "type": "info", "field": "sector",     "output_key": "sector"        },
-    { "type": "info", "field": "longName",   "output_key": "company_name"  }
+    { "type": "info", "field": "longName",   "output_key": "company_name"  },
+
+    { "type": "premarket", "field": "price",  "output_key": "pre_market_price"  },
+    { "type": "premarket", "field": "change", "output_key": "pre_market_change" },
+    { "type": "premarket", "field": "volume", "output_key": "pre_market_volume" }
   ]
 }

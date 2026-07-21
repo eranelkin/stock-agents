@@ -27,7 +27,28 @@ _active_tasks: dict[str, asyncio.Task[None]] = {}
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     Path(settings.output_dir, "runs").mkdir(parents=True, exist_ok=True)
     Path(settings.output_dir, "logs").mkdir(parents=True, exist_ok=True)
+
+    # Start Finnhub WebSocket streamer if a key is configured
+    streamer = None
+    if settings.premarket_enabled and settings.finnhub_api_key:
+        from ai_service.enricher.premarket import PreMarketStreamer
+
+        streamer = PreMarketStreamer(api_key=settings.finnhub_api_key)
+        await streamer.start()
+        logger.info("Finnhub pre-market streamer started")
+    else:
+        logger.info(
+            "Pre-market streamer not started — %s",
+            "PREMARKET_ENABLED=false" if not settings.premarket_enabled else "FINNHUB_API_KEY not set (yfinance fallback active)",
+        )
+
+    app.state.premarket_streamer = streamer
+
     yield
+
+    if streamer is not None:
+        await streamer.stop()
+        logger.info("Finnhub pre-market streamer stopped")
 
 
 app = FastAPI(title="Stock-Agents AI Service", lifespan=lifespan)
@@ -84,6 +105,7 @@ async def enrich_tickers(request: EnrichRequest) -> list[dict[str, Any]]:
         indicators_path=settings.indicators_json,
         period=settings.enrichment_period,
         max_concurrent=settings.enrichment_max_concurrent,
+        streamer=app.state.premarket_streamer,
     )
     return await enricher.enrich_all(request.tickers, request.candle_frequency)
 
@@ -101,7 +123,11 @@ async def stop_run(run_id: str) -> dict[str, str]:
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok"}
+    streamer = app.state.premarket_streamer
+    return {
+        "status": "ok",
+        "premarket_source": "finnhub" if streamer is not None else "yfinance",
+    }
 
 
 async def _run_orchestrator(
@@ -126,6 +152,7 @@ async def _run_orchestrator(
             ceo_prompts=ceo_prompts or [],
             candle_frequency=candle_frequency,
             enrichment_enabled=enrichment_enabled,
+            premarket_streamer=app.state.premarket_streamer,
         ).run()
     finally:
         _active_tasks.pop(run_id, None)

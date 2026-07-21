@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     enrichment_max_concurrent: int = 5     # max parallel Yahoo Finance fetches
     indicators_json: str = "./indicators.json"
 
+    # Pre-market data
+    finnhub_api_key: str = ""
+    premarket_enabled: bool = True
+    premarket_source: str = "auto"         # auto | finnhub | yfinance
+
     # Service
     ai_service_port: int = 4102
 

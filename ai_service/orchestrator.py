@@ -68,12 +68,14 @@ class Orchestrator:
         ceo_prompts: list[PromptConfig] | None = None,
         candle_frequency: str = "1d",
         enrichment_enabled: bool = True,
+        premarket_streamer: Any | None = None,
     ) -> None:
         self.run_id = run_id
         self.model_configs = model_configs
         self.tickers = tickers
         self.candle_frequency = candle_frequency
         self.enrichment_enabled = enrichment_enabled
+        self._premarket_streamer = premarket_streamer
         self.prompts_by_category: dict[str, list[PromptConfig]] = {
             "agents": prompts,
             "sectors": sector_prompts,
@@ -138,6 +140,7 @@ class Orchestrator:
                     indicators_path=settings.indicators_json,
                     period=settings.enrichment_period,
                     max_concurrent=settings.enrichment_max_concurrent,
+                    streamer=self._premarket_streamer,
                 )
                 logger.info(
                     "Data enrichment started",

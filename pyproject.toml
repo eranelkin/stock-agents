@@ -25,6 +25,7 @@ dependencies = [
     "yfinance>=0.2.40",
     "pandas-ta>=0.3.14b0",
     "pandas>=2.0.0",
+    "websockets>=12.0",
 ]
 
 [project.optional-dependencies]

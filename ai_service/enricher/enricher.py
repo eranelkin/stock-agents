@@ -5,37 +5,58 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
+from ai_service.config import settings
 from ai_service.enricher.calculator import calculate_indicators
 from ai_service.enricher.fetcher import fetch_candles, fetch_info
+from ai_service.enricher.premarket import (
+    PreMarketStreamer,
+    fetch_premarket_yfinance,
+)
 from ai_service.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
+def _use_finnhub(streamer: PreMarketStreamer | None) -> bool:
+    """Return True if Finnhub should be the pre-market source."""
+    if settings.premarket_source == "yfinance":
+        return False
+    if settings.premarket_source == "finnhub":
+        return streamer is not None
+    # "auto": use Finnhub only if a live streamer is injected
+    return streamer is not None
+
+
 class Enricher:
-    """Fetches market candles and calculates technical indicators for a list of tickers.
+    """Fetches market candles, technical indicators, and pre-market data for a list of tickers.
 
     Runs concurrently (bounded by a semaphore) and never raises — failed tickers
     fall back to their original data with enrichment_status="failed".
     """
 
     def __init__(
-        self, indicators_path: str, period: str, max_concurrent: int
+        self,
+        indicators_path: str,
+        period: str,
+        max_concurrent: int,
+        streamer: PreMarketStreamer | None = None,
     ) -> None:
         """
         Args:
             indicators_path: Path to indicators.json.
             period: yfinance history window for non-intraday intervals (e.g. "2y").
             max_concurrent: Max simultaneous Yahoo Finance fetches.
+            streamer: Optional live Finnhub WebSocket streamer for pre-market quotes.
         """
         self._period = period
         self._semaphore = asyncio.Semaphore(max_concurrent)
+        self._streamer = streamer
         with open(indicators_path) as f:
             config = json.load(f)
         self._indicators: list[dict[str, Any]] = config["indicators"]
 
     async def enrich(self, ticker_dict: dict[str, Any], frequency: str) -> dict[str, Any]:
-        """Enrich one ticker dict with candle data and technical indicators.
+        """Enrich one ticker dict with candle data, technical indicators, and pre-market data.
 
         Args:
             ticker_dict: Original ticker object (must contain "name" or "symbol").
@@ -60,6 +81,21 @@ class Enricher:
                 indicators = calculate_indicators(df, self._indicators, info=info)
                 latest_close = float(df["Close"].iloc[-1])
 
+                # Pre-market data — driven by "type": "premarket" entries in indicators.json
+                pre_market_fields: dict[str, Any] = {}
+                premarket_specs = [s for s in self._indicators if s.get("type") == "premarket"]
+                if settings.premarket_enabled and premarket_specs:
+                    if _use_finnhub(self._streamer) and self._streamer is not None:
+                        prev_close_val = float(df["Close"].iloc[-2]) if len(df) >= 2 else latest_close
+                        self._streamer.set_prev_close(symbol, prev_close_val)
+                        quote = self._streamer.get(symbol)
+                    else:
+                        quote = await fetch_premarket_yfinance(symbol)
+
+                    if quote:
+                        for spec in premarket_specs:
+                            pre_market_fields[spec["output_key"]] = getattr(quote, spec["field"], None)
+
                 enriched: dict[str, Any] = {
                     **ticker_dict,
                     "current_price": round(latest_close, 4),
@@ -68,6 +104,7 @@ class Enricher:
                     "enriched_at": datetime.now(timezone.utc).isoformat(),
                     "enrichment_status": "ok",
                     **indicators,
+                    **pre_market_fields,
                 }
                 logger.info(
                     f"Enriched {symbol}: {len(df)} candles, {len(indicators)} indicators",
@@ -94,6 +131,12 @@ class Enricher:
         Returns:
             List of enriched ticker dicts in the same order as input.
         """
+        # If using Finnhub, pre-subscribe all symbols so the streamer accumulates
+        # trades while candles are being fetched
+        if self._streamer is not None and settings.premarket_enabled:
+            symbols = [t.get("name") or t.get("symbol", "") for t in tickers]
+            self._streamer.subscribe([s for s in symbols if s])
+
         return list(
             await asyncio.gather(*[self.enrich(t, frequency) for t in tickers])
         )

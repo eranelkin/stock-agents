@@ -117,6 +117,22 @@
     "company_name": {
       "type": ["string", "null"],
       "description": "Full company name (e.g. 'Apple Inc.', 'Microsoft Corporation')."
+    },
+    "pre_market_price": {
+      "type": ["number", "null"],
+      "description": "Current pre-market price (real-time via Finnhub, or 15-min delayed via yfinance). Null during regular/after-hours if no pre-market activity."
+    },
+    "pre_market_change": {
+      "type": ["number", "null"],
+      "description": "Absolute price change from previous close during pre-market session."
+    },
+    "pre_market_change_pct": {
+      "type": ["number", "null"],
+      "description": "Percentage price change from previous close during pre-market session."
+    },
+    "pre_market_volume": {
+      "type": ["number", "null"],
+      "description": "Total volume traded during the pre-market session so far. Only populated when using Finnhub streaming."
     }
   },
   "required": ["name"]
