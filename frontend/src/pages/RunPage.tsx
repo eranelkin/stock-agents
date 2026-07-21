@@ -1060,7 +1060,7 @@ export default function RunPage({
                   </Box>
                   <pre>{JSON.stringify(
                     Object.fromEntries(
-                      Object.entries(t).filter(([k]) => !["name", "sector", "enrichment_status", "enriched_at", "candle_frequency", "candle_count", "current_price"].includes(k))
+                      Object.entries(t).filter(([k]) => !["name", "enrichment_status", "enriched_at", "candle_frequency", "candle_count", "current_price"].includes(k))
                     ),
                     null,
                     2
