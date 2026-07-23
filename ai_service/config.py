@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    # LLM — LLM_MODEL is the full litellm model string (e.g. "gpt-4o", "claude-3-opus-20240229")
+    # LLM — LLM_MODEL is the full litellm model string (e.g. "gpt-4o", "claude-3-opus-20240229", "gemini/gemini-1.5-flash")
     llm_model: str = "gpt-4o"
     llm_temperature: float = 0.2
     llm_max_tokens: int = 4096
