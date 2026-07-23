@@ -1,6 +1,6 @@
 [
-  { "name": "AAPL", "sector": "Information Technology" },
-  { "name": "GOOGL", "sector": "Communication Services" },
-  { "name": "MSFT", "sector": "Information Technology" },
-  { "name": "AMZN", "sector": "Consumer Discretionary" }
+  { "symbol": "AAPL", "sector": "Information Technology" },
+  { "symbol": "GOOGL", "sector": "Communication Services" },
+  { "symbol": "MSFT", "sector": "Information Technology" },
+  { "symbol": "AMZN", "sector": "Consumer Discretionary" }
 ]

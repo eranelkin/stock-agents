@@ -12,22 +12,22 @@ class CeoInput(BaseModel):
     as produced by the StockAggregator.
     """
 
-    name: str
+    symbol: str
     agents: dict[str, Any]
 
 
 class TickerInput(BaseModel):
-    """A single ticker entry from Data.json. Accepts 'name' or 'symbol' as the identifier key.
+    """A single ticker entry from Data.json. Accepts 'symbol' or 'name' as the identifier key.
     All extra fields (e.g. Market cap, ATR, price) are preserved and passed through to the LLM."""
 
     model_config = ConfigDict(extra="allow")
 
-    name: str
+    symbol: str
     sector: str | None = None
 
     @model_validator(mode="before")
     @classmethod
-    def resolve_name(cls, data: object) -> object:
-        if isinstance(data, dict) and "name" not in data and "symbol" in data:
-            data = {**data, "name": data["symbol"]}
+    def resolve_symbol(cls, data: object) -> object:
+        if isinstance(data, dict) and "symbol" not in data and "name" in data:
+            data = {**data, "symbol": data["name"]}
         return data
