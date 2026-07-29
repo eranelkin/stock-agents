@@ -202,7 +202,7 @@ class Orchestrator:
                 pipelines = [
                     Pipeline(
                         entity=entity,
-                        entity_name=entity.name,
+                        entity_name=getattr(entity, "symbol", None) or getattr(entity, "name", None),
                         prompts=type_prompts,
                         pipeline_semaphore=semaphore,
                         llm_client=LLMClient(mc, run_logger=run_logger),

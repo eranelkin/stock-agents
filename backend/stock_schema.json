@@ -30,17 +30,31 @@
       "enum": ["ok", "failed"],
       "description": "Whether enrichment succeeded. If 'failed', all indicator fields below will be absent."
     },
-    "ema_20": {
-      "type": ["number", "null"],
-      "description": "20-period Exponential Moving Average of closing price."
-    },
-    "ema_50": {
-      "type": ["number", "null"],
-      "description": "50-period Exponential Moving Average of closing price."
-    },
-    "ema_200": {
-      "type": ["number", "null"],
-      "description": "200-period Exponential Moving Average of closing price."
+    "ema": {
+      "type": ["object", "null"],
+      "description": "Exponential Moving Averages of closing price at multiple lengths, for the given candle timeframe.",
+      "properties": {
+        "ema_9": {
+          "type": ["number", "null"],
+          "description": "9-period Exponential Moving Average of closing price."
+        },
+        "ema_20": {
+          "type": ["number", "null"],
+          "description": "20-period Exponential Moving Average of closing price."
+        },
+        "ema_50": {
+          "type": ["number", "null"],
+          "description": "50-period Exponential Moving Average of closing price."
+        },
+        "ema_200": {
+          "type": ["number", "null"],
+          "description": "200-period Exponential Moving Average of closing price."
+        },
+        "timeframe": {
+          "type": ["string", "null"],
+          "description": "Candle interval the EMAs were computed on (e.g. '1d', '1h', '30m')."
+        }
+      }
     },
     "rsi_14": {
       "type": ["number", "null"],
@@ -48,9 +62,23 @@
       "minimum": 0,
       "maximum": 100
     },
-    "atr_%": {
-      "type": ["number", "null"],
-      "description": "14-period Average True Range expressed as a percentage of the current price. Measures volatility."
+    "atr": {
+      "type": ["object", "null"],
+      "description": "Average True Range, expressed as a percentage of the current price, for the given period and candle timeframe. Measures volatility.",
+      "properties": {
+        "value": {
+          "type": ["string", "null"],
+          "description": "ATR as a percentage of the current price, formatted with a trailing '%' (e.g. '4.11%')."
+        },
+        "period": {
+          "type": "integer",
+          "description": "Number of periods the ATR was computed over."
+        },
+        "timeframe": {
+          "type": ["string", "null"],
+          "description": "Candle interval the ATR was computed on (e.g. '1d', '1h', '30m')."
+        }
+      }
     },
     "prev_close": {
       "type": ["number", "null"],
@@ -80,7 +108,7 @@
       "type": ["number", "null"],
       "description": "Lowest intraday price over the last 252 trading days (~1 year)."
     },
-    "prev_session_vwap": {
+    "vwap_prev_session": {
       "type": ["number", "null"],
       "description": "Volume-Weighted Average Price for the previous completed trading session."
     },
@@ -99,12 +127,60 @@
         "val": {
           "type": "number",
           "description": "Value Area Low — lower boundary of the price range containing 70% of volume."
+        },
+        "lookback_sessions": {
+          "type": ["integer", "null"],
+          "description": "Number of trading sessions the volume profile was computed over."
+        }
+      }
+    },
+    "avg_daily_volume_20d": {
+      "type": ["string", "number", "null"],
+      "description": "Average daily trading volume over the last 20 trading days. Formatted with a B/M suffix for readability (e.g. '2.16M'); left as a plain number if under 1,000,000."
+    },
+    "benchmark": {
+      "type": ["object", "null"],
+      "description": "Snapshot of the benchmark index (e.g. SPY), shared across all tickers in the run — useful for relative-strength comparisons.",
+      "properties": {
+        "symbol": {
+          "type": "string",
+          "description": "Benchmark ticker symbol (e.g. 'SPY')."
+        },
+        "prev_close": {
+          "type": "number",
+          "description": "Benchmark's previous closing price."
+        },
+        "pre_market_change_pct": {
+          "type": ["string", "null"],
+          "description": "Benchmark's pre-market percentage change from previous close, formatted with a trailing '%' (e.g. '-7.58%')."
         }
       }
     },
     "market_cap": {
-      "type": ["number", "null"],
-      "description": "Market capitalisation in USD."
+      "type": ["string", "number", "null"],
+      "description": "Market capitalisation in USD. Formatted with a B/M suffix for readability (e.g. '2.16B'); left as a plain number if under 1,000,000."
+    },
+    "shares_outstanding": {
+      "type": ["string", "number", "null"],
+      "description": "Total number of shares currently held by all shareholders. Formatted with a B/M suffix for readability (e.g. '115.35M'); left as a plain number if under 1,000,000."
+    },
+    "beta": {
+      "type": ["object", "null"],
+      "description": "Measure of the stock's volatility relative to the overall market (1.0 = moves with the market; >1.0 = more volatile).",
+      "properties": {
+        "value": {
+          "type": ["number", "null"],
+          "description": "Beta coefficient."
+        },
+        "timeframe": {
+          "type": ["string", "null"],
+          "description": "Lookback window and sampling interval the beta was computed over (e.g. '1Y monthly')."
+        }
+      }
+    },
+    "next_earnings_date": {
+      "type": ["string", "null"],
+      "description": "Date of the company's next scheduled earnings report, ISO format (e.g. '2026-07-27'). May be an estimate."
     },
     "industry": {
       "type": ["string", "null"],

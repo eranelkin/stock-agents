@@ -55,12 +55,57 @@ class Enricher:
             config = json.load(f)
         self._indicators: list[dict[str, Any]] = config["indicators"]
 
-    async def enrich(self, ticker_dict: dict[str, Any], frequency: str) -> dict[str, Any]:
+    async def _fetch_benchmark(self, frequency: str) -> dict[str, Any] | None:
+        """Fetch benchmark (e.g. SPY) prev close and pre-market change, once per run.
+
+        Args:
+            frequency: yfinance interval string, e.g. "1d", "1h", "30m".
+
+        Returns:
+            {"symbol": str, "prev_close": float, "pre_market_change_pct": str | None},
+            or None if the benchmark symbol is unset or the fetch fails.
+        """
+        symbol = settings.benchmark_symbol
+        if not symbol:
+            return None
+
+        try:
+            df = await fetch_candles(symbol, interval=frequency, period=self._period)
+            if df.empty:
+                raise ValueError("No market data returned from Yahoo Finance")
+
+            prev_close = float(df["Close"].iloc[-1])
+
+            change_pct: str | None = None
+            if settings.premarket_enabled:
+                if _use_finnhub(self._streamer) and self._streamer is not None:
+                    self._streamer.set_prev_close(symbol, prev_close)
+                    quote = self._streamer.get(symbol)
+                else:
+                    quote = await fetch_premarket_yfinance(symbol)
+
+                if quote is not None and quote.change_pct is not None:
+                    change_pct = f"{round(quote.change_pct, 2)}%"
+
+            return {
+                "symbol": symbol,
+                "prev_close": round(prev_close, 4),
+                "pre_market_change_pct": change_pct,
+            }
+
+        except Exception as exc:
+            logger.warning(f"Benchmark fetch failed for {symbol}: {exc}")
+            return None
+
+    async def enrich(
+        self, ticker_dict: dict[str, Any], frequency: str, benchmark: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Enrich one ticker dict with candle data, technical indicators, and pre-market data.
 
         Args:
             ticker_dict: Original ticker object (must contain "name" or "symbol").
             frequency: yfinance interval string, e.g. "1d", "1h", "30m".
+            benchmark: Shared benchmark block (e.g. SPY), fetched once per run by enrich_all.
 
         Returns:
             Original ticker dict merged with indicator values and enrichment metadata.
@@ -78,7 +123,7 @@ class Enricher:
                 if df.empty:
                     raise ValueError("No market data returned from Yahoo Finance")
 
-                indicators = calculate_indicators(df, self._indicators, info=info)
+                indicators = calculate_indicators(df, self._indicators, info=info, timeframe=frequency)
                 latest_close = float(df["Close"].iloc[-1])
 
                 # Pre-market data — driven by "type": "premarket" entries in indicators.json
@@ -105,6 +150,7 @@ class Enricher:
                     "enrichment_status": "ok",
                     **indicators,
                     **pre_market_fields,
+                    "benchmark": benchmark,
                 }
                 logger.info(
                     f"Enriched {symbol}: {len(df)} candles, {len(indicators)} indicators",
@@ -131,12 +177,17 @@ class Enricher:
         Returns:
             List of enriched ticker dicts in the same order as input.
         """
-        # If using Finnhub, pre-subscribe all symbols so the streamer accumulates
-        # trades while candles are being fetched
+        # If using Finnhub, pre-subscribe all symbols (including the benchmark) so the
+        # streamer accumulates trades while candles are being fetched
         if self._streamer is not None and settings.premarket_enabled:
             symbols = [t.get("name") or t.get("symbol", "") for t in tickers]
+            if settings.benchmark_symbol:
+                symbols.append(settings.benchmark_symbol)
             self._streamer.subscribe([s for s in symbols if s])
 
+        # Benchmark (e.g. SPY) is identical for every ticker in the run — fetch once and share
+        benchmark = await self._fetch_benchmark(frequency)
+
         return list(
-            await asyncio.gather(*[self.enrich(t, frequency) for t in tickers])
+            await asyncio.gather(*[self.enrich(t, frequency, benchmark) for t in tickers])
         )

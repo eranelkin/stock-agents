@@ -1,10 +1,8 @@
 {
   "indicators": [
-    { "name": "ema", "params": { "length": 20  }, "output_key": "ema_20"  },
-    { "name": "ema", "params": { "length": 50  }, "output_key": "ema_50"  },
-    { "name": "ema", "params": { "length": 200 }, "output_key": "ema_200" },
+    { "type": "ema", "lengths": [9, 20, 50, 200], "output_key": "ema" },
     { "name": "rsi", "params": { "length": 14  }, "output_key": "rsi_14"  },
-    { "name": "atr", "params": { "length": 14  }, "output_key": "atr_%", "normalize_by": "Close" },
+    { "type": "atr", "period": 14, "output_key": "atr" },
 
     { "type": "raw",     "source": "Close",  "offset": -1, "output_key": "prev_close"    },
     { "type": "raw",     "source": "Open",   "offset": -1, "output_key": "prev_day_open" },
@@ -12,13 +10,17 @@
     { "type": "raw",     "source": "Low",    "offset": -1, "output_key": "prev_day_low"  },
     { "type": "raw",     "source": "Volume", "offset": -1, "output_key": "volume"        },
 
-    { "type": "rolling", "source": "High", "stat": "max", "window": 252, "output_key": "fifty_two_week_high" },
-    { "type": "rolling", "source": "Low",  "stat": "min", "window": 252, "output_key": "fifty_two_week_low"  },
+    { "type": "rolling", "source": "High",   "stat": "max",  "window": 252, "output_key": "fifty_two_week_high"  },
+    { "type": "rolling", "source": "Low",    "stat": "min",  "window": 252, "output_key": "fifty_two_week_low"   },
+    { "type": "rolling", "source": "Volume", "stat": "mean", "window": 20,  "output_key": "avg_daily_volume_20d", "format": "compact" },
 
-    { "type": "session_vwap",   "session_offset": 0,                                          "output_key": "prev_session_vwap" },
-    { "type": "volume_profile", "window": 252, "num_bins": 100, "value_area_pct": 70,         "output_key": "volume_profile"    },
+    { "type": "session_vwap",   "session_offset": 0,                                          "output_key": "vwap_prev_session" },
+    { "type": "volume_profile", "window": 252, "num_bins": 100, "value_area_pct": 70, "lookback_sessions": 3, "output_key": "volume_profile" },
 
-    { "type": "info", "field": "marketCap",  "output_key": "market_cap"    },
+    { "type": "info", "field": "marketCap",  "output_key": "market_cap", "format": "compact" },
+    { "type": "info", "field": "sharesOutstanding", "output_key": "shares_outstanding", "format": "compact" },
+    { "type": "beta", "timeframe": "1Y monthly", "output_key": "beta" },
+    { "type": "epoch_date", "field": "earningsTimestamp", "output_key": "next_earnings_date" },
     { "type": "info", "field": "industry",   "output_key": "industry"      },
     { "type": "info", "field": "sector",     "output_key": "sector"        },
     { "type": "info", "field": "longName",   "output_key": "company_name"  },

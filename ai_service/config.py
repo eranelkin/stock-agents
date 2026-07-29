@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     premarket_enabled: bool = True
     premarket_source: str = "auto"         # auto | finnhub | yfinance
 
+    # Benchmark (fetched once per run, shared across all tickers)
+    benchmark_symbol: str = "SPY"
+
     # Service
     ai_service_port: int = 4102
 
