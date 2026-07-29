@@ -66,7 +66,7 @@ class CeoManager:
         tasks: list[asyncio.Task[None]] = []
         for _ in range(self._total):
             ticker, agents = await self._queue.get()
-            entity = CeoInput(name=ticker, agents=agents)
+            entity = CeoInput(symbol=ticker, agents=agents)
             for mc in self._model_configs:
                 tasks.append(asyncio.create_task(self._run_one(entity, mc)))
 
@@ -78,7 +78,7 @@ class CeoManager:
         search_client = SearchClient(run_logger=self._run_logger)
         pipeline = Pipeline(
             entity=entity,
-            entity_name=entity.name,
+            entity_name=entity.symbol,
             prompts=self._prompts,
             pipeline_semaphore=self._semaphore,
             llm_client=LLMClient(mc, run_logger=self._run_logger),
@@ -99,5 +99,5 @@ class CeoManager:
         )
         logger.info(
             "CEO pipeline output written",
-            extra={"ticker": entity.name, "model": mc.name},
+            extra={"ticker": entity.symbol, "model": mc.name},
         )
