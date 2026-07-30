@@ -35,7 +35,13 @@ import AttachFileIcon from "@mui/icons-material/AttachFile";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CheckIcon from "@mui/icons-material/Check";
 import ArticleIcon from "@mui/icons-material/Article";
-import { createRun, deleteRun, deleteRuns, enrichPreview, stopRun } from "../api/runs";
+import {
+  createRun,
+  deleteRun,
+  deleteRuns,
+  enrichPreview,
+  stopRun,
+} from "../api/runs";
 import CeoResultsPage from "../components/CeoResultsPage";
 import type { Run } from "../types/run";
 
@@ -85,9 +91,11 @@ export default function RunPage({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [candleFrequency, setCandleFrequency] = useState("1d");
-  const [enrichmentEnabled, setEnrichmentEnabled] = useState(true);
+  const [enrichmentEnabled, setEnrichmentEnabled] = useState(false);
   const [testingEnrich, setTestingEnrich] = useState(false);
-  const [enrichResults, setEnrichResults] = useState<Record<string, unknown>[] | null>(null);
+  const [enrichResults, setEnrichResults] = useState<
+    Record<string, unknown>[] | null
+  >(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const esRef = useRef<EventSource | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -378,7 +386,11 @@ export default function RunPage({
               />
             }
             label={
-              <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ whiteSpace: "nowrap" }}
+              >
                 Enrich
               </Typography>
             }
@@ -456,7 +468,12 @@ export default function RunPage({
               )
             }
             onClick={handleTestEnrich}
-            disabled={!selectedFile || !rawFileText || !enrichmentEnabled || testingEnrich}
+            disabled={
+              !selectedFile ||
+              !rawFileText ||
+              !enrichmentEnabled ||
+              testingEnrich
+            }
             sx={{
               borderRadius: 1.5,
               px: 2,
@@ -999,9 +1016,16 @@ export default function RunPage({
       >
         <DialogTitle sx={{ color: "text.primary", fontWeight: 700, pb: 1 }}>
           Enrichment Test Results
-          <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 400, mt: 0.5 }}>
-            {enrichResults?.length ?? 0} ticker{enrichResults?.length !== 1 ? "s" : ""} enriched
-            {enrichResults && enrichResults[0] && ` · frequency: ${(enrichResults[0] as Record<string, unknown>).candle_frequency}`}
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ fontWeight: 400, mt: 0.5 }}
+          >
+            {enrichResults?.length ?? 0} ticker
+            {enrichResults?.length !== 1 ? "s" : ""} enriched
+            {enrichResults &&
+              enrichResults[0] &&
+              ` · frequency: ${(enrichResults[0] as Record<string, unknown>).candle_frequency}`}
           </Typography>
         </DialogTitle>
         <DialogContent sx={{ p: 0 }}>
@@ -1035,9 +1059,20 @@ export default function RunPage({
                     border: `1px solid ${status === "ok" ? "rgba(129,212,250,0.2)" : "rgba(244,67,54,0.3)"}`,
                   }}
                 >
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                      mb: 1,
+                    }}
+                  >
                     <Typography
-                      sx={{ fontWeight: 700, fontSize: "0.95rem", color: "#81d4fa" }}
+                      sx={{
+                        fontWeight: 700,
+                        fontSize: "0.95rem",
+                        color: "#81d4fa",
+                      }}
                     >
                       {t.name as string}
                     </Typography>
@@ -1048,23 +1083,43 @@ export default function RunPage({
                         height: 18,
                         fontSize: "0.65rem",
                         fontWeight: 700,
-                        bgcolor: status === "ok" ? "rgba(76,175,80,0.15)" : "rgba(244,67,54,0.15)",
+                        bgcolor:
+                          status === "ok"
+                            ? "rgba(76,175,80,0.15)"
+                            : "rgba(244,67,54,0.15)",
                         color: status === "ok" ? "#81c784" : "#ef9a9a",
                       }}
                     />
                     {status === "ok" && (
-                      <Typography variant="body2" color="text.secondary" sx={{ ml: "auto", fontSize: "0.8rem" }}>
-                        ${t.current_price as number} · {t.candle_count as number} candles
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ ml: "auto", fontSize: "0.8rem" }}
+                      >
+                        ${t.current_price as number} ·{" "}
+                        {t.candle_count as number} candles
                       </Typography>
                     )}
                   </Box>
-                  <pre>{JSON.stringify(
-                    Object.fromEntries(
-                      Object.entries(t).filter(([k]) => !["name", "enrichment_status", "enriched_at", "candle_frequency", "candle_count", "current_price"].includes(k))
-                    ),
-                    null,
-                    2
-                  )}</pre>
+                  <pre>
+                    {JSON.stringify(
+                      Object.fromEntries(
+                        Object.entries(t).filter(
+                          ([k]) =>
+                            ![
+                              "name",
+                              "enrichment_status",
+                              "enriched_at",
+                              "candle_frequency",
+                              "candle_count",
+                              "current_price",
+                            ].includes(k),
+                        ),
+                      ),
+                      null,
+                      2,
+                    )}
+                  </pre>
                 </Box>
               );
             })}
