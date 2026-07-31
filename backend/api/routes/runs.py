@@ -11,6 +11,7 @@ from typing import Any, AsyncGenerator
 
 import aiofiles
 import httpx
+import yaml
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
 from sqlalchemy import delete as sql_delete, select
@@ -525,12 +526,13 @@ async def stream_ceo_results(run_id: uuid.UUID) -> StreamingResponse:
             return
 
         if run.output_dir:
-            for f in sorted(Path(run.output_dir).glob("CEO_*.json")):
-                ticker = f.stem[4:]
-                data = _parse_ceo_file(f)
-                if data:
-                    seen.add(ticker)
-                    yield f"data: {json.dumps({'ticker': ticker, 'data': data})}\n\n"
+            for ext in ("yaml", "json"):
+                for f in sorted(Path(run.output_dir).glob(f"CEO_*.{ext}")):
+                    ticker = f.stem[4:]
+                    data = _parse_ceo_file(f)
+                    if data:
+                        seen.add(ticker)
+                        yield f"data: {json.dumps({'ticker': ticker, 'data': data})}\n\n"
 
         if run.status in ("completed", "failed", "cancelled"):
             yield "event: done\ndata: {}\n\n"
@@ -550,14 +552,15 @@ async def stream_ceo_results(run_id: uuid.UUID) -> StreamingResponse:
                 break
 
             if run.output_dir:
-                for f in sorted(Path(run.output_dir).glob("CEO_*.json")):
-                    ticker = f.stem[4:]
-                    if ticker not in seen:
-                        data = _parse_ceo_file(f)
-                        if data:
-                            seen.add(ticker)
-                            yield f"data: {json.dumps({'ticker': ticker, 'data': data})}\n\n"
-                            idle_ticks = 0
+                for ext in ("yaml", "json"):
+                    for f in sorted(Path(run.output_dir).glob(f"CEO_*.{ext}")):
+                        ticker = f.stem[4:]
+                        if ticker not in seen:
+                            data = _parse_ceo_file(f)
+                            if data:
+                                seen.add(ticker)
+                                yield f"data: {json.dumps({'ticker': ticker, 'data': data})}\n\n"
+                                idle_ticks = 0
 
             idle_ticks += 1
             if idle_ticks >= 15:
@@ -584,32 +587,33 @@ def _log_file_path(output_dir: str) -> Path:
 
 
 def _parse_ceo_file(file_path: Path) -> dict | None:
-    """Extract the stock analysis dict from a CEO_*.json output file.
+    """Extract the stock analysis dict from a CEO_*.yaml or CEO_*.json output file.
 
     Handles two LLM output patterns:
-    - Each analysis field as a separate list item under `stocks`
-    - Analysis fields as siblings of `stocks` at the agent level
+    - Each analysis field as a separate list item under `stocks` (old JSON pattern)
+    - Analysis fields nested under a key (e.g. "symbol") in agent_data (current YAML pattern)
     Both are merged into one flat dict.
     """
     try:
         with open(file_path) as f:
-            doc = json.load(f)
+            doc = yaml.safe_load(f) if file_path.suffix == ".yaml" else json.load(f)
         for agent_data in doc.get("agents", {}).values():
             if not isinstance(agent_data, dict):
                 continue
             merged: dict = {}
-            # Merge all items in the stocks list (handles LLM pattern where each
-            # field is its own list entry: [{symbol: X}, {confidence: 72}, ...])
+            _SKIP = {"stocks", "raw_output", "parse_error", "reasoning"}
+            # Old JSON pattern: stocks is a list of single-key dicts
             for item in agent_data.get("stocks") or []:
                 if isinstance(item, dict):
                     merged.update(item)
-            # Also pull in analysis fields sitting directly on agent_data
-            # (LLM sometimes places them outside the stocks list)
-            _SKIP = {"stocks", "raw_output", "parse_error", "reasoning"}
+            # Current YAML pattern: data is a dict nested under a key (e.g. "symbol"),
+            # or flat sibling keys alongside stocks
             for k, v in agent_data.items():
                 if k in _SKIP:
                     continue
-                if isinstance(k, str) and len(k) < 100:
+                if isinstance(v, dict):
+                    merged.update(v)
+                else:
                     merged.setdefault(k, v)
             if merged:
                 return merged
