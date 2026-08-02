@@ -177,6 +177,18 @@ def main(
     if not dry_run:
         click.echo(f"Output: {path}")
 
+        if path and app_config.stock_agents.enabled:
+            from src.integration.stock_agents_trigger import trigger_stock_agents_run
+            sa = app_config.stock_agents
+            trigger_stock_agents_run(
+                output_path=path,
+                backend_url=sa.backend_url,
+                run_name_prefix=sa.run_name_prefix,
+                enrichment_enabled=sa.enrichment_enabled,
+                candle_frequency=sa.candle_frequency,
+                model_names=sa.model_names or None,
+            )
+
 
 if __name__ == "__main__":
     main()

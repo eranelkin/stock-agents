@@ -27,7 +27,7 @@ screener:
   # the streaming tick undercounts by 40–50% and would incorrectly drop valid stocks.
   exclude_etfs: true             # drop ETFs/ETNs from results (stockType check via IB ContractDetails)
   price_min: 2.0                 # minimum stock price (filters penny stocks)
-  pre_market_chg_pct_min: 2.0   # minimum pre-market change % — drops flat/down stocks before expensive fetches
+  pre_market_chg_pct_min: -1.5  # defualt 2% minimum pre-market change % — drops flat/down stocks before expensive fetches
                                  # Set to null to disable
 
   # ── Phase 2 filters (applied after historical bars and pre-market bars are fetched) ──

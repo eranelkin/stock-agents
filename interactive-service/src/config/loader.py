@@ -138,6 +138,17 @@ class ExternalApisConfig:
 
 
 @dataclass
+class StockAgentsConfig:
+    """Integration settings for auto-triggering a stock-agents run after output is written."""
+    enabled: bool = False
+    backend_url: str = "http://localhost:4101"
+    run_name_prefix: str = "IBK Pre-Market"
+    enrichment_enabled: bool = False
+    candle_frequency: str = "1d"
+    model_names: List[str] = field(default_factory=list)  # empty = all active models
+
+
+@dataclass
 class AppConfig:
     ib_gateway: IBGatewayConfig = field(default_factory=IBGatewayConfig)
     pacing: PacingConfig = field(default_factory=PacingConfig)
@@ -146,6 +157,7 @@ class AppConfig:
     scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
     ib_data: IBDataConfig = field(default_factory=IBDataConfig)
     external_apis: ExternalApisConfig = field(default_factory=ExternalApisConfig)
+    stock_agents: StockAgentsConfig = field(default_factory=StockAgentsConfig)
     max_number_of_stocks: int = 70
     benchmark_symbol: str = "SPY"
 

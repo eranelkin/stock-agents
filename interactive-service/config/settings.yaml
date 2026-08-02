@@ -10,7 +10,7 @@ ib_gateway:
   #   4001 = IB Gateway live trading
   #   7497 = TWS paper trading
   #   7496 = TWS live trading
-  port: 7496
+  port: 7497
   client_id: 1
   timeout: 30  # seconds to wait for connection
 
@@ -38,7 +38,7 @@ scheduler:
     minute: 0
     timezone: "America/New_York"
 
-max_number_of_stocks: 100 #org : 49 -  How many passing records are written to the output file
+max_number_of_stocks: 10 #org : 49 -  How many passing records are written to the output file
 
 ib_data:
   # ── Core Data Fetches ────────────────────────────────────────────────────────
@@ -136,6 +136,15 @@ ib_data:
   output_rsi: "finhub"
 
 
+
+stock_agents:
+  enabled: true               # set to true to auto-submit a stock-agents run after output is written
+  backend_url: "http://localhost:4101"   # stock-agents backend URL
+  run_name_prefix: "IBK Pre-Market"     # prefix for the run name shown in the History tab
+  enrichment_enabled: false    # false = use IB data as-is; true = re-enrich via yfinance/FMP
+  candle_frequency: "1d"
+  model_names: ["Gemini 2.5 Pro"]              # which models to use — empty = all active models
+                               # example: ["Gemini 2.5 Flash", "Gemini 2.5 Flash Lite""Claude Sonnet", "GPT-4o"]
 
 external_apis:
   # ── External Data Sources (not from IB) ──────────────────────────────────────

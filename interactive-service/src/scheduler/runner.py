@@ -25,6 +25,19 @@ async def _run_job(app_config: AppConfig, screener_config: ScreenerConfig, watch
             path = await run_watchlist_pipeline(app_config, watchlist)
         log.info("Scheduled job complete — output: %s", path)
         print(f"[scheduler] Output written to: {path}")
+
+        if path and app_config.stock_agents.enabled:
+            from src.integration.stock_agents_trigger import trigger_stock_agents_run
+            sa = app_config.stock_agents
+            await asyncio.to_thread(
+                trigger_stock_agents_run,
+                path,
+                sa.backend_url,
+                sa.run_name_prefix,
+                sa.enrichment_enabled,
+                sa.candle_frequency,
+                sa.model_names or None,
+            )
     except Exception:
         log.exception("Scheduled job failed")
 
