@@ -238,9 +238,11 @@ class LLMClient:
             "temperature": settings.llm_temperature,
             "max_tokens": settings.llm_max_tokens,
             "timeout": settings.llm_timeout_seconds,
-            "response_format": {"type": "json_object"},
             **kwargs,
         }
+        # Gemini rejects response_mime_type alongside function calling tools.
+        if "tools" not in kwargs:
+            params["response_format"] = {"type": "json_object"}
         if self._base_url:
             params["base_url"] = self._base_url
         if self._api_key:
