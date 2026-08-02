@@ -1,0 +1,160 @@
+ #To reduce or eliminate the 442s pause, the options are:                                                                                                                            
+ # 1. Disable volume profile — set fetch_volume_profile: false in settings.yaml → cuts from 6 to 3 calls/symbol, 10 symbols = 30 calls (well under limit)  
+ # 2. Reduce volume_profile_sessions: 3 → 1 — cuts volume profile to 1 call/symbol                                                                         
+ # 3. Disable pre-market bars or VWAP — set fetch_pre_market_bars: false or fetch_prev_session_vwap: false
+
+ib_gateway:
+  host: "127.0.0.1"
+  # Port options:
+  #   4002 = IB Gateway paper trading (recommended for testing)
+  #   4001 = IB Gateway live trading
+  #   7497 = TWS paper trading
+  #   7496 = TWS live trading
+  port: 7496
+  client_id: 1
+  timeout: 30  # seconds to wait for connection
+
+pacing:
+  historical_delay_seconds: 1.2   # IB limit: max 60 historical requests/10 min (increased for stability)
+  market_data_delay_seconds: 0.1  # delay between reqMktData calls
+  max_concurrent_mkt_data: 40     # IB hard limit on simultaneous subscriptions (reduced from 50 for stability)
+  historical_request_timeout_seconds: 45  # max wait per reqHistoricalData/reqHistogramData call
+                                           # before treating it as failed (guards against IB data-farm hangs)
+
+output:
+  directory: "./output"
+  filename_prefix: "pre_market"    # files saved as pre_market_YYYYMMDD_HHMMSSfundamental.yaml
+
+pre_market:
+  check_hours: true               # warn if run outside 4:00–9:30 AM ET
+  tz: "America/New_York"
+
+scheduler:
+  enabled: false
+  mode: "screener"                # screener | watchlist
+  cron:
+    day_of_week: "mon-fri"
+    hour: 8
+    minute: 0
+    timezone: "America/New_York"
+
+max_number_of_stocks: 100 #org : 49 -  How many passing records are written to the output file
+
+ib_data:
+  # ── Core Data Fetches ────────────────────────────────────────────────────────
+  fetch_contract_details: false    # fetch contract details (required for all other data)
+                                  # Provides: symbol, company_name, sector, industry, stock_type
+  
+  fetch_daily_bars: true          # fetch historical daily bars
+                                  # Provides: prev_close, prev_day_high, prev_day_low, prev_day_open,
+                                  #           avg_daily_volume_20d, and enables ATR/EMA/RSI calculations
+  
+  fetch_market_snapshot: true     # fetch real-time market snapshots
+                                  # Provides: pre_market_price, pre_market_volume, pre_market_chg_pct,
+                                  #           market_cap, shares_outstanding, beta, fifty_two_week_high,
+                                  #           fifty_two_week_low, bid/ask prices
+  
+  fetch_pre_market_bars: false     # fetch pre_market 1-min bars
+                                  # Provides: pre_market_high, pre_market_low, rvol_pre_market
+  
+  fetch_prev_session_vwap: false   # fetch previous session VWAP
+                                  # Provides: vwap_prev_session
+  
+ 
+  
+  # ── Technical Indicators (calculated from daily bars) ────────────────────────
+  # Calculation is enabled if the corresponding output field is enabled.
+  atr_period: 14                  # ATR calculation period (days)
+  ema_periods: [9, 20, 50, 200]   # EMA periods to calculate (requires daily_bars_duration ≥ max period)
+  ema_timeframe: "1d"             # EMA calculation timeframe (currently only "1d" from daily bars is supported)
+  rsi_period: 14                  # RSI calculation period (days)
+  beta_timeframe: "1Y monthly"    # Beta calculation timeframe (sourced from IB/yf, typically 3-5 years)
+  
+  # ── Historical Data Parameters ───────────────────────────────────────────────
+  daily_bars_duration: "300 D"    # duration for historical daily bars
+                                  # Must be ≥ max(ema_periods) for EMA calculation (e.g., "300 D" for EMA-200)
+  pre_market_rvol_lookback: 20    # days to look back for pre_market relative volume calculation
+  
+
+  # ── Output Fields ────────────────────────────────────────────────────────────
+  # These flags control which fields are fetched, processed, and included in the output.
+  # Disabling a field will prevent it from being requested (if possible) and shown.
+  
+  # Contract Details
+  output_company_name: "ibk"
+  output_sector: "ibk"
+  output_industry: "ibk"
+  output_stock_type: "ibk"      # Used for ETF filtering, not in output, but toggle is here
+  
+  # Daily Bars Data
+  output_prev_close: "finhub"
+  output_prev_day_high: "finhub"
+  output_prev_day_low: "finhub"
+  output_prev_day_open: "finhub"
+  
+  # Market Snapshot Data
+  output_market_cap: "finhub"
+  output_shares_outstanding: "finhub"
+  output_beta: "ibk"
+  output_fifty_two_week_high: "finhub"
+  output_fifty_two_week_low: "finhub"
+  output_bid_ask: true           # Bid and ask prices
+  
+  # Volume Data (from various sources)
+  #output_pre_market_volume: "ibk" # org location 
+  output_avg_daily_volume_20d: "finhub"
+  
+  # Pre-market Bars Data
+  output_pre_market_volume: "ibk" 
+  output_pre_market_price: "ibk"
+  output_pre_market_chg_pct: "ibk"
+  output_pre_market_high: "finhub"
+  output_pre_market_low: "finhub"
+  output_rvol_pre_market: "ibk"  # Relative volume
+
+  # Previous Session VWAP
+  output_vwap_prev_session: "finhub"
+  
+  # Volume Profile Data
+  fetch_volume_profile: false      # fetch volume profile (POC, VAH, VAL)
+                                  # Provides: vp_poc, vp_vah, vp_val, vp_lookback_sessions
+  volume_profile_sessions: 3      # number of sessions for volume profile calculation
+
+  output_vp_poc: "ibk"                # Point of Control
+  output_vp_vah: "ibk"                # Value Area High
+  output_vp_val: "ibk"                # Value Area Low
+  
+  # Benchmark (SPY) Data
+  output_benchmark_data: "finhub"        # Master switch; yfinance does not provide pre-market price for SPY
+  output_benchmark_prev_close: "finhub"
+  output_benchmark_pre_market_chg_pct: "ibk"
+  benchmark_symbol: "SPY"           # benchmark used for relative pre-market comparison
+  
+  # Technical Indicators
+  output_atr: "finhub"
+  output_ema: "finhub"
+  output_rsi: "finhub"
+
+
+
+external_apis:
+  # ── External Data Sources (not from IB) ──────────────────────────────────────
+  # These fields are fetched from external APIs and are independent of ib_data config
+  
+  fmp_api_key: ""                 # Financial Modeling Prep API key (free at financialmodelingprep.com)
+                                  # Provides: news_catalysts (list of recent news headlines)
+                                  # Leave empty to disable news fetching
+  
+  news_max_headlines: 3           # max news items per stock (set to 0 to disable)
+  
+  # Note: The following fields are fetched from yfinance (no API key required):
+  #   - float_shares: number of shares available for public trading
+  #   - next_earnings_date: upcoming earnings announcement date
+  
+  # Output Toggles for External Data
+  output_news_catalysts: null
+  output_float_pct: "finhub"
+  output_next_earnings_date: "finhub"
+  output_short_float_pct: "finhub"
+  output_short_ratio: "finhub"
+  output_institutional_holding_pct: "finhub"

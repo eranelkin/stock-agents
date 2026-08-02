@@ -1,0 +1,4 @@
+
+
+
+1. find all the the params with setting and make sure they are fit for our need i.e : RSI period , ATR period,....

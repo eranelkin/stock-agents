@@ -1,0 +1,58 @@
+# Full IB Data Configuration - All features enabled
+# Use this to test that the pipeline works with all data fetching enabled
+
+ib_gateway:
+  host: "127.0.0.1"
+  port: 4002
+  client_id: 1
+  timeout: 30
+
+pacing:
+  historical_delay_seconds: 1.2
+  market_data_delay_seconds: 0.1
+  max_concurrent_mkt_data: 40
+  historical_request_timeout_seconds: 45.0
+
+output:
+  directory: "./output"
+  filename_prefix: "full_test"
+
+pre_market:
+  check_hours: false
+  tz: "America/New_York"
+
+scheduler:
+  enabled: false
+
+ib_data:
+  # Full configuration - all IB data fetches enabled
+  # Output will have all available fields populated
+  fetch_contract_details: true    # symbol, company_name, sector, industry
+  fetch_daily_bars: true          # prev_close, prev_day_*, avg_daily_volume_20d
+  fetch_market_snapshot: true     # pre_market_*, market_cap, shares_outstanding, beta, fifty_two_week_*
+  fetch_pre_market_bars: true     # pre_market_high, pre_market_low, rvol_pre_market
+  fetch_prev_session_vwap: true   # vwap_prev_session
+  fetch_volume_profile: true      # vp_poc, vp_vah, vp_val
+  fetch_benchmark: true           # benchmark_symbol, benchmark_prev_close, benchmark_pre_market_chg_pct
+  fetch_atr: true                 # atr
+  atr_period: 14
+  fetch_bid_ask: true
+  fetch_volume: true
+  daily_bars_duration: "300 D"    # long enough for EMA-200
+  pre_market_rvol_lookback: 20
+  fetch_ema: true                 # ema_20, ema_50, ema_200
+  ema_periods: [9, 20, 50, 200]
+  fetch_rsi: true                 # rsi_14
+  rsi_period: 14
+  volume_profile_sessions: 3
+  fetch_sector: true
+  fetch_industry: true
+  fetch_stock_type: true
+
+max_number_of_stocks: 70
+benchmark_symbol: "SPY"
+
+external_apis:
+  fmp_api_key: ""                 # add your FMP key here to enable news_catalysts
+  news_max_headlines: 3           # max 3 news items per stock
+  # Note: float_shares and next_earnings_date from yfinance are always fetched
