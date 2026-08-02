@@ -85,7 +85,7 @@ export default function RunPage({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [candleFrequency, setCandleFrequency] = useState("1d");
-  const [enrichmentEnabled, setEnrichmentEnabled] = useState(true);
+  const [enrichmentEnabled, setEnrichmentEnabled] = useState(false);
   const [testingEnrich, setTestingEnrich] = useState(false);
   const [enrichResults, setEnrichResults] = useState<Record<string, unknown>[] | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
