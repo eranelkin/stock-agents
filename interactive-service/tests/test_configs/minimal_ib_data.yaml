@@ -1,0 +1,61 @@
+# Minimal IB Data Configuration - Only contract details enabled
+# Use this to test that the pipeline works with minimal data fetching
+
+ib_gateway:
+  host: "127.0.0.1"
+  port: 4002
+  client_id: 1
+  timeout: 30
+
+pacing:
+  historical_delay_seconds: 0.6
+  market_data_delay_seconds: 0.1
+  max_concurrent_mkt_data: 50
+  historical_request_timeout_seconds: 45.0
+
+output:
+  directory: "./output"
+  filename_prefix: "minimal_test"
+
+pre_market:
+  check_hours: false
+  tz: "America/New_York"
+
+scheduler:
+  enabled: false
+
+ib_data:
+  # Minimal configuration - only contract details enabled
+  # Output will have: symbol, company_name, sector, industry
+  # All other fields will be null
+  fetch_contract_details: true
+  fetch_daily_bars: false         # disables: prev_close, prev_day_*, avg_daily_volume_20d, ATR, EMA, RSI
+  fetch_market_snapshot: false    # disables: pre_market_price, pre_market_volume, pre_market_chg_pct,
+                                  #           market_cap, shares_outstanding, beta, fifty_two_week_*
+  fetch_pre_market_bars: false    # disables: pre_market_high, pre_market_low, rvol_pre_market
+  fetch_prev_session_vwap: false  # disables: vwap_prev_session
+  fetch_volume_profile: false     # disables: vp_poc, vp_vah, vp_val
+  fetch_benchmark: false          # disables: benchmark_* fields
+  fetch_atr: false
+  atr_period: 14
+  fetch_bid_ask: false
+  fetch_volume: false
+  daily_bars_duration: "20 D"
+  pre_market_rvol_lookback: 20
+  fetch_ema: false
+  ema_periods: []
+  fetch_rsi: false
+  rsi_period: 14
+  volume_profile_sessions: 3
+  fetch_sector: true
+  fetch_industry: true
+  fetch_stock_type: true
+
+max_number_of_stocks: 50
+benchmark_symbol: "SPY"
+
+external_apis:
+  fmp_api_key: ""                 # no FMP key = no news_catalysts
+  news_max_headlines: 0           # disabled
+  # Note: float_shares and next_earnings_date from yfinance will still be fetched
+  # (cannot be disabled individually)

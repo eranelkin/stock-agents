@@ -1,0 +1,1376 @@
+{
+  "stocks": [
+    {
+      "symbol": "MPWR",
+      "company_name": "MONOLITHIC POWER SYSTEMS INC",
+      "sector": "Semiconductors",
+      "industry": "Semiconductors",
+      "market_cap": "70.06B",
+      "shares_outstanding": "49.13M",
+      "beta": {
+        "value": 1.712,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 1714.09,
+      "fifty_two_week_low": 774.14,
+      "pre_market_price": 1315.18,
+      "pre_market_chg_pct": "-0.08%",
+      "pre_market_volume": "0",
+      "float_pct": "96.39%",
+      "next_earnings_date": "2026-10-29",
+      "short_float_pct": "6.73%",
+      "short_ratio": 2.06,
+      "institutional_holding_pct": "100.80%",
+      "pre_market_high": 1510.0,
+      "pre_market_low": 1400.4,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 1316.18,
+      "prev_day_high": 1339.99,
+      "prev_day_low": 1290.63,
+      "prev_day_open": 1290.97,
+      "avg_daily_volume_20d": "938.98K",
+      "atr": {
+        "value": "6.81%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 1341.22,
+        "ema_20": 1353.32,
+        "ema_50": 1393.05,
+        "ema_200": 1242.57,
+        "timeframe": "1d"
+      },
+      "rsi_14": 54.62,
+      "vwap_prev_session": 1317.15,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "LITE",
+      "company_name": "LUMENTUM HOLDINGS INC",
+      "sector": "Computers",
+      "industry": "Computers",
+      "market_cap": "55.54B",
+      "shares_outstanding": "77.80M",
+      "beta": {
+        "value": 1.569,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 1085.68,
+      "fifty_two_week_low": 106.16,
+      "pre_market_price": 692.24,
+      "pre_market_chg_pct": "-0.14%",
+      "pre_market_volume": "0",
+      "float_pct": "91.47%",
+      "next_earnings_date": "2026-08-11",
+      "short_float_pct": "12.50%",
+      "short_ratio": 1.76,
+      "institutional_holding_pct": "103.86%",
+      "pre_market_high": 753.26,
+      "pre_market_low": 708.01,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 693.24,
+      "prev_day_high": 698.28,
+      "prev_day_low": 650.0,
+      "prev_day_open": 661.91,
+      "avg_daily_volume_20d": "4.32M",
+      "atr": {
+        "value": "10.62%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 714.33,
+        "ema_20": 748.12,
+        "ema_50": 793.03,
+        "ema_200": 635.94,
+        "timeframe": "1d"
+      },
+      "rsi_14": 45.54,
+      "vwap_prev_session": 682.58,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "STRL",
+      "company_name": "STERLING INFRASTRUCTURE INC",
+      "sector": "Engineering&Construction",
+      "industry": "Engineering&Construction",
+      "market_cap": "18.31B",
+      "shares_outstanding": "30.69M",
+      "beta": {
+        "value": "Not available from source (ibk)",
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 1005.68,
+      "fifty_two_week_low": 262.27,
+      "pre_market_price": 579.73,
+      "pre_market_chg_pct": "-0.17%",
+      "pre_market_volume": "0",
+      "float_pct": "97.73%",
+      "next_earnings_date": "2026-08-03",
+      "short_float_pct": "4.84%",
+      "short_ratio": 1.43,
+      "institutional_holding_pct": "94.72%",
+      "pre_market_high": 639.36,
+      "pre_market_low": 598.0,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 580.73,
+      "prev_day_high": 584.26,
+      "prev_day_low": 542.0,
+      "prev_day_open": 557.5,
+      "avg_daily_volume_20d": "770.52K",
+      "atr": {
+        "value": "9.85%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 607.24,
+        "ema_20": 655.15,
+        "ema_50": 695.76,
+        "ema_200": 550.71,
+        "timeframe": "1d"
+      },
+      "rsi_14": 41.78,
+      "vwap_prev_session": 568.71,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "META",
+      "company_name": "META PLATFORMS INC-CLASS A",
+      "sector": "Internet",
+      "industry": "Internet",
+      "market_cap": "1418.22B",
+      "shares_outstanding": "2.21B",
+      "beta": {
+        "value": 1.228,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 796.25,
+      "fifty_two_week_low": 520.26,
+      "pre_market_price": 538.03,
+      "pre_market_chg_pct": "-0.19%",
+      "pre_market_volume": "0",
+      "float_pct": "99.85%",
+      "next_earnings_date": "2026-10-28",
+      "short_float_pct": "1.72%",
+      "short_ratio": 1.85,
+      "institutional_holding_pct": "78.92%",
+      "pre_market_high": 556.76,
+      "pre_market_low": 539.03,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 539.03,
+      "prev_day_high": 539.88,
+      "prev_day_low": 524.49,
+      "prev_day_open": 526.0,
+      "avg_daily_volume_20d": "19.01M",
+      "atr": {
+        "value": "4.52%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 587.25,
+        "ema_20": 602.13,
+        "ema_50": 606.83,
+        "ema_200": 638.62,
+        "timeframe": "1d"
+      },
+      "rsi_14": 37.85,
+      "vwap_prev_session": 532.99,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "CRS",
+      "company_name": "CARPENTER TECHNOLOGY",
+      "sector": "Iron/Steel",
+      "industry": "Iron/Steel",
+      "market_cap": "25.82B",
+      "shares_outstanding": "49.69M",
+      "beta": {
+        "value": 1.275,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 625.99,
+      "fifty_two_week_low": 228.0,
+      "pre_market_price": 502.71,
+      "pre_market_chg_pct": "-0.20%",
+      "pre_market_volume": "0",
+      "float_pct": "97.90%",
+      "next_earnings_date": "2026-10-22",
+      "short_float_pct": "3.87%",
+      "short_ratio": 2.11,
+      "institutional_holding_pct": "96.10%",
+      "pre_market_high": 514.04,
+      "pre_market_low": 503.0,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 503.71,
+      "prev_day_high": 514.98,
+      "prev_day_low": 472.29,
+      "prev_day_open": 492.21,
+      "avg_daily_volume_20d": "708.72K",
+      "atr": {
+        "value": "5.23%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 549.35,
+        "ema_20": 561.74,
+        "ema_50": 540.94,
+        "ema_200": 429.11,
+        "timeframe": "1d"
+      },
+      "rsi_14": 39.08,
+      "vwap_prev_session": 501.78,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "FFIV",
+      "company_name": "F5 INC",
+      "sector": "Internet",
+      "industry": "Internet",
+      "market_cap": "22.88B",
+      "shares_outstanding": "56.83M",
+      "beta": {
+        "value": 1.036,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 435.0,
+      "fifty_two_week_low": 223.76,
+      "pre_market_price": 387.75,
+      "pre_market_chg_pct": "-0.26%",
+      "pre_market_volume": "0",
+      "float_pct": "98.99%",
+      "next_earnings_date": "2026-10-26",
+      "short_float_pct": "3.05%",
+      "short_ratio": 2.06,
+      "institutional_holding_pct": "110.23%",
+      "pre_market_high": 393.1,
+      "pre_market_low": 389.97,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 388.75,
+      "prev_day_high": 393.58,
+      "prev_day_low": 386.01,
+      "prev_day_open": 390.6,
+      "avg_daily_volume_20d": "648.35K",
+      "atr": {
+        "value": "4.05%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 399.27,
+        "ema_20": 402.79,
+        "ema_50": 392.08,
+        "ema_200": 337.99,
+        "timeframe": "1d"
+      },
+      "rsi_14": 50.24,
+      "vwap_prev_session": 389.63,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "ETN",
+      "company_name": "EATON CORP PLC",
+      "sector": "Electrical Compo&Equip",
+      "industry": "Electrical Compo&Equip",
+      "market_cap": "161.22B",
+      "shares_outstanding": "388.30M",
+      "beta": {
+        "value": 1.213,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 436.74,
+      "fifty_two_week_low": 311.92,
+      "pre_market_price": 385.89,
+      "pre_market_chg_pct": "-0.26%",
+      "pre_market_volume": "0",
+      "float_pct": "99.86%",
+      "next_earnings_date": "2026-07-31",
+      "short_float_pct": "2.06%",
+      "short_ratio": 3.43,
+      "institutional_holding_pct": "88.03%",
+      "pre_market_high": 421.89,
+      "pre_market_low": 386.89,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 386.89,
+      "prev_day_high": 389.39,
+      "prev_day_low": 378.58,
+      "prev_day_open": 381.5,
+      "avg_daily_volume_20d": "2.36M",
+      "atr": {
+        "value": "4.70%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 396.56,
+        "ema_20": 400.04,
+        "ema_50": 401.1,
+        "ema_200": 383.49,
+        "timeframe": "1d"
+      },
+      "rsi_14": 54.5,
+      "vwap_prev_session": 385.52,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "SNPS",
+      "company_name": "SYNOPSYS INC",
+      "sector": "Software",
+      "industry": "Software",
+      "market_cap": "74.44B",
+      "shares_outstanding": "191.48M",
+      "beta": {
+        "value": 1.257,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 636.61,
+      "fifty_two_week_low": 366.0,
+      "pre_market_price": 371.33,
+      "pre_market_chg_pct": "-0.27%",
+      "pre_market_volume": "0",
+      "float_pct": "99.43%",
+      "next_earnings_date": "2026-08-26",
+      "short_float_pct": "2.94%",
+      "short_ratio": 2.86,
+      "institutional_holding_pct": "91.46%",
+      "pre_market_high": 380.0,
+      "pre_market_low": 372.5,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 372.33,
+      "prev_day_high": 381.05,
+      "prev_day_low": 370.2,
+      "prev_day_open": 376.0,
+      "avg_daily_volume_20d": "1.97M",
+      "atr": {
+        "value": "4.27%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 384.84,
+        "ema_20": 401.29,
+        "ema_50": 429.56,
+        "ema_200": 466.14,
+        "timeframe": "1d"
+      },
+      "rsi_14": 40.15,
+      "vwap_prev_session": 372.71,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "MDB",
+      "company_name": "MONGODB INC",
+      "sector": "Software",
+      "industry": "Software",
+      "market_cap": "27.14B",
+      "shares_outstanding": "80.43M",
+      "beta": {
+        "value": 1.555,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 444.72,
+      "fifty_two_week_low": 198.47,
+      "pre_market_price": 324.88,
+      "pre_market_chg_pct": "-0.31%",
+      "pre_market_volume": "0",
+      "float_pct": "97.38%",
+      "next_earnings_date": "2026-08-26",
+      "short_float_pct": "3.62%",
+      "short_ratio": 1.75,
+      "institutional_holding_pct": "94.64%",
+      "pre_market_high": 334.82,
+      "pre_market_low": 325.88,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 325.88,
+      "prev_day_high": 328.88,
+      "prev_day_low": 318.17,
+      "prev_day_open": 319.1,
+      "avg_daily_volume_20d": "1.30M",
+      "atr": {
+        "value": "5.44%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 320.92,
+        "ema_20": 324.06,
+        "ema_50": 324.17,
+        "ema_200": 313.68,
+        "timeframe": "1d"
+      },
+      "rsi_14": 55.24,
+      "vwap_prev_session": 323.95,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "ALAB",
+      "company_name": "ASTERA LABS INC",
+      "sector": "Semiconductors",
+      "industry": "Semiconductors",
+      "market_cap": "53.35B",
+      "shares_outstanding": "171.41M",
+      "beta": {
+        "value": "Not available from source (ibk)",
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 499.48,
+      "fifty_two_week_low": 97.89,
+      "pre_market_price": 298.69,
+      "pre_market_chg_pct": "-0.33%",
+      "pre_market_volume": "0",
+      "float_pct": "89.83%",
+      "next_earnings_date": "2026-08-04",
+      "short_float_pct": "7.32%",
+      "short_ratio": 1.59,
+      "institutional_holding_pct": "73.16%",
+      "pre_market_high": 330.0,
+      "pre_market_low": 313.5,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 299.69,
+      "prev_day_high": 300.1,
+      "prev_day_low": 273.01,
+      "prev_day_open": 282.17,
+      "avg_daily_volume_20d": "4.43M",
+      "atr": {
+        "value": "11.70%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 299.59,
+        "ema_20": 323.73,
+        "ema_50": 323.81,
+        "ema_200": 236.7,
+        "timeframe": "1d"
+      },
+      "rsi_14": 46.33,
+      "vwap_prev_session": 290.18,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "AEIS",
+      "company_name": "ADVANCED ENERGY INDUSTRIES",
+      "sector": "Electronics",
+      "industry": "Electronics",
+      "market_cap": "11.58B",
+      "shares_outstanding": "40.01M",
+      "beta": {
+        "value": 1.351,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 397.44,
+      "fifty_two_week_low": 128.4,
+      "pre_market_price": 273.26,
+      "pre_market_chg_pct": "-0.36%",
+      "pre_market_volume": "0",
+      "float_pct": "94.03%",
+      "next_earnings_date": "2026-08-03",
+      "short_float_pct": "6.13%",
+      "short_ratio": 1.76,
+      "institutional_holding_pct": "110.73%",
+      "pre_market_high": 295.03,
+      "pre_market_low": 280.26,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 274.26,
+      "prev_day_high": 279.41,
+      "prev_day_low": 267.83,
+      "prev_day_open": 267.93,
+      "avg_daily_volume_20d": "690.91K",
+      "atr": {
+        "value": "7.75%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 285.83,
+        "ema_20": 297.7,
+        "ema_50": 314.65,
+        "ema_200": 286.4,
+        "timeframe": "1d"
+      },
+      "rsi_14": 46.02,
+      "vwap_prev_session": 271.99,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "COHR",
+      "company_name": "COHERENT CORP",
+      "sector": "Electronics",
+      "industry": "Electronics",
+      "market_cap": "51.43B",
+      "shares_outstanding": "195.64M",
+      "beta": {
+        "value": 2.158,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 440.0,
+      "fifty_two_week_low": 84.35,
+      "pre_market_price": 248.06,
+      "pre_market_chg_pct": "-0.40%",
+      "pre_market_volume": "0",
+      "float_pct": "99.62%",
+      "next_earnings_date": "2026-08-12",
+      "short_float_pct": "5.21%",
+      "short_ratio": 1.64,
+      "institutional_holding_pct": "91.06%",
+      "pre_market_high": 271.15,
+      "pre_market_low": 258.47,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 249.06,
+      "prev_day_high": 250.59,
+      "prev_day_low": 239.3,
+      "prev_day_open": 243.4,
+      "avg_daily_volume_20d": "4.62M",
+      "atr": {
+        "value": "11.15%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 267.27,
+        "ema_20": 292.5,
+        "ema_50": 320.8,
+        "ema_200": 267.69,
+        "timeframe": "1d"
+      },
+      "rsi_14": 40.4,
+      "vwap_prev_session": 245.76,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "VRT",
+      "company_name": "VERTIV HOLDINGS CO-A",
+      "sector": "Machinery-Constr&Mining",
+      "industry": "Machinery-Constr&Mining",
+      "market_cap": "93.00B",
+      "shares_outstanding": "384.99M",
+      "beta": {
+        "value": 2.123,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 379.94,
+      "fifty_two_week_low": 118.7,
+      "pre_market_price": 226.5,
+      "pre_market_chg_pct": "-0.44%",
+      "pre_market_volume": "0",
+      "float_pct": "98.35%",
+      "next_earnings_date": "2026-10-21",
+      "short_float_pct": "2.92%",
+      "short_ratio": 1.72,
+      "institutional_holding_pct": "85.78%",
+      "pre_market_high": 242.99,
+      "pre_market_low": 227.5,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 227.5,
+      "prev_day_high": 241.32,
+      "prev_day_low": 224.6,
+      "prev_day_open": 237.2,
+      "avg_daily_volume_20d": "6.13M",
+      "atr": {
+        "value": "8.95%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 262.7,
+        "ema_20": 282.33,
+        "ema_50": 297.48,
+        "ema_200": 256.85,
+        "timeframe": "1d"
+      },
+      "rsi_14": 34.81,
+      "vwap_prev_session": 230.63,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "TSEM",
+      "company_name": "TOWER SEMICONDUCTOR LTD",
+      "sector": "Semiconductors",
+      "industry": "Semiconductors",
+      "market_cap": "24.83B",
+      "shares_outstanding": "113.03M",
+      "beta": {
+        "value": 0.705,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 319.94,
+      "fifty_two_week_low": 45.51,
+      "pre_market_price": 210.16,
+      "pre_market_chg_pct": "-0.47%",
+      "pre_market_volume": "0",
+      "float_pct": "99.18%",
+      "next_earnings_date": "2026-08-04",
+      "short_float_pct": "2.44%",
+      "short_ratio": 1.41,
+      "institutional_holding_pct": "75.98%",
+      "pre_market_high": 228.89,
+      "pre_market_low": 216.3,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 211.16,
+      "prev_day_high": 215.17,
+      "prev_day_low": 202.23,
+      "prev_day_open": 205.62,
+      "avg_daily_volume_20d": "1.79M",
+      "atr": {
+        "value": "10.40%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 220.38,
+        "ema_20": 229.97,
+        "ema_50": 235.3,
+        "ema_200": 179.8,
+        "timeframe": "1d"
+      },
+      "rsi_14": 45.96,
+      "vwap_prev_session": 209.85,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "CRDO",
+      "company_name": "CREDO TECHNOLOGY GROUP HOLDI",
+      "sector": "Semiconductors",
+      "industry": "Semiconductors",
+      "market_cap": "38.60B",
+      "shares_outstanding": "186.48M",
+      "beta": {
+        "value": 3.301,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 308.67,
+      "fifty_two_week_low": 86.48,
+      "pre_market_price": 200.08,
+      "pre_market_chg_pct": "-0.50%",
+      "pre_market_volume": "0",
+      "float_pct": "90.00%",
+      "next_earnings_date": "2026-09-02",
+      "short_float_pct": "3.62%",
+      "short_ratio": 0.67,
+      "institutional_holding_pct": "76.25%",
+      "pre_market_high": 218.0,
+      "pre_market_low": 208.8,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 201.08,
+      "prev_day_high": 201.35,
+      "prev_day_low": 186.53,
+      "prev_day_open": 187.13,
+      "avg_daily_volume_20d": "6.06M",
+      "atr": {
+        "value": "10.92%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 206.97,
+        "ema_20": 219.12,
+        "ema_50": 220.01,
+        "ema_200": 175.93,
+        "timeframe": "1d"
+      },
+      "rsi_14": 45.35,
+      "vwap_prev_session": 196.78,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "SPXC",
+      "company_name": "SPX TECHNOLOGIES INC",
+      "sector": "Building Materials",
+      "industry": "Building Materials",
+      "market_cap": "11.00B",
+      "shares_outstanding": "50.06M",
+      "beta": {
+        "value": 1.321,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 251.08,
+      "fifty_two_week_low": 179.62,
+      "pre_market_price": 198.3,
+      "pre_market_chg_pct": "-0.50%",
+      "pre_market_volume": "0",
+      "float_pct": "97.73%",
+      "next_earnings_date": "2026-10-28",
+      "short_float_pct": "2.91%",
+      "short_ratio": 1.32,
+      "institutional_holding_pct": "99.49%",
+      "pre_market_high": 223.0,
+      "pre_market_low": 206.2,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 199.3,
+      "prev_day_high": 200.22,
+      "prev_day_low": 191.74,
+      "prev_day_open": 193.99,
+      "avg_daily_volume_20d": "624.17K",
+      "atr": {
+        "value": "5.40%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 210.27,
+        "ema_20": 215.11,
+        "ema_50": 218.84,
+        "ema_200": 213.37,
+        "timeframe": "1d"
+      },
+      "rsi_14": 51.49,
+      "vwap_prev_session": 198.45,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "FTAI",
+      "company_name": "FTAI AVIATION LTD",
+      "sector": "Aerospace/Defense",
+      "industry": "Aerospace/Defense",
+      "market_cap": "21.14B",
+      "shares_outstanding": "102.63M",
+      "beta": {
+        "value": 1.554,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 323.51,
+      "fifty_two_week_low": 134.49,
+      "pre_market_price": 196.5,
+      "pre_market_chg_pct": "-0.51%",
+      "pre_market_volume": "0",
+      "float_pct": "98.91%",
+      "next_earnings_date": "2026-10-26",
+      "short_float_pct": "10.57%",
+      "short_ratio": 5.79,
+      "institutional_holding_pct": "97.43%",
+      "pre_market_high": 210.0,
+      "pre_market_low": 197.15,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 197.5,
+      "prev_day_high": 198.0,
+      "prev_day_low": 179.11,
+      "prev_day_open": 184.95,
+      "avg_daily_volume_20d": "1.73M",
+      "atr": {
+        "value": "7.60%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 208.02,
+        "ema_20": 216.77,
+        "ema_50": 231.16,
+        "ema_200": 224.74,
+        "timeframe": "1d"
+      },
+      "rsi_14": 41.65,
+      "vwap_prev_session": 188.16,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "TWLO",
+      "company_name": "TWILIO INC - A",
+      "sector": "Software",
+      "industry": "Software",
+      "market_cap": "29.95B",
+      "shares_outstanding": "151.77M",
+      "beta": {
+        "value": 1.38,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 238.48,
+      "fifty_two_week_low": 91.84,
+      "pre_market_price": 189.94,
+      "pre_market_chg_pct": "-0.52%",
+      "pre_market_volume": "0",
+      "float_pct": "99.58%",
+      "next_earnings_date": "2026-08-06",
+      "short_float_pct": "3.60%",
+      "short_ratio": 2.06,
+      "institutional_holding_pct": "94.26%",
+      "pre_market_high": 197.69,
+      "pre_market_low": 190.01,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 190.94,
+      "prev_day_high": 191.7,
+      "prev_day_low": 184.04,
+      "prev_day_open": 186.67,
+      "avg_daily_volume_20d": "1.67M",
+      "atr": {
+        "value": "5.02%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 194.59,
+        "ema_20": 198.04,
+        "ema_50": 194.74,
+        "ema_200": 159.91,
+        "timeframe": "1d"
+      },
+      "rsi_14": 48.88,
+      "vwap_prev_session": 188.65,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "CRWD",
+      "company_name": "CROWDSTRIKE HOLDINGS INC - A",
+      "sector": "Computers",
+      "industry": "Computers",
+      "market_cap": "194.34B",
+      "shares_outstanding": "1.02B",
+      "beta": {
+        "value": 1.254,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 217.5,
+      "fifty_two_week_low": 85.68,
+      "pre_market_price": 184.22,
+      "pre_market_chg_pct": "-0.54%",
+      "pre_market_volume": "0",
+      "float_pct": "98.24%",
+      "next_earnings_date": "2026-09-01",
+      "short_float_pct": "2.74%",
+      "short_ratio": 2.46,
+      "institutional_holding_pct": "74.41%",
+      "pre_market_high": 188.0,
+      "pre_market_low": 186.01,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 185.22,
+      "prev_day_high": 185.46,
+      "prev_day_low": 177.75,
+      "prev_day_open": 180.58,
+      "avg_daily_volume_20d": "8.44M",
+      "atr": {
+        "value": "4.94%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 186.77,
+        "ema_20": 187.48,
+        "ema_50": 176.38,
+        "ema_200": 141.08,
+        "timeframe": "1d"
+      },
+      "rsi_14": 54.34,
+      "vwap_prev_session": 182.18,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "ATI",
+      "company_name": "ATI INC",
+      "sector": "Aerospace/Defense",
+      "industry": "Aerospace/Defense",
+      "market_cap": "25.58B",
+      "shares_outstanding": "136.47M",
+      "beta": {
+        "value": 1.0,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 205.31,
+      "fifty_two_week_low": 70.42,
+      "pre_market_price": 180.9,
+      "pre_market_chg_pct": "-0.55%",
+      "pre_market_volume": "0",
+      "float_pct": "99.00%",
+      "next_earnings_date": "2026-08-06",
+      "short_float_pct": "4.16%",
+      "short_ratio": 2.15,
+      "institutional_holding_pct": "96.91%",
+      "pre_market_high": 184.05,
+      "pre_market_low": 179.99,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 181.9,
+      "prev_day_high": 184.59,
+      "prev_day_low": 175.0,
+      "prev_day_open": 179.42,
+      "avg_daily_volume_20d": "1.41M",
+      "atr": {
+        "value": "4.67%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 187.77,
+        "ema_20": 189.04,
+        "ema_50": 184.18,
+        "ema_200": 149.54,
+        "timeframe": "1d"
+      },
+      "rsi_14": 48.96,
+      "vwap_prev_session": 181.53,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "ANET",
+      "company_name": "ARISTA NETWORKS INC",
+      "sector": "Telecommunications",
+      "industry": "Telecommunications",
+      "market_cap": "227.09B",
+      "shares_outstanding": "1.26B",
+      "beta": {
+        "value": 1.618,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 189.82,
+      "fifty_two_week_low": 114.52,
+      "pre_market_price": 170.02,
+      "pre_market_chg_pct": "-0.58%",
+      "pre_market_volume": "0",
+      "float_pct": "82.98%",
+      "next_earnings_date": "2026-08-04",
+      "short_float_pct": "1.91%",
+      "short_ratio": 2.27,
+      "institutional_holding_pct": "72.94%",
+      "pre_market_high": 176.0,
+      "pre_market_low": 172.06,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 171.02,
+      "prev_day_high": 171.51,
+      "prev_day_low": 164.49,
+      "prev_day_open": 164.56,
+      "avg_daily_volume_20d": "7.45M",
+      "atr": {
+        "value": "5.69%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 172.06,
+        "ema_20": 171.56,
+        "ema_50": 166.7,
+        "ema_200": 149.63,
+        "timeframe": "1d"
+      },
+      "rsi_14": 56.82,
+      "vwap_prev_session": 169.35,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "FTNT",
+      "company_name": "FORTINET INC",
+      "sector": "Computers",
+      "industry": "Computers",
+      "market_cap": "118.82B",
+      "shares_outstanding": "733.71M",
+      "beta": {
+        "value": 1.076,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 170.35,
+      "fifty_two_week_low": 70.12,
+      "pre_market_price": 153.25,
+      "pre_market_chg_pct": "-0.65%",
+      "pre_market_volume": "0",
+      "float_pct": "84.33%",
+      "next_earnings_date": "2026-07-29",
+      "short_float_pct": "2.39%",
+      "short_ratio": 2.36,
+      "institutional_holding_pct": "71.78%",
+      "pre_market_high": 156.16,
+      "pre_market_low": 153.4,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 154.25,
+      "prev_day_high": 169.26,
+      "prev_day_low": 152.23,
+      "prev_day_open": 164.0,
+      "avg_daily_volume_20d": "5.46M",
+      "atr": {
+        "value": "4.54%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 155.84,
+        "ema_20": 155.4,
+        "ema_50": 145.43,
+        "ema_200": 112.29,
+        "timeframe": "1d"
+      },
+      "rsi_14": 60.12,
+      "vwap_prev_session": 156.69,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "NVT",
+      "company_name": "NVENT ELECTRIC PLC",
+      "sector": "Electronics",
+      "industry": "Electronics",
+      "market_cap": "24.88B",
+      "shares_outstanding": "161.72M",
+      "beta": {
+        "value": 1.413,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 184.64,
+      "fifty_two_week_low": 85.72,
+      "pre_market_price": 143.8,
+      "pre_market_chg_pct": "-0.69%",
+      "pre_market_volume": "0",
+      "float_pct": "99.65%",
+      "next_earnings_date": "2026-10-30",
+      "short_float_pct": "2.82%",
+      "short_ratio": 1.82,
+      "institutional_holding_pct": "96.25%",
+      "pre_market_high": 170.0,
+      "pre_market_low": 151.0,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 144.8,
+      "prev_day_high": 148.39,
+      "prev_day_low": 140.45,
+      "prev_day_open": 145.0,
+      "avg_daily_volume_20d": "2.21M",
+      "atr": {
+        "value": "6.36%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 149.13,
+        "ema_20": 153.29,
+        "ema_50": 155.8,
+        "ema_200": 134.1,
+        "timeframe": "1d"
+      },
+      "rsi_14": 49.15,
+      "vwap_prev_session": 144.62,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "GVA",
+      "company_name": "GRANITE CONSTRUCTION INC",
+      "sector": "Engineering&Construction",
+      "industry": "Engineering&Construction",
+      "market_cap": "5.29B",
+      "shares_outstanding": "43.76M",
+      "beta": {
+        "value": 1.378,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 162.08,
+      "fifty_two_week_low": 91.85,
+      "pre_market_price": 113.92,
+      "pre_market_chg_pct": "-0.87%",
+      "pre_market_volume": "0",
+      "float_pct": "99.22%",
+      "next_earnings_date": "2026-07-30",
+      "short_float_pct": "14.84%",
+      "short_ratio": 4.07,
+      "institutional_holding_pct": "118.42%",
+      "pre_market_high": 120.0,
+      "pre_market_low": 114.91,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 114.92,
+      "prev_day_high": 116.13,
+      "prev_day_low": 108.38,
+      "prev_day_open": 114.42,
+      "avg_daily_volume_20d": "1.03M",
+      "atr": {
+        "value": "4.67%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 121.73,
+        "ema_20": 126.65,
+        "ema_50": 132.0,
+        "ema_200": 124.65,
+        "timeframe": "1d"
+      },
+      "rsi_14": 40.14,
+      "vwap_prev_session": 111.2,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "TEAM",
+      "company_name": "ATLASSIAN CORP-CL A",
+      "sector": "Software",
+      "industry": "Software",
+      "market_cap": "25.63B",
+      "shares_outstanding": "159.63M",
+      "beta": {
+        "value": 0.979,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 189.69,
+      "fifty_two_week_low": 56.01,
+      "pre_market_price": 97.12,
+      "pre_market_chg_pct": "-1.02%",
+      "pre_market_volume": "0",
+      "float_pct": "98.68%",
+      "next_earnings_date": "2026-08-06",
+      "short_float_pct": "11.08%",
+      "short_ratio": 4.19,
+      "institutional_holding_pct": "107.18%",
+      "pre_market_high": 98.32,
+      "pre_market_low": 94.97,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 98.12,
+      "prev_day_high": 99.18,
+      "prev_day_low": 95.18,
+      "prev_day_open": 97.74,
+      "avg_daily_volume_20d": "3.77M",
+      "atr": {
+        "value": "6.82%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 96.15,
+        "ema_20": 92.75,
+        "ema_50": 89.6,
+        "ema_200": 106.95,
+        "timeframe": "1d"
+      },
+      "rsi_14": 58.55,
+      "vwap_prev_session": 97.6,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "AAOI",
+      "company_name": "APPLIED OPTOELECTRONICS INC",
+      "sector": "Electronics",
+      "industry": "Electronics",
+      "market_cap": "7.57B",
+      "shares_outstanding": "80.24M",
+      "beta": {
+        "value": 3.839,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 233.67,
+      "fifty_two_week_low": 18.5,
+      "pre_market_price": 89.11,
+      "pre_market_chg_pct": "-1.11%",
+      "pre_market_volume": "0",
+      "float_pct": "95.01%",
+      "next_earnings_date": "2026-08-06",
+      "short_float_pct": "12.86%",
+      "short_ratio": 0.89,
+      "institutional_holding_pct": "68.44%",
+      "pre_market_high": 100.82,
+      "pre_market_low": 93.51,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 90.11,
+      "prev_day_high": 90.68,
+      "prev_day_low": 82.8,
+      "prev_day_open": 83.35,
+      "avg_daily_volume_20d": "8.67M",
+      "atr": {
+        "value": "15.39%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 96.21,
+        "ema_20": 108.32,
+        "ema_50": 127.7,
+        "ema_200": 101.84,
+        "timeframe": "1d"
+      },
+      "rsi_14": 40.88,
+      "vwap_prev_session": 88.08,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "P",
+      "company_name": "EVERPURE INC-A",
+      "sector": "Computers",
+      "industry": "Computers",
+      "market_cap": "25.65B",
+      "shares_outstanding": "332.40M",
+      "beta": {
+        "value": "Not available from source (ibk)",
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 100.59,
+      "fifty_two_week_low": 54.37,
+      "pre_market_price": 74.06,
+      "pre_market_chg_pct": "-1.33%",
+      "pre_market_volume": "0",
+      "float_pct": "94.52%",
+      "next_earnings_date": "2026-08-26",
+      "short_float_pct": "4.43%",
+      "short_ratio": 3.45,
+      "institutional_holding_pct": "85.68%",
+      "pre_market_high": 76.88,
+      "pre_market_low": 74.79,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 75.06,
+      "prev_day_high": 75.61,
+      "prev_day_low": 71.31,
+      "prev_day_open": 71.71,
+      "avg_daily_volume_20d": "2.32M",
+      "atr": {
+        "value": "5.73%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 74.06,
+        "ema_20": 74.1,
+        "ema_50": 74.2,
+        "ema_200": 71.94,
+        "timeframe": "1d"
+      },
+      "rsi_14": 54.62,
+      "vwap_prev_session": 74.13,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    },
+    {
+      "symbol": "AMBA",
+      "company_name": "AMBARELLA INC",
+      "sector": "Semiconductors",
+      "industry": "Semiconductors",
+      "market_cap": "3.77B",
+      "shares_outstanding": "43.87M",
+      "beta": {
+        "value": 2.156,
+        "timeframe": "1Y monthly"
+      },
+      "fifty_two_week_high": 96.69,
+      "fifty_two_week_low": 48.3,
+      "pre_market_price": 73.09,
+      "pre_market_chg_pct": "-1.35%",
+      "pre_market_volume": "0",
+      "float_pct": "95.40%",
+      "next_earnings_date": "2026-08-27",
+      "short_float_pct": "10.89%",
+      "short_ratio": 2.22,
+      "institutional_holding_pct": "88.10%",
+      "pre_market_high": 77.77,
+      "pre_market_low": 74.5,
+      "rvol_pre_market": "Not calculated (source: ibk)",
+      "prev_close": 74.09,
+      "prev_day_high": 74.79,
+      "prev_day_low": 68.72,
+      "prev_day_open": 71.07,
+      "avg_daily_volume_20d": "2.03M",
+      "atr": {
+        "value": "8.27%",
+        "period": 14,
+        "timeframe": "1d"
+      },
+      "ema": {
+        "ema_9": 73.24,
+        "ema_20": 71.87,
+        "ema_50": 71.25,
+        "ema_200": 69.5,
+        "timeframe": "1d"
+      },
+      "rsi_14": 64.54,
+      "vwap_prev_session": 73.04,
+      "benchmark": {
+        "symbol": "SPY",
+        "prev_close": 741.69,
+        "pre_market_change_pct": "Not available from source (ibk)"
+      }
+    }
+  ]
+}
