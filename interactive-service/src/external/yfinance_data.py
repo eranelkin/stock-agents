@@ -129,6 +129,17 @@ def _fetch_yfinance_sync(symbols: List[str], rvol_lookback_days: int = 5) -> Dic
                 except (TypeError, ValueError):
                     pass
 
+            # Real-time cumulative pre-market volume from Yahoo Finance info (matches TradingView)
+            pre_market_volume_info: Optional[float] = None
+            raw_pmv = info.get("preMarketVolume")
+            if raw_pmv is not None:
+                try:
+                    val_pmv = float(raw_pmv)
+                    if val_pmv > 0:
+                        pre_market_volume_info = val_pmv
+                except (TypeError, ValueError):
+                    pass
+
             short_float_pct: Optional[float] = None
             raw_sfp = info.get("shortPercentOfFloat")
             if raw_sfp is not None:
@@ -160,6 +171,7 @@ def _fetch_yfinance_sync(symbols: List[str], rvol_lookback_days: int = 5) -> Dic
             # ── Intraday 1-min bars: pre-market high/low/rvol + prev-session VWAP ──
             pre_market_high: Optional[float] = None
             pre_market_low:  Optional[float] = None
+            pre_market_volume_yf: Optional[float] = None
             rvol_pre_market: Optional[float] = None
             vwap_prev_session: Optional[float] = None
             _lookback = min(rvol_lookback_days, 5)  # yfinance 1m capped at ~7 cal days
@@ -188,6 +200,13 @@ def _fetch_yfinance_sync(symbols: List[str], rvol_lookback_days: int = 5) -> Dic
                             pre_market_high = float(today_pm["High"].max())
                             pre_market_low  = float(today_pm["Low"].min())
                             today_vol   = float(today_pm["Volume"].sum())
+                            # Prefer info preMarketVolume (real-time, consolidated).
+                            # Only use bar sum if it's > 0; 0 means bars are unfinalized for
+                            # the current session and should not be treated as actual zero volume.
+                            pre_market_volume_yf = (
+                                pre_market_volume_info if pre_market_volume_info is not None
+                                else (today_vol if today_vol > 0 else None)
+                            )
                             latest_t    = today_pm.index.time.max()
 
                             prior_vols = []
@@ -201,6 +220,10 @@ def _fetch_yfinance_sync(symbols: List[str], rvol_lookback_days: int = 5) -> Dic
                                 rvol_pre_market = round(today_vol / (sum(prior_vols) / len(prior_vols)), 2)
             except Exception as e:
                 log.debug("%s: yfinance pre-market bars failed: %s", sym, e)
+
+            # If bars didn't produce a usable volume, fall back to info value
+            if not pre_market_volume_yf and pre_market_volume_info is not None:
+                pre_market_volume_yf = pre_market_volume_info
 
             try:
                 rth_df = ticker.history(interval="1m", prepost=False, period="2d")
@@ -236,6 +259,7 @@ def _fetch_yfinance_sync(symbols: List[str], rvol_lookback_days: int = 5) -> Dic
                 "history":            history,
                 "pre_market_high":    pre_market_high,
                 "pre_market_low":     pre_market_low,
+                "pre_market_volume":  pre_market_volume_yf,
                 "rvol_pre_market":    rvol_pre_market,
                 "vwap_prev_session":  vwap_prev_session,
             }
@@ -257,6 +281,7 @@ def _fetch_yfinance_sync(symbols: List[str], rvol_lookback_days: int = 5) -> Dic
                 "pre_market_chg_pct": None,
                 "pre_market_high":    None,
                 "pre_market_low":     None,
+                "pre_market_volume":  None,
                 "rvol_pre_market":    None,
                 "vwap_prev_session":  None,
             }
@@ -269,3 +294,55 @@ async def fetch_yfinance_data(symbols: List[str], rvol_lookback_days: int = 5) -
     if not symbols:
         return {}
     return await asyncio.to_thread(_fetch_yfinance_sync, symbols, rvol_lookback_days)
+
+
+def _fetch_yfinance_benchmark_sync(symbols: List[str]) -> Dict[str, dict]:
+    """Lightweight benchmark fetch using fast_info — avoids fundamentals endpoints that 404 for ETFs."""
+    try:
+        import yfinance as yf
+    except ImportError:
+        log.warning("yfinance not installed — benchmark data unavailable")
+        return {}
+
+    results: Dict[str, dict] = {}
+    for sym in symbols:
+        try:
+            fi = yf.Ticker(sym).fast_info
+
+            prev_close: Optional[float] = None
+            try:
+                prev_close = float(fi.previous_close) if fi.previous_close is not None else None
+            except (TypeError, ValueError):
+                pass
+
+            # fast_info.pre_market_price is absent for ETFs; fall back to last_price.
+            # During pre-market hours last_price reflects the most recent pre-market trade.
+            pre_market_price: Optional[float] = None
+            try:
+                raw_pm = getattr(fi, "pre_market_price", None) or getattr(fi, "last_price", None)
+                if raw_pm is not None:
+                    pre_market_price = round(float(raw_pm), 2)
+            except (TypeError, ValueError):
+                pass
+
+            pre_market_chg_pct: Optional[float] = None
+            if pre_market_price is not None and prev_close:
+                pre_market_chg_pct = round((pre_market_price / prev_close - 1) * 100, 4)
+
+            results[sym] = {
+                "prev_close": prev_close,
+                "pre_market_price": pre_market_price,
+                "pre_market_chg_pct": pre_market_chg_pct,
+            }
+        except Exception as e:
+            log.warning("%s: yfinance benchmark fetch failed: %s", sym, e)
+            results[sym] = {"prev_close": None, "pre_market_price": None, "pre_market_chg_pct": None}
+
+    return results
+
+
+async def fetch_yfinance_benchmark_data(symbols: List[str]) -> Dict[str, dict]:
+    """Fetch prev_close and pre-market change % for benchmark symbols (e.g. SPY) without triggering ETF fundamentals 404s."""
+    if not symbols:
+        return {}
+    return await asyncio.to_thread(_fetch_yfinance_benchmark_sync, symbols)

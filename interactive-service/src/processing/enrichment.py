@@ -127,6 +127,7 @@ class StockRecord:
     # ── Populated by benchmark fetcher (Phase 4) ──────────────────────────────
     benchmark_symbol: str = ""
     benchmark_prev_close: Optional[float] = None
+    benchmark_pre_market_price: Optional[float] = None
     benchmark_pre_market_chg_pct: Optional[float] = None
 
     # ── Populated by volume profile fetcher (Phase 6) ─────────────────────────
@@ -220,7 +221,7 @@ def build_records(
 
             market_cap_usd=(snap.market_cap_usd if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_market_cap == "ibk") else None,
             pre_market_price=(snap.pre_market_price if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_pre_market_price == "ibk") else None,
-            pre_market_volume=(snap.pre_market_volume if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_pre_market_volume == "ibk") else None,
+            pre_market_volume=(snap.pre_market_volume if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_pre_market_volume in ("ibk", "finnhub", "yfinance")) else None,
             pre_market_chg_pct=(snap.pre_market_chg_pct if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_pre_market_chg_pct == "ibk") else None,
             price=(snap.prev_close if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_prev_close == "ibk") else None,
             atr=atr_val,

@@ -38,7 +38,7 @@ scheduler:
     minute: 0
     timezone: "America/New_York"
 
-max_number_of_stocks: 1 #org : 49 -  How many passing records are written to the output file
+max_number_of_stocks: 10 #org : 49 -  How many passing records are written to the output file
 
 ib_data:
   # ── Core Data Fetches ────────────────────────────────────────────────────────
@@ -54,7 +54,7 @@ ib_data:
                                   #           market_cap, shares_outstanding, beta, fifty_two_week_high,
                                   #           fifty_two_week_low, bid/ask prices
   
-  fetch_pre_market_bars: false     # fetch pre_market 1-min bars
+  fetch_pre_market_bars: true     # fetch pre_market 1-min bars - MUST BE TRUE FOR pre-market volume to be accurate !!!!
                                   # Provides: pre_market_high, pre_market_low, rvol_pre_market
   
   fetch_prev_session_vwap: false   # fetch previous session VWAP
@@ -87,33 +87,38 @@ ib_data:
   output_stock_type: "ibk"      # Used for ETF filtering, not in output, but toggle is here
   
   # Daily Bars Data
-  output_prev_close: "finhub"
-  output_prev_day_high: "finhub"
-  output_prev_day_low: "finhub"
-  output_prev_day_open: "finhub"
+  output_prev_close: "yfinance"
+  output_prev_day_high: "yfinance"
+  output_prev_day_low: "yfinance"
+  output_prev_day_open: "yfinance"
   
   # Market Snapshot Data
-  output_market_cap: "finhub"
-  output_shares_outstanding: "finhub"
+  output_market_cap: "yfinance"
+  output_shares_outstanding: "yfinance"
   output_beta: "ibk"
-  output_fifty_two_week_high: "finhub"
-  output_fifty_two_week_low: "finhub"
+  output_fifty_two_week_high: "yfinance"
+  output_fifty_two_week_low: "yfinance"
   output_bid_ask: true           # Bid and ask prices
   
   # Volume Data (from various sources)
   #output_pre_market_volume: "ibk" # org location 
-  output_avg_daily_volume_20d: "finhub"
+  output_avg_daily_volume_20d: "yfinance"
   
   # Pre-market Bars Data
-  output_pre_market_volume: "ibk" 
-  output_pre_market_price: "ibk"
-  output_pre_market_chg_pct: "ibk"
-  output_pre_market_high: "finhub"
-  output_pre_market_low: "finhub"
+  # pre_market_volume source options (to match TradingView SIP-consolidated volume):
+  #   "yfinance"  — Yahoo Finance info.preMarketVolume (real-time consolidated, matches TradingView, no extra IB calls) ← RECOMMENDED
+  #   "ibk"       — IB 1-min TRADES bars sum 4:00–9:30 AM (most authoritative; requires fetch_pre_market_bars: true)
+  #                 Falls back to IB streaming tick when fetch_pre_market_bars: false (undercounts 40–50%)
+  #   "finnhub"   — Finnhub /quote session volume (only accurate during pre-market hours)
+  output_pre_market_volume: "ibk"  #ONLY ONE WAY FOR IT TO WORK SET fetch_pre_market_bars: true  !!!!
+  output_pre_market_price: "ibk"  # it will correct only when running it on the pre-market hours, otherwise it will be the last price of the previous day.
+  output_pre_market_chg_pct: "ibk"  # it will correct only when running it on the pre-market hours, otherwise it will be the last price of the previous day.
+  output_pre_market_high: "yfinance"
+  output_pre_market_low: "yfinance"
   output_rvol_pre_market: "ibk"  # Relative volume
 
   # Previous Session VWAP
-  output_vwap_prev_session: "finhub"
+  output_vwap_prev_session: "yfinance"
   
   # Volume Profile Data
   fetch_volume_profile: false      # fetch volume profile (POC, VAH, VAL)
@@ -125,15 +130,15 @@ ib_data:
   output_vp_val: "ibk"                # Value Area Low
   
   # Benchmark (SPY) Data
-  output_benchmark_data: "finhub"        # Master switch; yfinance does not provide pre-market price for SPY
-  output_benchmark_prev_close: "finhub"
+  output_benchmark_data: "yfinance"        # Master switch; yfinance does not provide pre-market price for SPY
+  output_benchmark_prev_close: "yfinance"
   output_benchmark_pre_market_chg_pct: "ibk"
   benchmark_symbol: "SPY"           # benchmark used for relative pre-market comparison
   
   # Technical Indicators
-  output_atr: "finhub"
-  output_ema: "finhub"
-  output_rsi: "finhub"
+  output_atr: "yfinance"
+  output_ema: "yfinance"
+  output_rsi: "yfinance"
 
 
 
@@ -153,7 +158,11 @@ external_apis:
   fmp_api_key: ""                 # Financial Modeling Prep API key (free at financialmodelingprep.com)
                                   # Provides: news_catalysts (list of recent news headlines)
                                   # Leave empty to disable news fetching
-  
+
+  finnhub_api_key: ""             # Finnhub.io API key (free at finnhub.io — 60 calls/min)
+                                  # Provides: pre_market_volume (current session volume, matches TradingView before 9:30 AM)
+                                  # Set output_pre_market_volume to "finnhub" to activate
+
   news_max_headlines: 3           # max news items per stock (set to 0 to disable)
   
   # Note: The following fields are fetched from yfinance (no API key required):
@@ -162,8 +171,8 @@ external_apis:
   
   # Output Toggles for External Data
   output_news_catalysts: null
-  output_float_pct: "finhub"
-  output_next_earnings_date: "finhub"
-  output_short_float_pct: "finhub"
-  output_short_ratio: "finhub"
-  output_institutional_holding_pct: "finhub"
+  output_float_pct: "yfinance"
+  output_next_earnings_date: "yfinance"
+  output_short_float_pct: "yfinance"
+  output_short_ratio: "yfinance"
+  output_institutional_holding_pct: "yfinance"

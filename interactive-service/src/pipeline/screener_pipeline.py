@@ -12,7 +12,7 @@ from ib_async import IB
 
 from src.config.loader import AppConfig, PacingConfig, ScreenerConfig
 from src.external.news_data import fetch_news_catalysts
-from src.external.yfinance_data import fetch_yfinance_data
+from src.external.yfinance_data import fetch_yfinance_benchmark_data, fetch_yfinance_data
 from src.ib.client import IBClient
 from src.ib.contract_details import fetch_all_contract_details, fetch_contract_details
 from src.ib.historical import (
@@ -187,8 +187,9 @@ async def collect_screener_records(
 
     # ── Pre-loop: benchmark (fetched once, shared across all iterations) ───────
     benchmark_sym = getattr(app_config, "benchmark_symbol", "SPY") if app_config else "SPY"
-    bm_prev_close: float | None = None
-    bm_chg_pct:   float | None = None
+    bm_prev_close:      float | None = None
+    bm_pre_market_price: float | None = None
+    bm_chg_pct:         float | None = None
 
     if app_config and app_config.ib_data.output_benchmark_data == "ibk":
         try:
@@ -201,13 +202,14 @@ async def collect_screener_records(
                     bm_chg_pct    = bm_snap.pre_market_chg_pct
         except Exception as e:
             log.warning("Benchmark fetch failed for %s from IBKR: %s", benchmark_sym, e)
-    elif app_config and app_config.ib_data.output_benchmark_data == "finhub":
+    elif app_config and app_config.ib_data.output_benchmark_data == "yfinance":
         log.info("Fetching benchmark data for %s from yfinance...", benchmark_sym)
         try:
-            yf_bm_data = await fetch_yfinance_data([benchmark_sym])
+            yf_bm_data = await fetch_yfinance_benchmark_data([benchmark_sym])
             if bm_data := yf_bm_data.get(benchmark_sym):
-                bm_prev_close = bm_data.get("prev_close")
-                bm_chg_pct    = bm_data.get("pre_market_chg_pct")
+                bm_prev_close       = bm_data.get("prev_close")
+                bm_pre_market_price = bm_data.get("pre_market_price")
+                bm_chg_pct          = bm_data.get("pre_market_chg_pct")
         except Exception as e:
             log.warning("Benchmark fetch failed for %s from yfinance: %s", benchmark_sym, e)
     else:
@@ -366,12 +368,12 @@ async def collect_screener_records(
                      app_config.ib_data.output_atr if app_config else "N/A")
 
         # Step 4b: avg_volume_min pre-filter
-        # When source is "finhub" (yfinance), skip the bars-based pre-filter — IB's
+        # When source is "yfinance" (yfinance), skip the bars-based pre-filter — IB's
         # RTH-only bar volumes undercount vs yfinance total-session volume and would
         # incorrectly drop stocks. The final Step 13 filter applies avg_volume_min
         # against rec.avg_daily_volume_20d which yfinance populates with total volume.
         avg_vol_source = getattr(getattr(app_config, "ib_data", None), "output_avg_daily_volume_20d", "ibk")
-        if avg_vol_source == "finhub":
+        if avg_vol_source == "yfinance":
             log.info(
                 "Skipping bars-based avg_volume pre-filter (source: finhub) — "
                 "will apply after yfinance enrichment using total-session volume"
@@ -463,7 +465,7 @@ async def collect_screener_records(
         log.info("Built %d records from %d surviving symbols", len(records_all), len(surviving_infos))
 
         # Step 11: patch records with pre-market bars, VWAP, benchmark, VP
-        if app_config and _should_output_ib_data("output_vp_poc", source="finhub"):
+        if app_config and _should_output_ib_data("output_vp_poc", source="yfinance"):
             log.warning("Volume Profile from yfinance is not supported and will be null.")
 
         for rec in records_all:
@@ -500,10 +502,12 @@ async def collect_screener_records(
             if _should_output_ib_data("output_benchmark_data"):
                 rec.benchmark_symbol = benchmark_sym
                 rec.benchmark_prev_close = bm_prev_close if _should_output_ib_data("output_benchmark_prev_close") else None
+                rec.benchmark_pre_market_price = bm_pre_market_price
                 rec.benchmark_pre_market_chg_pct = bm_chg_pct if _should_output_ib_data("output_benchmark_pre_market_chg_pct") else None
             else:
                 rec.benchmark_symbol = None
                 rec.benchmark_prev_close = None
+                rec.benchmark_pre_market_price = None
                 rec.benchmark_pre_market_chg_pct = None
 
             vp = vp_map.get(rec.symbol)
@@ -536,8 +540,8 @@ async def collect_screener_records(
                 "output_float_pct", "output_next_earnings_date",
                 "output_short_float_pct", "output_short_ratio", "output_institutional_holding_pct",
             ]
-            if (any(_should_output_ib_data(f, "finhub") for f in ib_finhub) or
-                    any(_should_output_external_data(f, "finhub") for f in ext_finhub)):
+            if (any(_should_output_ib_data(f, "yfinance") for f in ib_finhub) or
+                    any(_should_output_external_data(f, "yfinance") for f in ext_finhub)):
                 log.info("Fetching external data (yfinance) for %d symbols...", len(surviving_syms))
                 rvol_lookback = getattr(ib_data_cfg, "pre_market_rvol_lookback", 5) if ib_data_cfg else 5
                 yf_data = await fetch_yfinance_data(surviving_syms, rvol_lookback_days=min(rvol_lookback, 5))
@@ -547,11 +551,20 @@ async def collect_screener_records(
         news_data: dict = {}
         fmp_key = getattr(ext_cfg, "fmp_api_key", "") if ext_cfg else ""
         max_headlines = getattr(ext_cfg, "news_max_headlines", 3) if ext_cfg else 3
-        if fmp_key and max_headlines > 0 and _should_output_external_data("output_news_catalysts", source="finhub"):
+        if fmp_key and max_headlines > 0 and _should_output_external_data("output_news_catalysts", source="yfinance"):
             log.info("Fetching news catalysts via FMP for %d symbols...", len(surviving_syms))
             news_data = await fetch_news_catalysts(surviving_syms, fmp_key, max_headlines)
         else:
             log.info("Skipping news fetch (API key/flag not set or output disabled)")
+
+        finnhub_volume: dict = {}
+        finnhub_key = getattr(ext_cfg, "finnhub_api_key", "") if ext_cfg else ""
+        if finnhub_key and ib_data_cfg and ib_data_cfg.output_pre_market_volume == "finnhub":
+            from src.external.finnhub_data import fetch_finnhub_premarket_volume
+            log.info("Fetching pre-market volume from Finnhub for %d symbols...", len(surviving_syms))
+            finnhub_volume = await fetch_finnhub_premarket_volume(surviving_syms, finnhub_key)
+        elif ib_data_cfg and ib_data_cfg.output_pre_market_volume == "finnhub":
+            log.warning("output_pre_market_volume=finnhub but finnhub_api_key is not set — falling back to IB volume")
 
         for rec in records_all:
             if yf := yf_data.get(rec.symbol):
@@ -593,20 +606,24 @@ async def collect_screener_records(
                         rec.fifty_two_week_low = yf.get("fifty_two_week_low")
                     elif ib_data_cfg.output_fifty_two_week_low is None:
                         rec.fifty_two_week_low = None
-                    if ib_data_cfg.output_beta == "finhub":
+                    if ib_data_cfg.output_beta == "yfinance":
                         rec.beta = yf.get("beta")
                     elif ib_data_cfg.output_beta is None:
                         rec.beta = None
-                    if ib_data_cfg.output_pre_market_high == "finhub":
+                    if ib_data_cfg.output_pre_market_high == "yfinance":
                         rec.pre_market_high = yf.get("pre_market_high")
-                    if ib_data_cfg.output_pre_market_low == "finhub":
+                    if ib_data_cfg.output_pre_market_low == "yfinance":
                         rec.pre_market_low = yf.get("pre_market_low")
-                    if ib_data_cfg.output_rvol_pre_market == "finhub":
+                    if ib_data_cfg.output_rvol_pre_market == "yfinance":
                         rec.rvol_pre_market = yf.get("rvol_pre_market")
-                    if ib_data_cfg.output_vwap_prev_session == "finhub":
+                    if ib_data_cfg.output_vwap_prev_session == "yfinance":
                         rec.vwap_prev_session = yf.get("vwap_prev_session")
+                    if ib_data_cfg.output_pre_market_volume == "yfinance":
+                        yf_pmv = yf.get("pre_market_volume")
+                        if yf_pmv is not None:
+                            rec.pre_market_volume = yf_pmv
 
-                if _should_output_external_data("output_float_pct", source="finhub"):
+                if _should_output_external_data("output_float_pct", source="yfinance"):
                     raw_float = yf.get("float_shares")
                     rec.float_pct = (
                         (raw_float / rec.shares_outstanding) * 100
@@ -620,15 +637,15 @@ async def collect_screener_records(
                 if history_df is not None and not history_df.empty and ib_data_cfg:
                     history_df = history_df.dropna(subset=['High', 'Low', 'Close', 'Open'])
                     if len(history_df) >= 2:
-                        if ib_data_cfg.output_prev_day_high == "finhub":
+                        if ib_data_cfg.output_prev_day_high == "yfinance":
                             rec.prev_day_high = history_df['High'].iloc[-2]
-                        if ib_data_cfg.output_prev_day_low == "finhub":
+                        if ib_data_cfg.output_prev_day_low == "yfinance":
                             rec.prev_day_low = history_df['Low'].iloc[-2]
-                        if ib_data_cfg.output_prev_day_open == "finhub":
+                        if ib_data_cfg.output_prev_day_open == "yfinance":
                             rec.prev_day_open = history_df['Open'].iloc[-2]
-                    if ib_data_cfg.output_avg_daily_volume_20d == "finhub":
+                    if ib_data_cfg.output_avg_daily_volume_20d == "yfinance":
                         rec.avg_daily_volume_20d = history_df['Volume'].tail(20).mean()
-                    if ib_data_cfg.output_atr == "finhub":
+                    if ib_data_cfg.output_atr == "yfinance":
                         atr_period = app_config.ib_data.atr_period if app_config else 14
                         if len(history_df) >= atr_period + 1:
                             hl = history_df['High'] - history_df['Low']
@@ -640,13 +657,13 @@ async def collect_screener_records(
                             last_close = history_df['Close'].iloc[-1]
                             if pd.notna(atr_v) and last_close > 0:
                                 rec.atr = round(float(atr_v) / last_close * 100, 2)
-                    if ib_data_cfg.output_ema == "finhub":
+                    if ib_data_cfg.output_ema == "yfinance":
                         for p in (app_config.ib_data.ema_periods if app_config else []):
                             if len(history_df) >= p:
                                 rec.emas[p] = round(
                                     history_df['Close'].ewm(span=p, adjust=False).mean().iloc[-1], 4
                                 )
-                    if ib_data_cfg.output_rsi == "finhub":
+                    if ib_data_cfg.output_rsi == "yfinance":
                         rsi_period = app_config.ib_data.rsi_period if app_config else 14
                         if len(history_df) > rsi_period:
                             delta = history_df['Close'].diff(1)
@@ -679,13 +696,20 @@ async def collect_screener_records(
                         rec.fifty_two_week_high = None
                     if ib_data_cfg.output_fifty_two_week_low != "ibk" and ib_data_cfg.output_fifty_two_week_low is not None:
                         rec.fifty_two_week_low = None
-                    if ib_data_cfg.output_beta == "finhub":
+                    if ib_data_cfg.output_beta == "yfinance":
                         rec.beta = None
 
-            if _should_output_external_data("output_news_catalysts", source="finhub"):
+            if _should_output_external_data("output_news_catalysts", source="yfinance"):
                 rec.news_catalysts = news_data.get(rec.symbol, [])
             else:
                 rec.news_catalysts = []
+
+        # Step 12a: apply Finnhub pre-market volume
+        if finnhub_volume:
+            for rec in records_all:
+                vol = finnhub_volume.get(rec.symbol)
+                if vol is not None:
+                    rec.pre_market_volume = vol
 
         # Step 12b: post-enrichment calculations
         if (app_config and app_config.ib_data.output_market_cap is not None

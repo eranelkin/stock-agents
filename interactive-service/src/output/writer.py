@@ -240,15 +240,10 @@ def _record_to_dict(rec: StockRecord, app_cfg: AppConfig) -> dict:
     if ib_cfg.output_benchmark_data:
         bm_data = {"symbol": rec.benchmark_symbol or "N/A"}
         if ib_cfg.output_benchmark_prev_close:
-            if rec.benchmark_prev_close is not None:
-                bm_data["prev_close"] = _fmt_price(rec.benchmark_prev_close)
-            else:
-                bm_data["prev_close"] = f"Not available from source ({ib_cfg.output_benchmark_data})"
+            bm_data["prev_close"] = _fmt_price(rec.benchmark_prev_close) if rec.benchmark_prev_close is not None else None
+        bm_data["pre_market_price"] = _fmt_price(rec.benchmark_pre_market_price) if rec.benchmark_pre_market_price is not None else None
         if ib_cfg.output_benchmark_pre_market_chg_pct:
-            if rec.benchmark_pre_market_chg_pct is not None:
-                bm_data["pre_market_change_pct"] = _fmt_chg_pct(rec.benchmark_pre_market_chg_pct)
-            else:
-                bm_data["pre_market_change_pct"] = f"Not available from source ({ib_cfg.output_benchmark_pre_market_chg_pct})"
+            bm_data["pre_market_change_pct"] = _fmt_chg_pct(rec.benchmark_pre_market_chg_pct) if rec.benchmark_pre_market_chg_pct is not None else None
         data["benchmark"] = bm_data
 
     # ── External: News ───────────────────────────────────────────────────────

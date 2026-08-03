@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
 import dacite
 import yaml
+from dotenv import load_dotenv
 
 log = logging.getLogger(__name__)
 
@@ -128,13 +130,14 @@ class IBDataConfig:
 @dataclass
 class ExternalApisConfig:
     fmp_api_key: str = ""       # Financial Modeling Prep key — free at financialmodelingprep.com
+    finnhub_api_key: str = ""   # Finnhub.io key — free at finnhub.io (60 calls/min)
     news_max_headlines: int = 3  # max news items returned per stock (0 to disable)
-    output_news_catalysts: Optional[str] = "finhub"
-    output_float_pct: Optional[str] = "finhub"
-    output_next_earnings_date: Optional[str] = "finhub"
-    output_short_float_pct: Optional[str] = "finhub"
-    output_short_ratio: Optional[str] = "finhub"
-    output_institutional_holding_pct: Optional[str] = "finhub"
+    output_news_catalysts: Optional[str] = "yfinance"
+    output_float_pct: Optional[str] = "yfinance"
+    output_next_earnings_date: Optional[str] = "yfinance"
+    output_short_float_pct: Optional[str] = "yfinance"
+    output_short_ratio: Optional[str] = "yfinance"
+    output_institutional_holding_pct: Optional[str] = "yfinance"
 
 
 @dataclass
@@ -202,17 +205,29 @@ def _read_yaml(path: Path) -> dict:
 
 
 def load_settings(path: Path) -> AppConfig:
+    # Load .env from the project root (parent of the config dir) so API keys set
+    # there are available via os.environ without requiring them in settings.yaml.
+    load_dotenv(path.parent.parent / ".env", override=False)
+
     raw = _read_yaml(path)
     try:
         cfg = dacite.from_dict(AppConfig, raw, dacite.Config(strict=False))
     except dacite.DaciteError as e:
         raise ValueError(f"Invalid settings.yaml: {e}") from e
     for f in ("output_vp_poc", "output_vp_vah", "output_vp_val"):
-        if getattr(cfg.ib_data, f, None) == "finhub":
+        if getattr(cfg.ib_data, f, None) == "yfinance":
             raise ValueError(
-                f"Invalid settings.yaml: {f} cannot be 'finhub' — "
+                f"Invalid settings.yaml: {f} cannot be 'yfinance' — "
                 "volume profile data is only available from IB (set to 'ibk' or null)"
             )
+
+    # Patch API keys from environment if the yaml left them blank.
+    # This lets secrets live in .env without being embedded in yaml.
+    if not cfg.external_apis.finnhub_api_key:
+        cfg.external_apis.finnhub_api_key = os.environ.get("FINNHUB_API_KEY", "")
+    if not cfg.external_apis.fmp_api_key:
+        cfg.external_apis.fmp_api_key = os.environ.get("FMP_API_KEY", "")
+
     return cfg
 
 
