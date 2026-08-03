@@ -58,6 +58,7 @@ async def create_model(
         model_id=body.model_id,
         provider=body.provider,
         base_url=body.base_url,
+        search_depth=body.search_depth,
     )
     session.add(model)
     await session.flush()  # get the id before writing env var
@@ -92,6 +93,8 @@ async def update_model(
         model.provider = body.provider
     if body.base_url is not None:
         model.base_url = body.base_url
+    if body.search_depth is not None:
+        model.search_depth = body.search_depth
 
     if body.api_key:
         env_var = model.api_key_env_var or f"MODEL_API_KEY_{model.id.hex[:8].upper()}"

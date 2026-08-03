@@ -102,16 +102,20 @@ class Agent:
         llm_client: LLMClient,
         run_logger: RunLogger | None = None,
         search_mode: str | None = None,
+        search_depth: str | None = None,
         output_schema: dict[str, Any] | None = None,
         input_schema: dict[str, Any] | None = None,
+        thinking_budget_tokens: int | None = None,
     ) -> None:
         self.agent_id = agent_id
         self.prompt = prompt
         self._llm = llm_client
         self._run_logger = run_logger
         self._search_mode = search_mode
+        self._search_depth = search_depth
         self._output_schema = output_schema
         self._input_schema = input_schema
+        self._thinking_budget_tokens = thinking_budget_tokens
 
     async def run(
         self,
@@ -156,6 +160,7 @@ class Agent:
                     tool_handlers={"web_search": search_handler},
                     max_tool_rounds=settings.search_max_tool_rounds,
                     log_context=full_log_context,
+                    thinking_budget_tokens=self._thinking_budget_tokens,
                 )
                 return self._parse_and_validate(raw, extra)
             else:
@@ -187,6 +192,7 @@ class Agent:
                 system_prompt=system_prompt,
                 user_message=user_message,
                 log_context=log_context,
+                thinking_budget_tokens=self._thinking_budget_tokens,
             )
             result = self._parse_and_validate(raw, extra)
 
@@ -242,6 +248,7 @@ class Agent:
         """Return a search coroutine that logs via RunLogger when available."""
         client = SearchClient(run_logger=self._run_logger)
         agent_id = self.agent_id
+        search_depth = self._search_depth or self._llm.search_depth
 
         async def _handler(query: str) -> str:
             return await client.search(
@@ -251,6 +258,7 @@ class Agent:
                 prompt_title=prompt_title,
                 pipeline_id=pipeline_id,
                 pipeline_type=pipeline_type,
+                search_depth=search_depth,
             )
 
         return _handler

@@ -8,6 +8,8 @@ export interface Prompt {
   search_mode: string | null
   output_schema: Record<string, unknown> | null
   input_schema: Record<string, unknown> | null
+  thinking_budget_tokens: number | null
+  search_depth: string | null
   is_active: boolean
   created_at: string
   updated_at: string

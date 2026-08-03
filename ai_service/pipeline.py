@@ -121,8 +121,10 @@ class Pipeline:
                     llm_client=self._llm,
                     run_logger=self._run_logger,
                     search_mode=prompt_config.search_mode,
+                    search_depth=prompt_config.search_depth,
                     output_schema=prompt_config.output_schema,
                     input_schema=prompt_config.input_schema,
+                    thinking_budget_tokens=prompt_config.thinking_budget_tokens,
                 )
                 result = await agent.run(
                     ticker_input=self.entity.model_dump(),
@@ -157,8 +159,10 @@ class Pipeline:
                 llm_client=self._llm,
                 run_logger=self._run_logger,
                 search_mode=prompt_config.search_mode,
+                search_depth=prompt_config.search_depth,
                 output_schema=prompt_config.output_schema,
                 input_schema=prompt_config.input_schema,
+                thinking_budget_tokens=prompt_config.thinking_budget_tokens,
             )
             result = await agent.run(
                 ticker_input=self.entity.model_dump(),
@@ -189,4 +193,5 @@ class Pipeline:
             prompt_title=prompt_config.title,
             pipeline_id=self.pipeline_id,
             pipeline_type=self._pipeline_type,
+            search_depth=prompt_config.search_depth or self._llm.search_depth,
         )

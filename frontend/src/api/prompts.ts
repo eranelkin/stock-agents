@@ -51,6 +51,8 @@ export async function createPrompt(payload: {
   search_query_template?: string | null;
   output_schema?: Record<string, unknown> | null;
   input_schema?: Record<string, unknown> | null;
+  thinking_budget_tokens?: number | null;
+  search_depth?: string | null;
 }): Promise<Prompt> {
   const res = await fetch(BASE, {
     method: "POST",
@@ -77,6 +79,8 @@ export async function updatePrompt(
     search_query_template: string | null;
     output_schema: Record<string, unknown> | null;
     input_schema: Record<string, unknown> | null;
+    thinking_budget_tokens: number | null;
+    search_depth: string | null;
   }>,
 ): Promise<Prompt> {
   const res = await fetch(`${BASE}/${id}`, {

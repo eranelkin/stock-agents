@@ -142,6 +142,7 @@ async def create_run(
             "model_id": m.model_id,
             "base_url": m.base_url,
             "api_key": os.environ.get(m.api_key_env_var) if m.api_key_env_var else None,
+            "search_depth": m.search_depth,
         }
         for m in ai_models
     ]
@@ -171,8 +172,10 @@ async def create_run(
                             "search_enabled": p.search_enabled,
                             "search_query_template": p.search_query_template,
                             "search_mode": p.search_mode,
+                            "search_depth": p.search_depth,
                             "output_schema": p.output_schema,
                             "input_schema": p.input_schema or _TICKER_SCHEMA,
+                            "thinking_budget_tokens": p.thinking_budget_tokens,
                         }
                         for p in agent_prompts
                     ],
@@ -184,8 +187,10 @@ async def create_run(
                             "search_enabled": p.search_enabled,
                             "search_query_template": p.search_query_template,
                             "search_mode": p.search_mode,
+                            "search_depth": p.search_depth,
                             "output_schema": p.output_schema,
                             "input_schema": p.input_schema or _SECTOR_SCHEMA,
+                            "thinking_budget_tokens": p.thinking_budget_tokens,
                         }
                         for p in sector_prompts
                     ],
@@ -197,8 +202,10 @@ async def create_run(
                             "search_enabled": p.search_enabled,
                             "search_query_template": p.search_query_template,
                             "search_mode": p.search_mode,
+                            "search_depth": p.search_depth,
                             "output_schema": p.output_schema,
                             "input_schema": p.input_schema or _MACRO_SCHEMA,
+                            "thinking_budget_tokens": p.thinking_budget_tokens,
                         }
                         for p in macro_prompts
                     ],
@@ -210,8 +217,10 @@ async def create_run(
                             "search_enabled": p.search_enabled,
                             "search_query_template": p.search_query_template,
                             "search_mode": p.search_mode,
+                            "search_depth": p.search_depth,
                             "output_schema": p.output_schema,
                             "input_schema": ceo_input_schema,
+                            "thinking_budget_tokens": p.thinking_budget_tokens,
                         }
                         for p in ceo_prompts
                     ],

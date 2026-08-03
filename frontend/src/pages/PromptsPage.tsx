@@ -20,6 +20,7 @@ import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import Switch from "@mui/material/Switch";
+import Chip from "@mui/material/Chip";
 import { fetchPrompts, deletePrompt, togglePromptActive } from "../api/prompts";
 import type { Prompt } from "../types/prompt";
 import PromptDialog from "../components/PromptDialog";
@@ -204,7 +205,7 @@ export default function PromptsPage({ onRunPrompt }: PromptsPageProps) {
             <Table size="small" sx={{ width: "100%" }}>
               <TableHead>
                 <TableRow>
-                  {["Title", "Prompt", "Created"].map((h) => (
+                  {["Title", "Prompt", "Config", "Created"].map((h) => (
                     <TableCell
                       key={h}
                       sx={{
@@ -268,6 +269,49 @@ export default function PromptsPage({ onRunPrompt }: PromptsPageProps) {
                       {prompt.content.length > 100
                         ? `${prompt.content.slice(0, 100)}…`
                         : prompt.content}
+                    </TableCell>
+                    <TableCell sx={{ ...cellBorder, whiteSpace: "nowrap" }}>
+                      <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap" }}>
+                        {prompt.thinking_budget_tokens != null && (
+                          <Chip
+                            label={`Thinking: ${prompt.thinking_budget_tokens.toLocaleString()}`}
+                            size="small"
+                            sx={{
+                              bgcolor: "rgba(139,92,246,0.15)",
+                              color: "#a78bfa",
+                              border: "1px solid rgba(139,92,246,0.3)",
+                              fontSize: "0.72rem",
+                              height: 20,
+                            }}
+                          />
+                        )}
+                        {prompt.search_enabled && (
+                          <Chip
+                            label={prompt.search_mode ? prompt.search_mode.replace("_", " ") : "Search"}
+                            size="small"
+                            sx={{
+                              bgcolor: "rgba(20,184,166,0.15)",
+                              color: "#2dd4bf",
+                              border: "1px solid rgba(20,184,166,0.3)",
+                              fontSize: "0.72rem",
+                              height: 20,
+                            }}
+                          />
+                        )}
+                        {prompt.search_depth && (
+                          <Chip
+                            label={prompt.search_depth === "advanced" ? "Deep Research" : "Basic Search"}
+                            size="small"
+                            sx={{
+                              bgcolor: "rgba(59,130,246,0.15)",
+                              color: "#93c5fd",
+                              border: "1px solid rgba(59,130,246,0.3)",
+                              fontSize: "0.72rem",
+                              height: 20,
+                            }}
+                          />
+                        )}
+                      </Box>
                     </TableCell>
                     <TableCell
                       sx={{

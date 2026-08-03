@@ -44,6 +44,7 @@ class SearchClient:
         prompt_title: str = "",
         pipeline_id: str = "",
         pipeline_type: str = "",
+        search_depth: str | None = None,
     ) -> str:
         """Run a Tavily search and return a formatted plain-text context block."""
         if not self._client:
@@ -65,7 +66,7 @@ class SearchClient:
         try:
             raw: dict[str, Any] = await self._client.search(
                 query=query,
-                search_depth=settings.search_depth,
+                search_depth=search_depth or settings.search_depth,
                 max_results=settings.search_max_results,
             )
             duration_ms = int((time.monotonic() - start) * 1000)

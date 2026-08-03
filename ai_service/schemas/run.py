@@ -11,6 +11,7 @@ class ModelConfig(BaseModel):
     model_id: str  # full litellm model string e.g. "groq/llama-3.3-70b-versatile"
     base_url: str | None = None
     api_key: str | None = None
+    search_depth: str | None = None  # "basic" | "advanced" | None = use global default
 
 
 class PromptConfig(BaseModel):
@@ -22,5 +23,7 @@ class PromptConfig(BaseModel):
     search_enabled: bool = False
     search_query_template: str | None = None
     search_mode: str | None = None  # None = use global setting; "prefetch" | "tool_call"
+    search_depth: str | None = None  # "basic" | "advanced" | None = use model default
     output_schema: dict | None = None  # JSON Schema the agent must produce
     input_schema: dict | None = None   # auto-computed for CEO agents; read-only
+    thinking_budget_tokens: int | None = None
