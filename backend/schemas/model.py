@@ -12,6 +12,7 @@ class ModelCreate(BaseModel):
     provider: str = "openai_compatible"
     base_url: str | None = None
     api_key: str | None = None
+    search_depth: str | None = None  # "basic" | "advanced" | None = use global default
 
 
 class ModelUpdate(BaseModel):
@@ -20,6 +21,7 @@ class ModelUpdate(BaseModel):
     provider: str | None = None
     base_url: str | None = None
     api_key: str | None = None  # empty string = keep existing; new value = update
+    search_depth: str | None = None
 
 
 class ModelActiveUpdate(BaseModel):
@@ -33,6 +35,7 @@ class ModelResponse(BaseModel):
     provider: str
     base_url: str | None
     api_key_configured: bool
+    search_depth: str | None = None
     is_active: bool
     created_at: datetime
     updated_at: datetime

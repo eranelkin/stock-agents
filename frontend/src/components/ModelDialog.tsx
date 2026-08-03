@@ -8,6 +8,8 @@ import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import CloseIcon from "@mui/icons-material/Close";
 import { createModel, updateModel } from "../api/models";
 import type { Model, ModelCreatePayload } from "../types/model";
@@ -25,6 +27,7 @@ const EMPTY = {
   provider: "openai_compatible",
   base_url: "",
   api_key: "",
+  search_depth: "" as string,
 };
 
 const inputSx = {
@@ -84,6 +87,7 @@ export default function ModelDialog({
         provider: editModel.provider,
         base_url: editModel.base_url ?? "",
         api_key: "",
+        search_depth: editModel.search_depth ?? "",
       });
     } else {
       setForm(EMPTY);
@@ -103,6 +107,8 @@ export default function ModelDialog({
     setSaving(true);
     setError(null);
     try {
+      const searchDepth = form.search_depth || null;
+
       if (isEdit && editModel) {
         await updateModel(editModel.id, {
           name: form.name,
@@ -110,6 +116,7 @@ export default function ModelDialog({
           provider: form.provider,
           base_url: form.base_url || null,
           api_key: form.api_key || null,
+          search_depth: searchDepth,
         });
       } else {
         const payload: ModelCreatePayload = {
@@ -118,6 +125,7 @@ export default function ModelDialog({
           provider: form.provider,
           base_url: form.base_url || null,
           api_key: form.api_key || null,
+          search_depth: searchDepth,
         };
         await createModel(payload);
       }
@@ -240,6 +248,57 @@ export default function ModelDialog({
           />
           <Typography sx={{ color: "#6b7280", fontSize: "0.78rem", mt: 0.25 }}>
             Stored securely — never shown after saving.
+          </Typography>
+        </Field>
+
+        <Field label="Default Research Depth for All Prompts">
+          <ToggleButtonGroup
+            value={form.search_depth}
+            exclusive
+            onChange={(_e, val) => {
+              if (val !== null) setForm((f) => ({ ...f, search_depth: val }));
+            }}
+            size="small"
+            sx={{ gap: 1 }}
+          >
+            {(["", "basic", "advanced"] as const).map((val) => (
+              <ToggleButton
+                key={val}
+                value={val}
+                sx={{
+                  color: "rgba(255,255,255,0.5)",
+                  borderColor: "rgba(255,255,255,0.14)",
+                  textTransform: "none",
+                  fontSize: "0.82rem",
+                  px: 2,
+                  "&.Mui-selected": {
+                    color: "#fff",
+                    bgcolor: "rgba(25,118,210,0.25)",
+                    borderColor: "#1976d2",
+                  },
+                  "&.Mui-selected:hover": { bgcolor: "rgba(25,118,210,0.35)" },
+                }}
+              >
+                {val === "" ? "Default" : val === "basic" ? "Basic" : "Deep Research"}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+          <Box sx={{ display: "flex", gap: 1, mt: 0.5 }}>
+            {[
+              { desc: "Uses the global SEARCH_DEPTH from .env" },
+              { desc: "Faster & lower cost. Good for most prompts." },
+              { desc: "Tavily advanced mode — richer results, higher cost." },
+            ].map(({ desc }, i) => (
+              <Typography key={i} sx={{ flex: 1, color: "#4b5563", fontSize: "0.7rem", lineHeight: 1.4 }}>
+                {desc}
+              </Typography>
+            ))}
+          </Box>
+          <Typography sx={{ color: "#6b7280", fontSize: "0.78rem", mt: 0.5 }}>
+            Applied to all prompts using this model. Individual prompts can override this per-prompt.
+          </Typography>
+          <Typography sx={{ color: "#374151", fontSize: "0.72rem", mt: 0.25, fontStyle: "italic" }}>
+            Hierarchy: .env global → Model default (this setting) → Prompt override (set per-prompt)
           </Typography>
         </Field>
 

@@ -38,7 +38,7 @@ scheduler:
     minute: 0
     timezone: "America/New_York"
 
-max_number_of_stocks: 10 #org : 49 -  How many passing records are written to the output file
+max_number_of_stocks: 1 #org : 49 -  How many passing records are written to the output file
 
 ib_data:
   # ── Core Data Fetches ────────────────────────────────────────────────────────

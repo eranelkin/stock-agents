@@ -33,6 +33,7 @@ class LLMClient:
         self._model = model_config.model_id
         self._base_url = model_config.base_url
         self._api_key = model_config.api_key
+        self.search_depth: str | None = model_config.search_depth
         self._run_logger = run_logger
 
     async def complete(
@@ -40,6 +41,7 @@ class LLMClient:
         system_prompt: str,
         user_message: str,
         log_context: dict[str, Any] | None = None,
+        thinking_budget_tokens: int | None = None,
     ) -> str:
         """Send a chat completion and return the response text."""
         ctx = log_context or {}
@@ -68,7 +70,7 @@ class LLMClient:
 
         start = time.monotonic()
         try:
-            response = await self._call_llm(messages)
+            response = await self._call_llm(messages, thinking_budget_tokens=thinking_budget_tokens)
             duration_ms = int((time.monotonic() - start) * 1000)
             text = response.choices[0].message.content or ""
 
@@ -112,6 +114,7 @@ class LLMClient:
         tool_handlers: dict[str, Callable[..., Awaitable[str]]],
         max_tool_rounds: int = 5,
         log_context: dict[str, Any] | None = None,
+        thinking_budget_tokens: int | None = None,
     ) -> str:
         """Send a completion request that may invoke tools in a loop."""
         ctx = log_context or {}
@@ -142,7 +145,7 @@ class LLMClient:
 
                 start = time.monotonic()
                 try:
-                    response = await self._call_llm(messages, tools=tools, tool_choice="auto")
+                    response = await self._call_llm(messages, thinking_budget_tokens=thinking_budget_tokens, tools=tools, tool_choice="auto")
                     duration_ms = int((time.monotonic() - start) * 1000)
                 except Exception as exc:
                     duration_ms = int((time.monotonic() - start) * 1000)
@@ -227,21 +230,33 @@ class LLMClient:
         wait=wait_random_exponential(min=5, max=60),
         retry=retry_if_exception_type((litellm.RateLimitError, litellm.Timeout)),
     )
-    async def _call_llm(self, messages: list[dict[str, Any]], **kwargs: Any) -> Any:
+    async def _call_llm(
+        self,
+        messages: list[dict[str, Any]],
+        thinking_budget_tokens: int | None = None,
+        **kwargs: Any,
+    ) -> Any:
         """Single LLM call with retry on rate-limit or timeout errors."""
         if settings.llm_request_delay_seconds > 0:
             await asyncio.sleep(settings.llm_request_delay_seconds)
 
+        thinking_enabled = thinking_budget_tokens is not None
+
         params: dict[str, Any] = {
             "model": self._model,
             "messages": messages,
-            "temperature": settings.llm_temperature,
+            "temperature": 1 if thinking_enabled else settings.llm_temperature,
             "max_tokens": settings.llm_max_tokens,
             "timeout": settings.llm_timeout_seconds,
             **kwargs,
         }
-        # Gemini rejects response_mime_type alongside function calling tools.
-        if "tools" not in kwargs:
+        if thinking_enabled:
+            params["thinking"] = {
+                "type": "enabled",
+                "budget_tokens": thinking_budget_tokens,
+            }
+        # response_format (JSON mode) conflicts with thinking and tool calls.
+        elif "tools" not in kwargs:
             params["response_format"] = {"type": "json_object"}
         if self._base_url:
             params["base_url"] = self._base_url

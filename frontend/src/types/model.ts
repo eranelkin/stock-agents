@@ -5,6 +5,7 @@ export interface Model {
   provider: string
   base_url: string | null
   api_key_configured: boolean
+  search_depth: string | null
   is_active: boolean
   created_at: string
   updated_at: string
@@ -16,6 +17,7 @@ export interface ModelCreatePayload {
   provider: string
   base_url: string | null
   api_key: string | null
+  search_depth?: string | null
 }
 
 export interface ModelUpdatePayload {
@@ -24,4 +26,5 @@ export interface ModelUpdatePayload {
   provider?: string
   base_url?: string | null
   api_key?: string | null
+  search_depth?: string | null
 }

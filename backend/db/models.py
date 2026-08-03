@@ -65,6 +65,8 @@ class Prompt(Base):
     search_mode: Mapped[str | None] = mapped_column(String(20), nullable=True)
     output_schema: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     input_schema: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    thinking_budget_tokens: Mapped[int | None] = mapped_column(nullable=True)
+    search_depth: Mapped[str | None] = mapped_column(String(20), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -85,6 +87,7 @@ class AIModel(Base):
     provider: Mapped[str] = mapped_column(String(100), nullable=False, default="openai_compatible")
     base_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     api_key_env_var: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    search_depth: Mapped[str | None] = mapped_column(String(20), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

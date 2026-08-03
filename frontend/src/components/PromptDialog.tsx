@@ -8,6 +8,8 @@ import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 import Switch from "@mui/material/Switch";
 import FormControlLabel from "@mui/material/FormControlLabel";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Tooltip from "@mui/material/Tooltip";
 import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
@@ -41,6 +43,8 @@ const EMPTY = {
   search_query_template: "",
   output_schema: "",
   input_schema: "",
+  thinking_budget_tokens: "",
+  search_depth: "",
 };
 
 const inputSx = {
@@ -201,6 +205,10 @@ export default function PromptDialog({
         input_schema: editPrompt.input_schema
           ? JSON.stringify(editPrompt.input_schema, null, 2)
           : "",
+        thinking_budget_tokens: editPrompt.thinking_budget_tokens != null
+          ? String(editPrompt.thinking_budget_tokens)
+          : "",
+        search_depth: editPrompt.search_depth ?? "",
       });
     } else {
       setForm(EMPTY);
@@ -547,6 +555,10 @@ export default function PromptDialog({
             ? form.search_query_template.trim() || null
             : null,
       };
+      const thinkingBudget = form.thinking_budget_tokens.trim()
+        ? parseInt(form.thinking_budget_tokens, 10) || null
+        : null;
+      const searchDepth = form.search_depth || null;
       if (isEdit && editPrompt) {
         await updatePrompt(editPrompt.id, {
           title: form.title,
@@ -554,6 +566,8 @@ export default function PromptDialog({
           category: defaultCategory,
           output_schema: parsedSchema,
           input_schema: parsedInputSchema,
+          thinking_budget_tokens: thinkingBudget,
+          search_depth: searchDepth,
           ...searchPayload,
         });
       } else {
@@ -563,6 +577,8 @@ export default function PromptDialog({
           category: defaultCategory,
           output_schema: parsedSchema,
           input_schema: parsedInputSchema,
+          thinking_budget_tokens: thinkingBudget,
+          search_depth: searchDepth,
           ...searchPayload,
         });
       }
@@ -758,6 +774,154 @@ export default function PromptDialog({
             )}
           </>
         )}
+
+        {/* ── Thinking Level ── */}
+        <Field
+          label="Thinking Level"
+          tooltip={
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              <Typography sx={{ color: "#e2e8f0", fontWeight: 600, fontSize: "0.82rem" }}>
+                Extended Thinking
+              </Typography>
+              <Typography sx={{ color: "#94a3b8", fontSize: "0.78rem", lineHeight: 1.6 }}>
+                Reserves tokens for the model's internal reasoning before it writes the response.
+                Only enable on prompts that require complex judgment — synthesis, CEO decisions.
+              </Typography>
+              {[
+                { label: "None", desc: "Thinking disabled. Best for data collection and search-enabled agents — no reasoning overhead, lowest cost." },
+                { label: "Light · 3,000", desc: "One brief reasoning pass. Good for sentiment or technical analysis agents that benefit from light synthesis." },
+                { label: "Deep · 8,000", desc: "Full reasoning budget. Reserve for the final synthesis or CEO prompt where multi-factor judgment across all agent outputs matters most." },
+              ].map(({ label, desc }) => (
+                <Box key={label} sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}>
+                  <Typography sx={{ color: "#93c5fd", fontWeight: 600, fontSize: "0.78rem" }}>{label}</Typography>
+                  <Typography sx={{ color: "#94a3b8", fontSize: "0.76rem", lineHeight: 1.5 }}>{desc}</Typography>
+                </Box>
+              ))}
+            </Box>
+          }
+        >
+          <ToggleButtonGroup
+            value={(() => {
+              const v = form.thinking_budget_tokens;
+              if (v === "") return "none";
+              if (v === "3000") return "light";
+              if (v === "8000") return "deep";
+              return "";
+            })()}
+            exclusive
+            onChange={(_e, val) => {
+              if (val === null) return;
+              const presets: Record<string, string> = { none: "", light: "3000", deep: "8000" };
+              setForm((f) => ({ ...f, thinking_budget_tokens: presets[val] ?? f.thinking_budget_tokens }));
+            }}
+            size="small"
+            sx={{ gap: 1 }}
+          >
+            {([
+              { val: "none", label: "None" },
+              { val: "light", label: "Light · 3,000" },
+              { val: "deep", label: "Deep · 8,000" },
+            ] as const).map(({ val, label }) => (
+              <ToggleButton
+                key={val}
+                value={val}
+                sx={{
+                  color: "rgba(255,255,255,0.5)",
+                  borderColor: "rgba(255,255,255,0.14)",
+                  textTransform: "none",
+                  fontSize: "0.82rem",
+                  px: 2,
+                  "&.Mui-selected": {
+                    color: "#fff",
+                    bgcolor: "rgba(139,92,246,0.2)",
+                    borderColor: "#a78bfa",
+                  },
+                  "&.Mui-selected:hover": { bgcolor: "rgba(139,92,246,0.3)" },
+                }}
+              >
+                {label}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+          <Box sx={{ display: "flex", gap: 1, mt: 0.5 }}>
+            {[
+              { desc: "No reasoning overhead. Best for data & search agents." },
+              { desc: "Brief reasoning pass. Good for analysis agents." },
+              { desc: "Full reasoning budget. Reserve for synthesis / CEO." },
+            ].map(({ desc }, i) => (
+              <Typography key={i} sx={{ flex: 1, color: "#4b5563", fontSize: "0.7rem", lineHeight: 1.4 }}>
+                {desc}
+              </Typography>
+            ))}
+          </Box>
+          <Box sx={{ mt: 1 }}>
+            <Typography sx={{ color: "#6b7280", fontSize: "0.75rem", mb: 0.5 }}>
+              Custom token budget (edit to override the preset above)
+            </Typography>
+            <TextField
+              type="number"
+              placeholder="e.g. 5000  (leave empty to disable)"
+              value={form.thinking_budget_tokens}
+              onChange={set("thinking_budget_tokens")}
+              fullWidth
+              size="small"
+              sx={regularInputSx}
+              inputProps={{ min: 0 }}
+            />
+          </Box>
+        </Field>
+
+        {/* ── Research Depth Override ── */}
+        <Field label="Research Depth Override">
+          <ToggleButtonGroup
+            value={form.search_depth}
+            exclusive
+            onChange={(_e, val) => {
+              if (val !== null) setForm((f) => ({ ...f, search_depth: val }));
+            }}
+            size="small"
+            sx={{ gap: 1 }}
+          >
+            {(["", "basic", "advanced"] as const).map((val) => (
+              <ToggleButton
+                key={val}
+                value={val}
+                sx={{
+                  color: "rgba(255,255,255,0.5)",
+                  borderColor: "rgba(255,255,255,0.14)",
+                  textTransform: "none",
+                  fontSize: "0.82rem",
+                  px: 2,
+                  "&.Mui-selected": {
+                    color: "#fff",
+                    bgcolor: "rgba(25,118,210,0.25)",
+                    borderColor: "#1976d2",
+                  },
+                  "&.Mui-selected:hover": { bgcolor: "rgba(25,118,210,0.35)" },
+                }}
+              >
+                {val === "" ? "Default" : val === "basic" ? "Basic" : "Deep Research"}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+          <Box sx={{ display: "flex", gap: 1, mt: 0.5 }}>
+            {[
+              { desc: "Inherit from the model's default setting" },
+              { desc: "Faster & lower cost. Good for most prompts." },
+              { desc: "Tavily advanced mode — richer results, higher cost." },
+            ].map(({ desc }, i) => (
+              <Typography key={i} sx={{ flex: 1, color: "#4b5563", fontSize: "0.7rem", lineHeight: 1.4 }}>
+                {desc}
+              </Typography>
+            ))}
+          </Box>
+          <Typography sx={{ color: "#6b7280", fontSize: "0.78rem", mt: 0.5 }}>
+            Overrides the model's Default Research Depth for this prompt only. Leave as "Default" to inherit.
+          </Typography>
+          <Typography sx={{ color: "#374151", fontSize: "0.72rem", mt: 0.25, fontStyle: "italic" }}>
+            Hierarchy: .env global → Model default → This prompt override (highest priority)
+          </Typography>
+        </Field>
 
         {/* ── Output Schema ── */}
         <Field label="Output Schema" tooltip={outputSchemaTooltip}>
