@@ -108,6 +108,12 @@ def _check_premarket_hours(tz_name: str) -> bool:
     show_default=True,
     help="Logging verbosity.",
 )
+@click.option(
+    "--only-pull",
+    is_flag=True,
+    default=False,
+    help="Fetch data from Interactive Brokers but skip the stock-agents analysis trigger.",
+)
 def main(
     mode: str | None,
     use_scheduler: bool,
@@ -115,6 +121,7 @@ def main(
     dry_run: bool,
     no_hours_check: bool,
     log_level: str,
+    only_pull: bool,
 ) -> None:
     log_mode = "scheduler" if use_scheduler else (mode or "run")
     _setup_logging(log_level.upper(), mode=log_mode)
@@ -177,7 +184,7 @@ def main(
     if not dry_run:
         click.echo(f"Output: {path}")
 
-        if path and app_config.stock_agents.enabled:
+        if path and app_config.stock_agents.enabled and not only_pull:
             from src.integration.stock_agents_trigger import trigger_stock_agents_run
             sa = app_config.stock_agents
             trigger_stock_agents_run(

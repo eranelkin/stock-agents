@@ -46,7 +46,7 @@ def reject_reason(rec: StockRecord, cfg: ScreenerConfig) -> str:
 
     if cfg.pre_market_vol_min is not None:
         vol = rec.pre_market_volume
-        if vol is not None and vol > 0 and vol < cfg.pre_market_vol_min:
+        if vol is not None and vol < cfg.pre_market_vol_min:
             return f"pre_market_volume {vol:.0f} < min {cfg.pre_market_vol_min:.0f}"
 
     if cfg.avg_volume_min is not None:

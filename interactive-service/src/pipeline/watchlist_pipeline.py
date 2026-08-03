@@ -141,7 +141,7 @@ async def collect_watchlist_records(
                     bm_chg_pct    = bm_snap.pre_market_chg_pct
         except Exception as e:
             log.warning("Benchmark fetch failed for %s from IBKR: %s", benchmark_sym, e)
-    elif app_config and app_config.ib_data.output_benchmark_data == "finhub":
+    elif app_config and app_config.ib_data.output_benchmark_data == "yfinance":
         log.info("Fetching benchmark data for %s from yfinance...", benchmark_sym)
         try:
             yf_bm_data = await fetch_yfinance_data([benchmark_sym])
@@ -211,7 +211,7 @@ async def collect_watchlist_records(
         return val is not None
 
     # ── Step 9: patch records with pre-market bars, VWAP, benchmark, VP ───────
-    if app_config and _should_output_ib_data("output_vp_poc", source="finhub"):
+    if app_config and _should_output_ib_data("output_vp_poc", source="yfinance"):
         log.warning(
             "Volume Profile from yfinance is not supported "
             "(requires per-price histogram data) and will be null."
@@ -274,21 +274,21 @@ async def collect_watchlist_records(
 
         if _should_output_ib_data("output_vp_poc", source="ibk"):
             rec.vp_poc = vp.poc if vp else None
-        elif _should_output_ib_data("output_vp_poc", source="finhub"):
+        elif _should_output_ib_data("output_vp_poc", source="yfinance"):
             rec.vp_poc = None # Not supported from yfinance
         else:
             rec.vp_poc = None
 
         if _should_output_ib_data("output_vp_vah", source="ibk"):
             rec.vp_vah = vp.vah if vp else None
-        elif _should_output_ib_data("output_vp_vah", source="finhub"):
+        elif _should_output_ib_data("output_vp_vah", source="yfinance"):
             rec.vp_vah = None # Not supported from yfinance
         else:
             rec.vp_vah = None
 
         if _should_output_ib_data("output_vp_val", source="ibk"):
             rec.vp_val = vp.val if vp else None
-        elif _should_output_ib_data("output_vp_val", source="finhub"):
+        elif _should_output_ib_data("output_vp_val", source="yfinance"):
             rec.vp_val = None # Not supported from yfinance
         else:
             rec.vp_val = None
@@ -326,8 +326,8 @@ async def collect_watchlist_records(
             "output_short_float_pct", "output_short_ratio", "output_institutional_holding_pct",
         ]
 
-        if any(_should_output_ib_data(f, "finhub") for f in ib_finhub) or \
-           any(_should_output_external_data(f, "finhub") for f in ext_finhub):
+        if any(_should_output_ib_data(f, "yfinance") for f in ib_finhub) or \
+           any(_should_output_external_data(f, "yfinance") for f in ext_finhub):
             needs_yfinance = True
 
     if needs_yfinance:
@@ -340,11 +340,26 @@ async def collect_watchlist_records(
     news_data: dict = {}
     fmp_key = getattr(ext_cfg, "fmp_api_key", "") if ext_cfg else ""
     max_headlines = getattr(ext_cfg, "news_max_headlines", 3) if ext_cfg else 3
-    if fmp_key and max_headlines > 0 and _should_output_external_data("output_news_catalysts", source="finhub"):
+    if fmp_key and max_headlines > 0 and _should_output_external_data("output_news_catalysts", source="yfinance"):
         log.info("Fetching news catalysts via FMP for %d symbols...", len(syms))
         news_data = await fetch_news_catalysts(syms, fmp_key, max_headlines)
     else:
         log.info("Skipping news fetch (API key/flag not set or output disabled)")
+
+    finnhub_volume: dict = {}
+    finnhub_key = getattr(ext_cfg, "finnhub_api_key", "") if ext_cfg else ""
+    if finnhub_key and ib_data_cfg and ib_data_cfg.output_pre_market_volume == "finnhub":
+        from src.external.finnhub_data import fetch_finnhub_premarket_volume
+        log.info("Fetching pre-market volume from Finnhub for %d symbols...", len(syms))
+        finnhub_volume = await fetch_finnhub_premarket_volume(syms, finnhub_key)
+    elif ib_data_cfg and ib_data_cfg.output_pre_market_volume == "finnhub":
+        log.warning("output_pre_market_volume=finnhub but finnhub_api_key is not set — falling back to IB volume")
+
+    if finnhub_volume:
+        for rec in records:
+            vol = finnhub_volume.get(rec.symbol)
+            if vol is not None:
+                rec.pre_market_volume = vol
 
     for rec in records:
         ext_cfg = getattr(app_config, "external_apis", None) if app_config else None
@@ -408,25 +423,31 @@ async def collect_watchlist_records(
                     rec.fifty_two_week_low = None
                 
                 # beta
-                if ib_data_cfg.output_beta == "finhub":
+                if ib_data_cfg.output_beta == "yfinance":
                     rec.beta = yf.get("beta")
                 elif ib_data_cfg.output_beta is None:
                     rec.beta = None
 
                 # pre-market high/low/rvol from yfinance 1-min bars
-                if ib_data_cfg.output_pre_market_high == "finhub":
+                if ib_data_cfg.output_pre_market_high == "yfinance":
                     rec.pre_market_high = yf.get("pre_market_high")
-                if ib_data_cfg.output_pre_market_low == "finhub":
+                if ib_data_cfg.output_pre_market_low == "yfinance":
                     rec.pre_market_low = yf.get("pre_market_low")
-                if ib_data_cfg.output_rvol_pre_market == "finhub":
+                if ib_data_cfg.output_rvol_pre_market == "yfinance":
                     rec.rvol_pre_market = yf.get("rvol_pre_market")
 
                 # prev-session VWAP from yfinance 1-min bars
-                if ib_data_cfg.output_vwap_prev_session == "finhub":
+                if ib_data_cfg.output_vwap_prev_session == "yfinance":
                     rec.vwap_prev_session = yf.get("vwap_prev_session")
 
+                # pre-market volume from yfinance info.preMarketVolume (consolidated, matches TradingView)
+                if ib_data_cfg.output_pre_market_volume == "yfinance":
+                    yf_pmv = yf.get("pre_market_volume")
+                    if yf_pmv is not None:
+                        rec.pre_market_volume = yf_pmv
+
             # Float shares as percentage of outstanding — MUST run after shares_outstanding is patched
-            if _should_output_external_data("output_float_pct", source="finhub"):
+            if _should_output_external_data("output_float_pct", source="yfinance"):
                 raw_float_shares = yf.get("float_shares")
                 if raw_float_shares is not None and rec.shares_outstanding is not None and rec.shares_outstanding > 0:
                     rec.float_pct = (raw_float_shares / rec.shares_outstanding) * 100
@@ -446,19 +467,19 @@ async def collect_watchlist_records(
 
                 # Previous Day OHL
                 if len(history_df) >= 2:
-                    if ib_data_cfg.output_prev_day_high == "finhub":
+                    if ib_data_cfg.output_prev_day_high == "yfinance":
                         rec.prev_day_high = history_df['High'].iloc[-2]
-                    if ib_data_cfg.output_prev_day_low == "finhub":
+                    if ib_data_cfg.output_prev_day_low == "yfinance":
                         rec.prev_day_low = history_df['Low'].iloc[-2]
-                    if ib_data_cfg.output_prev_day_open == "finhub":
+                    if ib_data_cfg.output_prev_day_open == "yfinance":
                         rec.prev_day_open = history_df['Open'].iloc[-2]
 
                 # Average Daily Volume
-                if ib_data_cfg.output_avg_daily_volume_20d == "finhub":
+                if ib_data_cfg.output_avg_daily_volume_20d == "yfinance":
                     rec.avg_daily_volume_20d = history_df['Volume'].tail(20).mean()
 
                 # ATR
-                if ib_data_cfg.output_atr == "finhub":
+                if ib_data_cfg.output_atr == "yfinance":
                     atr_period = app_config.ib_data.atr_period if app_config else 14
                     if len(history_df) >= atr_period + 1:
                         high_low = history_df['High'] - history_df['Low']
@@ -472,7 +493,7 @@ async def collect_watchlist_records(
                             rec.atr = round(float(atr) / last_close * 100, 2)
                 
                 # EMA
-                if ib_data_cfg.output_ema == "finhub":
+                if ib_data_cfg.output_ema == "yfinance":
                     ema_periods = app_config.ib_data.ema_periods if app_config else []
                     for p in ema_periods:
                         if len(history_df) >= p:
@@ -480,7 +501,7 @@ async def collect_watchlist_records(
                             rec.emas[p] = round(ema, 4)
                             
                 # RSI
-                if ib_data_cfg.output_rsi == "finhub":
+                if ib_data_cfg.output_rsi == "yfinance":
                     rsi_period = app_config.ib_data.rsi_period if app_config else 14
                     if len(history_df) > rsi_period:
                         delta = history_df['Close'].diff(1)
@@ -517,11 +538,11 @@ async def collect_watchlist_records(
                     rec.fifty_two_week_high = None
                 if ib_data_cfg.output_fifty_two_week_low != "ibk" and ib_data_cfg.output_fifty_two_week_low is not None:
                     rec.fifty_two_week_low = None
-                if ib_data_cfg.output_beta == "finhub":
+                if ib_data_cfg.output_beta == "yfinance":
                     rec.beta = None
 
         # Handle news catalysts
-        if _should_output_external_data("output_news_catalysts", source="finhub"):
+        if _should_output_external_data("output_news_catalysts", source="yfinance"):
             rec.news_catalysts = news_data.get(rec.symbol, [])
         else:
             rec.news_catalysts = [] # Output flag is None or not configured
