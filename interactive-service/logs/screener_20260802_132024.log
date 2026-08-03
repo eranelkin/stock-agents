@@ -1,8 +1,0 @@
-2026-08-02 13:20:24  INFO      main  Log file: logs/screener_20260802_132024.log
-2026-08-02 13:20:24  WARNING   main  Current time is outside pre-market hours (4:00–9:30 AM ET, weekdays). Data may be unavailable or stale. Use --no-hours-check to suppress this warning.
-2026-08-02 13:20:25  DEBUG     asyncio  Using selector: KqueueSelector
-2026-08-02 13:20:25  INFO      src.ib.client  Connecting to IB Gateway at 127.0.0.1:7496 (clientId=1)...
-2026-08-02 13:20:25  INFO      ib_async.client  Connecting to 127.0.0.1:7496 with clientId 1...
-2026-08-02 13:20:25  INFO      ib_async.client  Disconnecting
-2026-08-02 13:20:25  ERROR     ib_async.client  API connection failed: ConnectionRefusedError(61, "Connect call failed ('127.0.0.1', 7496)")
-2026-08-02 13:20:25  ERROR     ib_async.client  Make sure API port on TWS/IBG is open
