@@ -5,16 +5,22 @@ import Typography from '@mui/material/Typography'
 import Tabs from '@mui/material/Tabs'
 import Tab from '@mui/material/Tab'
 import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
+import CircularProgress from '@mui/material/CircularProgress'
 import Chip from '@mui/material/Chip'
 import Popover from '@mui/material/Popover'
 import List from '@mui/material/List'
 import ListItemButton from '@mui/material/ListItemButton'
 import ListItemText from '@mui/material/ListItemText'
+import TextField from '@mui/material/TextField'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
 import { fetchModels } from '../api/models'
+import { runDataTest } from '../api/dataTest'
 import type { Model } from '../types/model'
+import type { DataTestResult } from '../types/dataTest'
+import DataTestDialog from './DataTestDialog'
 import { type TabId } from '../App'
 
 interface HeaderProps {
@@ -44,6 +50,34 @@ export default function Header({
   const [activeModels, setActiveModels] = useState<Model[]>([])
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const triggerRef = useRef<HTMLDivElement>(null)
+
+  const [dataTestSymbols, setDataTestSymbols] = useState('')
+  const [dataTestLoading, setDataTestLoading] = useState(false)
+  const [dataTestOpen, setDataTestOpen] = useState(false)
+  const [dataTestResult, setDataTestResult] = useState<DataTestResult | null>(null)
+  const [dataTestError, setDataTestError] = useState<string | null>(null)
+
+  const handleTestData = async () => {
+    const symbols = dataTestSymbols
+      .split(',')
+      .map((s) => s.trim().toUpperCase())
+      .filter(Boolean)
+    if (symbols.length === 0) return
+
+    setDataTestLoading(true)
+    setDataTestError(null)
+    try {
+      const result = await runDataTest(symbols)
+      setDataTestResult(result)
+      setDataTestOpen(true)
+    } catch (err) {
+      setDataTestError(err instanceof Error ? err.message : 'Data test failed')
+      setDataTestResult(null)
+      setDataTestOpen(true)
+    } finally {
+      setDataTestLoading(false)
+    }
+  }
 
   useEffect(() => {
     fetchModels(true)
@@ -117,6 +151,29 @@ export default function Header({
         </Tabs>
 
         <Box sx={{ flex: 1 }} />
+
+        {/* Data Test — ad hoc symbol comparison across interactive-service + external sources */}
+        <TextField
+          size="small"
+          placeholder="AAPL, MSFT, ..."
+          value={dataTestSymbols}
+          onChange={(e) => setDataTestSymbols(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleTestData()
+          }}
+          disabled={dataTestLoading}
+          sx={{ width: 180 }}
+        />
+        <Button
+          variant="outlined"
+          size="small"
+          onClick={handleTestData}
+          disabled={dataTestLoading || dataTestSymbols.trim() === ''}
+          startIcon={dataTestLoading ? <CircularProgress size={14} /> : undefined}
+          sx={{ textTransform: 'none', whiteSpace: 'nowrap' }}
+        >
+          Test Data
+        </Button>
 
         {/* Market Overview icon button */}
         <Tooltip title="Market Overview">
@@ -239,6 +296,13 @@ export default function Header({
           </List>
         </Popover>
       </Toolbar>
+
+      <DataTestDialog
+        open={dataTestOpen}
+        onClose={() => setDataTestOpen(false)}
+        result={dataTestResult}
+        error={dataTestError}
+      />
     </AppBar>
   )
 }

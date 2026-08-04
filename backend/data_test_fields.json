@@ -1,0 +1,100 @@
+{
+  "fields": [
+    {
+      "key": "price",
+      "label": "Price",
+      "interactive_service": {"path": ["pre_market_price", "prev_close"]},
+      "yahoo_finance": {"path": ["pre_market_price", "current_price"]},
+      "finnhub": {"quote_field": "c"},
+      "fmp": {"quote_field": "price"}
+    },
+    {
+      "key": "prev_close",
+      "label": "Previous Close",
+      "interactive_service": {"path": ["prev_close"]},
+      "yahoo_finance": null,
+      "finnhub": {"quote_field": "pc"},
+      "fmp": {"quote_field": "previousClose"}
+    },
+    {
+      "key": "market_cap",
+      "label": "Market Cap",
+      "interactive_service": {"path": ["market_cap"]},
+      "yahoo_finance": {"path": ["market_cap"]},
+      "finnhub": null,
+      "fmp": {"quote_field": "marketCap"}
+    },
+    {
+      "key": "rsi_14",
+      "label": "RSI (14)",
+      "interactive_service": {"path": ["rsi_14"]},
+      "yahoo_finance": {"path": ["rsi_14"]},
+      "finnhub": {"indicator": "rsi", "timeperiod": 14},
+      "fmp": {"technical_indicator": "rsi", "period": 14}
+    },
+    {
+      "key": "atr",
+      "label": "ATR (14) %",
+      "interactive_service": {"path": ["atr.value"]},
+      "yahoo_finance": {"path": ["atr_%"]},
+      "finnhub": {"indicator": "atr", "timeperiod": 14},
+      "fmp": {"technical_indicator": "atr", "period": 14}
+    },
+    {
+      "key": "ema_20",
+      "label": "EMA (20)",
+      "interactive_service": {"path": ["ema.ema_20"]},
+      "yahoo_finance": {"path": ["ema_20"]},
+      "finnhub": {"indicator": "ema", "timeperiod": 20},
+      "fmp": {"technical_indicator": "ema", "period": 20}
+    },
+    {
+      "key": "ema_50",
+      "label": "EMA (50)",
+      "interactive_service": {"path": ["ema.ema_50"]},
+      "yahoo_finance": {"path": ["ema_50"]},
+      "finnhub": {"indicator": "ema", "timeperiod": 50},
+      "fmp": {"technical_indicator": "ema", "period": 50}
+    },
+    {
+      "key": "ema_200",
+      "label": "EMA (200)",
+      "interactive_service": {"path": ["ema.ema_200"]},
+      "yahoo_finance": {"path": ["ema_200"]},
+      "finnhub": {"indicator": "ema", "timeperiod": 200},
+      "fmp": {"technical_indicator": "ema", "period": 200}
+    },
+    {
+      "key": "fifty_two_week_high",
+      "label": "52-Week High",
+      "interactive_service": {"path": ["fifty_two_week_high"]},
+      "yahoo_finance": null,
+      "finnhub": {"metric_field": "52WeekHigh"},
+      "fmp": {"quote_field": "yearHigh"}
+    },
+    {
+      "key": "fifty_two_week_low",
+      "label": "52-Week Low",
+      "interactive_service": {"path": ["fifty_two_week_low"]},
+      "yahoo_finance": null,
+      "finnhub": {"metric_field": "52WeekLow"},
+      "fmp": {"quote_field": "yearLow"}
+    },
+    {
+      "key": "avg_daily_volume_20d",
+      "label": "Avg Daily Volume (20d)",
+      "interactive_service": {"path": ["avg_daily_volume_20d"]},
+      "yahoo_finance": null,
+      "finnhub": null,
+      "fmp": {"quote_field": "avgVolume"}
+    },
+    {
+      "key": "beta",
+      "label": "Beta",
+      "interactive_service": {"path": ["beta.value"]},
+      "yahoo_finance": null,
+      "finnhub": {"metric_field": "beta"},
+      "fmp": {"profile_field": "beta"}
+    }
+  ]
+}

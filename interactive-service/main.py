@@ -102,6 +102,21 @@ def _check_premarket_hours(tz_name: str) -> bool:
     help="Skip the pre-market hours validation (useful for testing outside market hours).",
 )
 @click.option(
+    "--symbols",
+    default=None,
+    help="Comma-separated symbol list. With --mode watchlist, overrides config/watchlist.yaml "
+         "and fetches only these symbols. Intended for use with --adhoc.",
+)
+@click.option(
+    "--adhoc",
+    is_flag=True,
+    default=False,
+    help="Ad hoc test run for an explicit --symbols list: skips the pre-market hours check, "
+         "writes output under output/data_test/ instead of the configured output dir, and never "
+         "triggers a stock-agents run regardless of settings.yaml. Prints only the output file "
+         "path as the last line of stdout.",
+)
+@click.option(
     "--log-level",
     type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"], case_sensitive=False),
     default="INFO",
@@ -120,9 +135,15 @@ def main(
     config_dir: Path,
     dry_run: bool,
     no_hours_check: bool,
+    symbols: str | None,
+    adhoc: bool,
     log_level: str,
     only_pull: bool,
 ) -> None:
+    if adhoc and (not symbols or mode != "watchlist"):
+        click.echo("ERROR: --adhoc requires --mode watchlist and --symbols.", err=True)
+        sys.exit(1)
+
     log_mode = "scheduler" if use_scheduler else (mode or "run")
     _setup_logging(log_level.upper(), mode=log_mode)
     log = logging.getLogger("main")
@@ -160,7 +181,7 @@ def main(
         sys.exit(1)
 
     # Pre-market hours check
-    if app_config.pre_market.check_hours and not no_hours_check:
+    if app_config.pre_market.check_hours and not no_hours_check and not adhoc:
         if not _check_premarket_hours(app_config.pre_market.tz):
             log.warning(
                 "Current time is outside pre-market hours (4:00–9:30 AM ET, weekdays). "
@@ -172,7 +193,19 @@ def main(
         from src.pipeline.screener_pipeline import run_screener_pipeline
         path = asyncio.run(run_screener_pipeline(app_config, screener_config, dry_run=dry_run))
     elif mode == "watchlist":
-        watchlist = load_watchlist(watchlist_path)
+        from src.config.loader import WatchlistEntry
+        if adhoc:
+            watchlist = [
+                WatchlistEntry(symbol=s.strip().upper())
+                for s in symbols.split(",")
+                if s.strip()
+            ]
+            if not watchlist:
+                click.echo("ERROR: --symbols produced no valid symbols.", err=True)
+                sys.exit(1)
+            app_config.output.directory = str(Path(app_config.output.directory) / "data_test")
+        else:
+            watchlist = load_watchlist(watchlist_path)
         from src.pipeline.watchlist_pipeline import run_watchlist_pipeline
         path = asyncio.run(run_watchlist_pipeline(app_config, watchlist, dry_run=dry_run))
     else:  # mode == "merged"
@@ -182,9 +215,15 @@ def main(
         path = asyncio.run(run_merged_pipeline(app_config, screener_config, watchlist, dry_run=dry_run))
 
     if not dry_run:
-        click.echo(f"Output: {path}")
+        if adhoc:
+            # Ad hoc test runs never trigger a stock-agents run; print only the
+            # output path so callers (e.g. the backend's Data Test subprocess) can
+            # parse it unambiguously as the last line of stdout.
+            click.echo(str(path))
+        else:
+            click.echo(f"Output: {path}")
 
-        if path and app_config.stock_agents.enabled and not only_pull:
+        if path and app_config.stock_agents.enabled and not only_pull and not adhoc:
             from src.integration.stock_agents_trigger import trigger_stock_agents_run
             sa = app_config.stock_agents
             trigger_stock_agents_run(

@@ -27,6 +27,16 @@ class Settings(BaseSettings):
     search_depth: str = "basic"
     search_mode: str = "prefetch"  # prefetch | tool_call
 
+    # Data Test — comparison sources
+    finnhub_api_key: str = ""
+    fmp_api_key: str = ""
+    # Path (relative to the repo root, i.e. the parent of backend/) to the
+    # interactive-service checkout, and the python executable from its own
+    # venv (it has separate dependencies — e.g. ".../interactive-service/.venv/bin/python").
+    interactive_service_dir: str = "interactive-service"
+    interactive_service_python: str = "python3"
+    interactive_service_timeout_seconds: int = 180
+
     @property
     def database_url(self) -> str:
         return (
