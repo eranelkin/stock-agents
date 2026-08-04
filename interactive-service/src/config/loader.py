@@ -85,6 +85,7 @@ class IBDataConfig:
     
     # Daily Bars Data
     output_prev_close: Optional[str] = "ibk"
+    output_prev_chg_pct: Optional[str] = "ibk"
     output_prev_day_high: Optional[str] = "ibk"
     output_prev_day_low: Optional[str] = "ibk"
     output_prev_day_open: Optional[str] = "ibk"

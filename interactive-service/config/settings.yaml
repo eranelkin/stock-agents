@@ -88,6 +88,7 @@ ib_data:
   
   # Daily Bars Data
   output_prev_close: "yfinance"
+  output_prev_chg_pct: "yfinance"
   output_prev_day_high: "yfinance"
   output_prev_day_low: "yfinance"
   output_prev_day_open: "yfinance"
@@ -95,7 +96,7 @@ ib_data:
   # Market Snapshot Data
   output_market_cap: "yfinance"
   output_shares_outstanding: "yfinance"
-  output_beta: "ibk"
+  output_beta: "calculated"
   output_fifty_two_week_high: "yfinance"
   output_fifty_two_week_low: "yfinance"
   output_bid_ask: true           # Bid and ask prices

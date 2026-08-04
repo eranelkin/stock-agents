@@ -89,10 +89,35 @@ async def _run_single_scan(ib: IB, config: ScreenerConfig, batch: ScannerBatch) 
         config.price_min or "none",
     )
 
+    # Use subscription-based approach instead of reqScannerDataAsync.
+    # reqScannerDataAsync waits for IB's scannerDataEnd signal before returning; in some
+    # sessions IB never sends scannerDataEnd (keeps the subscription open), causing an
+    # indefinite hang.  Instead we subscribe, wait for ib.scannerDataEvent (fired by
+    # ib_async when scannerDataEnd arrives), and fall back to a hard timeout so we never
+    # block indefinitely.  We always read the list BEFORE cancelling because
+    # cancelScannerSubscription → endSubscription removes the dataList from the registry.
+    _SCAN_TIMEOUT = 25.0  # seconds to wait for scannerDataEnd before using partial data
     try:
-        scan_data = await ib.reqScannerDataAsync(sub)
-        # Extract symbols immediately while subscription is active
+        data_arrived = asyncio.Event()
+        scan_data = ib.reqScannerSubscription(sub)
+
+        def _on_scanner_data(dl) -> None:
+            if dl.reqId == scan_data.reqId:
+                data_arrived.set()
+
+        ib.scannerDataEvent += _on_scanner_data
+        try:
+            await asyncio.wait_for(data_arrived.wait(), timeout=_SCAN_TIMEOUT)
+        except asyncio.TimeoutError:
+            log.warning(
+                "Scanner: scannerDataEnd not received within %.0fs — using partial results",
+                _SCAN_TIMEOUT,
+            )
+        finally:
+            ib.scannerDataEvent -= _on_scanner_data
+
         symbols = [item.contractDetails.contract.symbol for item in scan_data]
+        ib.cancelScannerSubscription(scan_data)
     except Exception:
         log.exception("Scanner request failed")
         return []

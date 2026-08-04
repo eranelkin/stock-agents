@@ -84,6 +84,39 @@ def _record_to_dict(rec: StockRecord, app_cfg: AppConfig) -> dict:
             data["market_cap"] = _fmt_market_cap(rec.market_cap_usd)
         else:
             data["market_cap"] = f"Not available from source ({ib_cfg.output_market_cap})"
+
+    # ── Pre-market data (grouped immediately after market_cap) ───────────────
+    if ib_cfg.output_pre_market_price:
+        if rec.pre_market_price is not None:
+            data["pre_market_price"] = _fmt_price(rec.pre_market_price)
+        else:
+            data["pre_market_price"] = f"Not available from source ({ib_cfg.output_pre_market_price})"
+    if ib_cfg.output_pre_market_chg_pct:
+        if rec.pre_market_chg_pct is not None:
+            data["pre_market_chg_pct"] = _fmt_chg_pct(rec.pre_market_chg_pct)
+        else:
+            data["pre_market_chg_pct"] = f"Not available from source ({ib_cfg.output_pre_market_chg_pct})"
+    if ib_cfg.output_pre_market_volume:
+        if rec.pre_market_volume is not None:
+            data["pre_market_volume"] = _fmt_volume(rec.pre_market_volume)
+        else:
+            data["pre_market_volume"] = f"Not available from source ({ib_cfg.output_pre_market_volume})"
+    if ib_cfg.output_pre_market_high:
+        if rec.pre_market_high is not None:
+            data["pre_market_high"] = _fmt_price(rec.pre_market_high)
+        else:
+            data["pre_market_high"] = f"Not available from source ({ib_cfg.output_pre_market_high})"
+    if ib_cfg.output_pre_market_low:
+        if rec.pre_market_low is not None:
+            data["pre_market_low"] = _fmt_price(rec.pre_market_low)
+        else:
+            data["pre_market_low"] = f"Not available from source ({ib_cfg.output_pre_market_low})"
+    if ib_cfg.output_rvol_pre_market:
+        if rec.rvol_pre_market is not None:
+            data["rvol_pre_market"] = _fmt_ratio(rec.rvol_pre_market)
+        else:
+            data["rvol_pre_market"] = f"Not calculated (source: {ib_cfg.output_rvol_pre_market})"
+
     if ib_cfg.output_shares_outstanding:
         if rec.shares_outstanding is not None:
             data["shares_outstanding"] = _fmt_market_cap(rec.shares_outstanding)
@@ -104,21 +137,6 @@ def _record_to_dict(rec: StockRecord, app_cfg: AppConfig) -> dict:
             data["fifty_two_week_low"] = _fmt_price(rec.fifty_two_week_low)
         else:
             data["fifty_two_week_low"] = f"Not available from source ({ib_cfg.output_fifty_two_week_low})"
-    if ib_cfg.output_pre_market_price:
-        if rec.pre_market_price is not None:
-            data["pre_market_price"] = _fmt_price(rec.pre_market_price)
-        else:
-            data["pre_market_price"] = f"Not available from source ({ib_cfg.output_pre_market_price})"
-    if ib_cfg.output_pre_market_chg_pct:
-        if rec.pre_market_chg_pct is not None:
-            data["pre_market_chg_pct"] = _fmt_chg_pct(rec.pre_market_chg_pct)
-        else:
-            data["pre_market_chg_pct"] = f"Not available from source ({ib_cfg.output_pre_market_chg_pct})"
-    if ib_cfg.output_pre_market_volume:
-        if rec.pre_market_volume is not None:
-            data["pre_market_volume"] = _fmt_volume(rec.pre_market_volume)
-        else:
-            data["pre_market_volume"] = f"Not available from source ({ib_cfg.output_pre_market_volume})"
 
     # ── External: yfinance data ──────────────────────────────────────────────
     if ext_cfg.output_float_pct:
@@ -144,29 +162,17 @@ def _record_to_dict(rec: StockRecord, app_cfg: AppConfig) -> dict:
         else:
             data["institutional_holding_pct"] = f"Not available from source ({ext_cfg.output_institutional_holding_pct})"
 
-    # ── Pre-market bars data ─────────────────────────────────────────────────
-    if ib_cfg.output_pre_market_high:
-        if rec.pre_market_high is not None:
-            data["pre_market_high"] = _fmt_price(rec.pre_market_high)
-        else:
-            data["pre_market_high"] = f"Not available from source ({ib_cfg.output_pre_market_high})"
-    if ib_cfg.output_pre_market_low:
-        if rec.pre_market_low is not None:
-            data["pre_market_low"] = _fmt_price(rec.pre_market_low)
-        else:
-            data["pre_market_low"] = f"Not available from source ({ib_cfg.output_pre_market_low})"
-    if ib_cfg.output_rvol_pre_market:
-        if rec.rvol_pre_market is not None:
-            data["rvol_pre_market"] = _fmt_ratio(rec.rvol_pre_market)
-        else:
-            data["rvol_pre_market"] = f"Not calculated (source: {ib_cfg.output_rvol_pre_market})"
-
     # ── Daily bars data ──────────────────────────────────────────────────────
     if ib_cfg.output_prev_close:
         if rec.price is not None:
             data["prev_close"] = _fmt_price(rec.price)
         else:
             data["prev_close"] = f"Not available from source ({ib_cfg.output_prev_close})"
+    if ib_cfg.output_prev_chg_pct:
+        if rec.prev_chg_pct is not None:
+            data["prev_chg_pct"] = _fmt_chg_pct(rec.prev_chg_pct)
+        else:
+            data["prev_chg_pct"] = f"Not available from source ({ib_cfg.output_prev_chg_pct})"
     if ib_cfg.output_prev_day_high:
         if rec.prev_day_high is not None:
             data["prev_day_high"] = _fmt_price(rec.prev_day_high)
@@ -285,3 +291,26 @@ def write_output(
 
     log.info("Output written to %s (%d records)", filepath, len(sorted_records))
     return filepath
+
+
+def write_output_live(
+    records: List[StockRecord],
+    live_path: Path,
+    app_config: AppConfig,
+    max_stocks: Optional[int] = None,
+) -> None:
+    """Rewrite the live output file atomically with the current passing records.
+
+    Called after each symbol passes all filters during a streaming pipeline run.
+    Uses a temp-file + rename so the file is always valid JSON at every point.
+    """
+    sorted_records = sorted(records, key=_sort_key, reverse=True)
+    if max_stocks is not None:
+        sorted_records = sorted_records[:max_stocks]
+
+    payload = {"stocks": [_record_to_dict(r, app_config) for r in sorted_records]}
+    tmp = live_path.with_suffix(".tmp")
+    with open(tmp, "w") as f:
+        json.dump(payload, f, indent=2, ensure_ascii=False)
+    tmp.replace(live_path)
+    log.debug("Live output updated: %d record(s) → %s", len(sorted_records), live_path)

@@ -16,22 +16,19 @@ from src.external.yfinance_data import fetch_yfinance_benchmark_data, fetch_yfin
 from src.ib.client import IBClient
 from src.ib.contract_details import fetch_all_contract_details, fetch_contract_details
 from src.ib.historical import (
-    fetch_all_daily_bars,
-    fetch_all_premarket_bars,
-    fetch_all_prev_session_vwap,
+    PremarketData,
+    fetch_daily_bars_stream,
+    fetch_premarket_1min_bars,
+    fetch_prev_session_vwap,
 )
 from src.ib.market_data import fetch_market_snapshots
+from src.ib.ratelimiter import limiter
 from src.ib.scanner import run_scanner_batches
-from src.ib.volume_profile import fetch_all_volume_profiles
-from src.output.writer import write_output
+from src.ib.volume_profile import fetch_volume_profile
+from src.output.writer import write_output, write_output_live
 from src.processing.atr import calculate_atr
-from src.processing.enrichment import StockRecord, _compute_beta, build_records
-from src.processing.filters import (
-    apply_screener_filters,
-    filter_symbols_by_atr,
-    filter_symbols_by_avg_volume,
-    reject_reason,
-)
+from src.processing.enrichment import StockRecord, _compute_beta, build_single_record
+from src.processing.filters import apply_screener_filters, reject_reason
 
 log = logging.getLogger(__name__)
 
@@ -296,230 +293,228 @@ async def collect_screener_records(
 
         return surviving, snapshots_with_price, drop_log
 
-    # ── Phase 2: expensive, survivors only (historical bars + all enrichment) ──
+    # ── Phase 2: expensive, survivors only (streaming per-symbol) ──────────────
     async def _phase2_enrich(
         contract_infos: dict,
         snapshots_with_price: dict,
     ) -> tuple[list[StockRecord], dict[str, str]]:
         """
-        Steps 3–13 for Phase 1 survivors only.
-        Receives pre-fetched contract_infos and snapshots_with_price — does NOT re-fetch them.
-        Returns (passing_records, drop_log).
+        Steps 3–13 for Phase 1 survivors only — streaming per-symbol.
+
+        Daily bars are streamed via asyncio.as_completed(); as each symbol's bars
+        arrive, ATR/volume filters are applied immediately and premarket bars + VWAP +
+        VP are fetched concurrently for that symbol. yfinance is launched in the
+        background at the start so it runs concurrently with all IB fetching.
         """
         batch_drop_log: dict[str, str] = {}
         surviving_symbols = list(contract_infos.keys())
         contracts = [info.contract for info in contract_infos.values()]
 
-        # Step 3: historical daily bars
-        bars_map: dict = {}
-        if app_config and app_config.ib_data.fetch_daily_bars:
-            duration = app_config.ib_data.daily_bars_duration
-            contracts_for_bars = list(contracts)
-
-            if app_config.ib_data.output_beta == "calculated":
-                if benchmark_sym not in _bench_bars_cache:
-                    try:
-                        bm_info = await fetch_contract_details(ib, benchmark_sym)
-                        if bm_info:
-                            contracts_for_bars.append(bm_info.contract)
-                            log.info("Fetching daily bars for benchmark %s (beta calc)", benchmark_sym)
-                    except Exception as e:
-                        log.warning("Could not get benchmark contract for daily bars: %s", e)
-
-            if duration != "20 D":
-                log.info(
-                    "Fetching %s of daily bars for %d symbols — ~%d min at current pacing",
-                    duration, len(contracts_for_bars),
-                    max(1, int(len(contracts_for_bars) * pacing.historical_delay_seconds / 60)),
-                )
-            bars_map = await fetch_all_daily_bars(ib, contracts_for_bars, pacing, duration=duration)
-
-            if benchmark_sym in bars_map:
-                _bench_bars_cache[benchmark_sym] = bars_map[benchmark_sym]
-            elif benchmark_sym in _bench_bars_cache:
-                bars_map[benchmark_sym] = _bench_bars_cache[benchmark_sym]
-        else:
-            log.info("Skipping historical daily bars (fetch_daily_bars=False)")
-
-        # Step 4: ATR pre-filter
-        atr_map: dict[str, float | None] = {}
-        if app_config and app_config.ib_data.output_atr == "ibk":
-            log.info("Pre-filtering by ATR (source: ibk)...")
-            atr_period = app_config.ib_data.atr_period
-            atr_map = {
-                sym: calculate_atr(bars_map[sym], atr_period, symbol=sym)
-                if sym in bars_map else None
-                for sym in contract_infos
-            }
-            surviving_symbols = filter_symbols_by_atr(
-                surviving_symbols, atr_map, screener_config.atr_min, bars_map=bars_map,
-            )
-            surviving_set = set(surviving_symbols)
-            for sym in contract_infos:
-                if sym not in batch_drop_log and sym not in surviving_set:
-                    if sym not in bars_map:
-                        batch_drop_log[sym] = "historical bars unavailable"
-                    elif atr_map.get(sym) is None:
-                        batch_drop_log[sym] = f"ATR unavailable (need ≥{atr_period + 1} bars)"
-                    else:
-                        batch_drop_log[sym] = f"ATR {atr_map[sym]:.2f}% < min {screener_config.atr_min}%"
-        else:
-            log.info("Skipping ATR pre-filter (source: %s)",
-                     app_config.ib_data.output_atr if app_config else "N/A")
-
-        # Step 4b: avg_volume_min pre-filter
-        # When source is "yfinance" (yfinance), skip the bars-based pre-filter — IB's
-        # RTH-only bar volumes undercount vs yfinance total-session volume and would
-        # incorrectly drop stocks. The final Step 13 filter applies avg_volume_min
-        # against rec.avg_daily_volume_20d which yfinance populates with total volume.
+        # Configuration
+        fetch_daily    = bool(app_config and app_config.ib_data.fetch_daily_bars)
+        duration       = (app_config.ib_data.daily_bars_duration if app_config else "20 D")
+        atr_period     = (app_config.ib_data.atr_period if app_config else 14)
+        ema_periods_   = (app_config.ib_data.ema_periods if app_config else [9, 20, 50, 200])
+        rsi_period_    = (app_config.ib_data.rsi_period if app_config else 14)
+        use_atr_ibk    = bool(app_config and app_config.ib_data.output_atr == "ibk")
         avg_vol_source = getattr(getattr(app_config, "ib_data", None), "output_avg_daily_volume_20d", "ibk")
-        if avg_vol_source == "yfinance":
-            log.info(
-                "Skipping bars-based avg_volume pre-filter (source: finhub) — "
-                "will apply after yfinance enrichment using total-session volume"
-            )
-        else:
-            pre_avg_vol = surviving_symbols
-            surviving_symbols = filter_symbols_by_avg_volume(
-                surviving_symbols, bars_map, screener_config.avg_volume_min,
-            )
-            surviving_set = set(surviving_symbols)
-            for sym in pre_avg_vol:
-                if sym not in batch_drop_log and sym not in surviving_set:
-                    avg_vol = (
-                        sum(b.volume for b in bars_map[sym][-20:]) / len(bars_map[sym][-20:])
-                        if bars_map.get(sym) else None
-                    )
-                    batch_drop_log[sym] = (
-                        f"avg_daily_volume {avg_vol:.0f} < min {screener_config.avg_volume_min:.0f}"
-                        if avg_vol is not None else "avg_daily_volume unavailable"
-                    )
+        fetch_pm       = bool(app_config and app_config.ib_data.fetch_pre_market_bars)
+        fetch_vwap_    = bool(app_config and app_config.ib_data.fetch_prev_session_vwap)
+        fetch_vp_      = bool(app_config and app_config.ib_data.fetch_volume_profile)
+        vp_sessions_   = getattr(getattr(app_config, "ib_data", None), "volume_profile_sessions", 10) if app_config else 10
+        ib_timeout     = pacing.historical_request_timeout_seconds
+        ib_rvol_lb     = getattr(getattr(app_config, "ib_data", None), "pre_market_rvol_lookback", 5) if app_config else 5
 
-        surviving_contracts = [
-            contract_infos[s].contract for s in surviving_symbols if s in contract_infos
+        # Include benchmark contract for calculated beta
+        contracts_for_bars = list(contracts)
+        if app_config and app_config.ib_data.output_beta == "calculated":
+            if benchmark_sym not in _bench_bars_cache:
+                try:
+                    bm_info = await fetch_contract_details(ib, benchmark_sym)
+                    if bm_info:
+                        contracts_for_bars.append(bm_info.contract)
+                        log.info("Including benchmark %s in daily bars stream (beta calc)", benchmark_sym)
+                except Exception as e:
+                    log.warning("Could not get benchmark contract for daily bars: %s", e)
+
+        # Launch yfinance EARLY — runs concurrently with IB bar streaming
+        ib_yf_fields = [
+            "output_shares_outstanding", "output_market_cap", "output_prev_close",
+            "output_fifty_two_week_high", "output_fifty_two_week_low", "output_beta",
+            "output_prev_day_high", "output_prev_day_low", "output_prev_day_open",
+            "output_avg_daily_volume_20d", "output_atr", "output_ema", "output_rsi",
+            "output_pre_market_high", "output_pre_market_low", "output_rvol_pre_market",
+            "output_vwap_prev_session",
         ]
-        if not surviving_contracts:
-            log.warning("All Phase 2 symbols filtered out by ATR/avg-volume thresholds")
-            return [], batch_drop_log
-
-        # Step 6: pre-market 1-min bars
-        premarket_map: dict = {}
-        if app_config and app_config.ib_data.fetch_pre_market_bars:
-            log.info("Fetching pre-market 1-min bars for %d symbols...", len(surviving_contracts))
-            premarket_map = await fetch_all_premarket_bars(ib, surviving_contracts, pacing)
-        else:
-            log.info("Skipping pre-market 1-min bars (fetch_pre_market_bars=False)")
-
-        # Step 7: previous session VWAP
-        vwap_map: dict = {}
-        if app_config and app_config.ib_data.fetch_prev_session_vwap:
-            log.info("Fetching previous-session VWAP for %d symbols...", len(surviving_contracts))
-            vwap_map = await fetch_all_prev_session_vwap(ib, surviving_contracts, pacing)
-        else:
-            log.info("Skipping previous-session VWAP (fetch_prev_session_vwap=False)")
-
-        # Step 9: volume profiles
-        vp_map: dict = {}
-        if app_config and app_config.ib_data.fetch_volume_profile:
-            log.info("Fetching volume profiles for %d symbols...", len(surviving_contracts))
-            vp_map = await fetch_all_volume_profiles(
-                ib, surviving_contracts, pacing,
-                lookback_sessions=app_config.ib_data.volume_profile_sessions,
-            )
-        else:
-            log.info("Skipping volume profiles (fetch_volume_profile=False)")
-
-        # Step 10: assemble records
-        # snapshots_with_price already contains only symbols with valid price data
-        surviving_infos = {
-            s: contract_infos[s]
-            for s in surviving_symbols
-            if s in contract_infos and s in snapshots_with_price
-        }
-        log.info("Symbols with valid price data after Phase 2 pre-filters: %d / %d",
-                 len(surviving_infos), len(surviving_symbols))
-
-        if not surviving_infos:
-            log.error("No symbols with valid price data — check IB connection")
-            return [], batch_drop_log
-
-        atr_map_surviving = {sym: atr_map[sym] for sym in surviving_infos if sym in atr_map}
-        build_kwargs: dict = {"atr_map": atr_map_surviving}
-        if app_config:
-            if app_config.ib_data.output_atr is not None:
-                build_kwargs["atr_period"] = app_config.ib_data.atr_period
-            if app_config.ib_data.output_ema is not None:
-                build_kwargs["ema_periods"] = app_config.ib_data.ema_periods
-            if app_config.ib_data.output_rsi is not None:
-                build_kwargs["rsi_period"] = app_config.ib_data.rsi_period
-
-        # snapshots_with_price is passed as both snapshots and snapshots_with_price
-        # since all entries already have valid price data (guaranteed by Phase 1 filter)
-        records_all = build_records(
-            surviving_infos,
-            snapshots_with_price,
-            bars_map,
-            app_config=app_config,
-            **build_kwargs,
+        ext_yf_fields = [
+            "output_float_pct", "output_next_earnings_date",
+            "output_short_float_pct", "output_short_ratio", "output_institutional_holding_pct",
+        ]
+        need_yfinance = app_config and (
+            any(_should_output_ib_data(f, "yfinance") for f in ib_yf_fields) or
+            any(_should_output_external_data(f, "yfinance") for f in ext_yf_fields)
         )
-        log.info("Built %d records from %d surviving symbols", len(records_all), len(surviving_infos))
+        rvol_lookback = getattr(getattr(app_config, "ib_data", None), "pre_market_rvol_lookback", 5) if app_config else 5
+        yf_task: asyncio.Task | None = None
+        if need_yfinance:
+            p1_syms = [s for s in surviving_symbols if s in snapshots_with_price]
+            log.info("Launching yfinance for %d symbol(s) in background...", len(p1_syms))
+            yf_task = asyncio.ensure_future(
+                fetch_yfinance_data(p1_syms, rvol_lookback_days=min(rvol_lookback, 5))
+            )
 
-        # Step 11: patch records with pre-market bars, VWAP, benchmark, VP
-        if app_config and _should_output_ib_data("output_vp_poc", source="yfinance"):
-            log.warning("Volume Profile from yfinance is not supported and will be null.")
+        # Step 3–11: true progressive streaming
+        #   Sub-phase A — stream daily bars; apply early ATR/vol filters;
+        #                 launch _enrich_one task per survivor immediately (non-blocking)
+        #   Sub-phase B — collect enrichment results via as_completed;
+        #                 write live output as each symbol finishes
+        bars_map: dict[str, list] = {}
+        records_all: list[StockRecord] = []
 
-        for rec in records_all:
-            pm = premarket_map.get(rec.symbol)
-            if pm:
-                if _should_output_ib_data("output_pre_market_high"):
-                    rec.pre_market_high = pm.pre_market_high
-                else:
-                    rec.pre_market_high = None
-                if _should_output_ib_data("output_pre_market_low"):
-                    rec.pre_market_low = pm.pre_market_low
-                else:
-                    rec.pre_market_low = None
-                if _should_output_ib_data("output_rvol_pre_market"):
-                    rec.rvol_pre_market = pm.rvol_pre_market
-                else:
-                    rec.rvol_pre_market = None
-                if (pm.pre_market_volume is not None
-                        and _should_output_ib_data("output_pre_market_volume", source="ibk")):
-                    rec.pre_market_volume = pm.pre_market_volume
-            else:
-                if _should_output_ib_data("output_pre_market_high"):
-                    rec.pre_market_high = None
-                if _should_output_ib_data("output_pre_market_low"):
-                    rec.pre_market_low = None
-                if _should_output_ib_data("output_rvol_pre_market"):
-                    rec.rvol_pre_market = None
+        # Semaphores mirror the concurrency of the old batch functions (3 concurrent each)
+        _pm_sem   = asyncio.Semaphore(3)
+        _vwap_sem = asyncio.Semaphore(3)
+        _vp_sem   = asyncio.Semaphore(3)
+
+        async def _enrich_one(sym: str, bars: list, atr_val: float | None) -> StockRecord:
+            """Fetch premarket + VWAP + VP for one symbol with rate limiting, build record."""
+            contract = contract_infos[sym].contract
+
+            pm_data = PremarketData(None, None, None, None)
+            if fetch_pm:
+                async with _pm_sem:
+                    await limiter.acquire(min_gap=pacing.historical_delay_seconds)
+                    pm_data = await fetch_premarket_1min_bars(ib, contract, ib_rvol_lb, ib_timeout)
+
+            vwap_val: float | None = None
+            if fetch_vwap_:
+                async with _vwap_sem:
+                    await limiter.acquire(min_gap=pacing.historical_delay_seconds)
+                    vwap_val = await fetch_prev_session_vwap(ib, contract, ib_timeout)
+
+            vp_data = None
+            if fetch_vp_:
+                async with _vp_sem:
+                    await limiter.acquire(min_gap=pacing.historical_delay_seconds)
+                    vp_data = await fetch_volume_profile(ib, contract, lookback_sessions=vp_sessions_)
+
+            rec = build_single_record(
+                symbol=sym,
+                info=contract_infos[sym],
+                snap=snapshots_with_price.get(sym),
+                bars=bars,
+                app_config=app_config,
+                atr_val=atr_val,
+                atr_period=atr_period,
+                ema_periods=ema_periods_,
+                rsi_period=rsi_period_,
+            )
+
+            # Patch IB premarket fields
+            if _should_output_ib_data("output_pre_market_high"):
+                rec.pre_market_high = pm_data.pre_market_high
+            if _should_output_ib_data("output_pre_market_low"):
+                rec.pre_market_low = pm_data.pre_market_low
+            if _should_output_ib_data("output_rvol_pre_market"):
+                rec.rvol_pre_market = pm_data.rvol_pre_market
+            if (pm_data.pre_market_volume is not None
+                    and _should_output_ib_data("output_pre_market_volume", source="ibk")):
+                rec.pre_market_volume = pm_data.pre_market_volume
 
             if _should_output_ib_data("output_vwap_prev_session", source="ibk"):
-                rec.vwap_prev_session = vwap_map.get(rec.symbol)
-            else:
-                rec.vwap_prev_session = None
+                rec.vwap_prev_session = vwap_val
 
             if _should_output_ib_data("output_benchmark_data"):
                 rec.benchmark_symbol = benchmark_sym
                 rec.benchmark_prev_close = bm_prev_close if _should_output_ib_data("output_benchmark_prev_close") else None
                 rec.benchmark_pre_market_price = bm_pre_market_price
                 rec.benchmark_pre_market_chg_pct = bm_chg_pct if _should_output_ib_data("output_benchmark_pre_market_chg_pct") else None
-            else:
-                rec.benchmark_symbol = None
-                rec.benchmark_prev_close = None
-                rec.benchmark_pre_market_price = None
-                rec.benchmark_pre_market_chg_pct = None
 
-            vp = vp_map.get(rec.symbol)
-            rec.vp_lookback_sessions = vp.lookback_sessions if vp else None
-            rec.vp_poc = (vp.poc if vp else None) if _should_output_ib_data("output_vp_poc", source="ibk") else None
-            rec.vp_vah = (vp.vah if vp else None) if _should_output_ib_data("output_vp_vah", source="ibk") else None
-            rec.vp_val = (vp.val if vp else None) if _should_output_ib_data("output_vp_val", source="ibk") else None
+            if vp_data:
+                rec.vp_lookback_sessions = vp_data.lookback_sessions
+                rec.vp_poc = vp_data.poc if _should_output_ib_data("output_vp_poc", source="ibk") else None
+                rec.vp_vah = vp_data.vah if _should_output_ib_data("output_vp_vah", source="ibk") else None
+                rec.vp_val = vp_data.val if _should_output_ib_data("output_vp_val", source="ibk") else None
 
             if _should_output_ib_data("output_beta", source="calculated"):
-                stock_bars = bars_map.get(rec.symbol)
-                bench_bars = bars_map.get(benchmark_sym)
-                rec.beta = _compute_beta(stock_bars, bench_bars) if (stock_bars and bench_bars) else None
+                bench_bars = _bench_bars_cache.get(benchmark_sym)
+                rec.beta = _compute_beta(bars, bench_bars) if (bars and bench_bars) else None
+
+            return rec
+
+        # Sub-phase A: stream daily bars; launch enrichment task per survivor immediately
+        enrich_futures: list[asyncio.Future] = []
+
+        if fetch_daily:
+            if duration != "20 D":
+                log.info("Streaming %s of daily bars for %d symbols...", duration, len(contracts_for_bars))
+            async for symbol, bars in fetch_daily_bars_stream(ib, contracts_for_bars, pacing, duration=duration):
+                bars_map[symbol] = bars
+
+                if symbol == benchmark_sym:
+                    _bench_bars_cache[benchmark_sym] = bars
+                    continue
+
+                if symbol not in contract_infos or symbol not in snapshots_with_price:
+                    continue
+
+                # ATR pre-filter (IB bars source)
+                atr_val: float | None = None
+                if use_atr_ibk:
+                    atr_val = calculate_atr(bars, atr_period, symbol=symbol)
+                    if screener_config.atr_min is not None and (atr_val is None or atr_val < screener_config.atr_min):
+                        reason = (
+                            f"ATR {atr_val:.2f}% < min {screener_config.atr_min}%"
+                            if atr_val is not None
+                            else f"ATR unavailable (need ≥{atr_period + 1} bars)"
+                        )
+                        batch_drop_log.setdefault(symbol, reason)
+                        log.info("%s: dropped (ATR pre-filter) — %s", symbol, reason)
+                        continue
+
+                # Avg volume pre-filter (IB source; yfinance source deferred to Step 13)
+                if avg_vol_source != "yfinance" and screener_config.avg_volume_min:
+                    recent = bars[-20:] if bars else []
+                    avg_vol = sum(b.volume for b in recent) / len(recent) if recent else None
+                    if avg_vol is None or avg_vol < screener_config.avg_volume_min:
+                        reason = (
+                            f"avg_daily_volume {avg_vol:.0f} < min {screener_config.avg_volume_min:.0f}"
+                            if avg_vol is not None else "avg_daily_volume unavailable"
+                        )
+                        batch_drop_log.setdefault(symbol, reason)
+                        log.info("%s: dropped (avg-vol pre-filter) — %s", symbol, reason)
+                        continue
+
+                # Launch enrichment immediately — runs concurrently with remaining daily bar fetches
+                enrich_futures.append(asyncio.ensure_future(_enrich_one(symbol, bars, atr_val)))
+                log.debug("%s: daily bars done — enrichment task launched", symbol)
+
+        else:
+            log.info("Skipping historical daily bars (fetch_daily_bars=False)")
+            for symbol in contract_infos:
+                if symbol in snapshots_with_price:
+                    enrich_futures.append(asyncio.ensure_future(_enrich_one(symbol, [], None)))
+
+        # Sub-phase B: collect enrichment results as they complete; write live output per symbol
+        for future in asyncio.as_completed(enrich_futures):
+            try:
+                rec = await future
+            except Exception as e:
+                log.error("Enrichment task failed: %s", e)
+                continue
+            records_all.append(rec)
+            if _live_path and app_config:
+                write_output_live(records_all, _live_path, app_config, max_stocks=app_config.max_number_of_stocks)
+            log.info("%s: enrichment complete (%d record(s) so far)", rec.symbol, len(records_all))
+
+        if benchmark_sym in bars_map and benchmark_sym not in _bench_bars_cache:
+            _bench_bars_cache[benchmark_sym] = bars_map[benchmark_sym]
+
+        if app_config and _should_output_ib_data("output_vp_poc", source="yfinance"):
+            log.warning("Volume Profile from yfinance is not supported and will be null.")
+
+        log.info("Streaming Phase 2: %d record(s) built from %d daily-bar fetch(es)",
+                 len(records_all), len(bars_map))
 
         # Step 12: external enrichment (yfinance + FMP)
         surviving_syms = [rec.symbol for rec in records_all]
@@ -527,26 +522,17 @@ async def collect_screener_records(
         ib_data_cfg = getattr(app_config, "ib_data", None) if app_config else None
 
         yf_data: dict = {}
-        if app_config:
-            ib_finhub = [
-                "output_shares_outstanding", "output_market_cap", "output_prev_close",
-                "output_fifty_two_week_high", "output_fifty_two_week_low", "output_beta",
-                "output_prev_day_high", "output_prev_day_low", "output_prev_day_open",
-                "output_avg_daily_volume_20d", "output_atr", "output_ema", "output_rsi",
-                "output_pre_market_high", "output_pre_market_low", "output_rvol_pre_market",
-                "output_vwap_prev_session",
-            ]
-            ext_finhub = [
-                "output_float_pct", "output_next_earnings_date",
-                "output_short_float_pct", "output_short_ratio", "output_institutional_holding_pct",
-            ]
-            if (any(_should_output_ib_data(f, "yfinance") for f in ib_finhub) or
-                    any(_should_output_external_data(f, "yfinance") for f in ext_finhub)):
-                log.info("Fetching external data (yfinance) for %d symbols...", len(surviving_syms))
-                rvol_lookback = getattr(ib_data_cfg, "pre_market_rvol_lookback", 5) if ib_data_cfg else 5
-                yf_data = await fetch_yfinance_data(surviving_syms, rvol_lookback_days=min(rvol_lookback, 5))
-            else:
-                log.info("Skipping yfinance fetch (no fields configured for 'finhub')")
+        if yf_task is not None:
+            log.info("Awaiting yfinance data (launched at Phase 2 start)...")
+            try:
+                yf_data = await yf_task
+            except Exception as e:
+                log.warning("yfinance background task failed: %s", e)
+        elif need_yfinance and surviving_syms:
+            log.info("Fetching yfinance data for %d symbols...", len(surviving_syms))
+            yf_data = await fetch_yfinance_data(surviving_syms, rvol_lookback_days=min(rvol_lookback, 5))
+        else:
+            log.info("Skipping yfinance fetch (no fields configured for 'yfinance')")
 
         news_data: dict = {}
         fmp_key = getattr(ext_cfg, "fmp_api_key", "") if ext_cfg else ""
@@ -643,6 +629,11 @@ async def collect_screener_records(
                             rec.prev_day_low = history_df['Low'].iloc[-2]
                         if ib_data_cfg.output_prev_day_open == "yfinance":
                             rec.prev_day_open = history_df['Open'].iloc[-2]
+                    if len(history_df) >= 3 and ib_data_cfg.output_prev_chg_pct == "yfinance":
+                        prev_close_val = history_df['Close'].iloc[-2]
+                        close_before = history_df['Close'].iloc[-3]
+                        if close_before and close_before > 0:
+                            rec.prev_chg_pct = round((prev_close_val - close_before) / close_before * 100, 2)
                     if ib_data_cfg.output_avg_daily_volume_20d == "yfinance":
                         rec.avg_daily_volume_20d = history_df['Volume'].tail(20).mean()
                     if ib_data_cfg.output_atr == "yfinance":
@@ -743,10 +734,8 @@ async def collect_screener_records(
                 batch_drop_log.setdefault(rec.symbol, reject_reason(rec, screener_config) or "client-side filter")
 
         log.info(
-            "Phase 2 summary: %d candidates → %d historical → %d ATR/vol pass"
-            " → %d snapshots → %d records → %d after filters",
+            "Phase 2 summary: %d candidates → %d daily-bar fetches → %d records built → %d after filters",
             len(list(contract_infos.keys())), len(bars_map),
-            len(surviving_symbols), len(snapshots_with_price),
             len(records_all), len(passing_records),
         )
         return passing_records, batch_drop_log
@@ -757,6 +746,15 @@ async def collect_screener_records(
     all_records: list[StockRecord] = []
     all_drop_log: dict[str, str] = {}
     all_scanner_symbols: list[str] = []
+
+    # Live output file — created once at run start, rewritten after each iteration
+    import datetime as _dt
+    _live_ts = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+    _live_path: Path | None = None
+    if app_config:
+        _live_dir = Path(app_config.output.directory)
+        _live_dir.mkdir(parents=True, exist_ok=True)
+        _live_path = _live_dir / f"pre_market_live_{_live_ts}.json"
 
     for iteration in range(_MAX_TOPUP_ITERATIONS):
         if iteration > 0:
@@ -806,6 +804,14 @@ async def collect_screener_records(
         batch_records, p2_drops = await _phase2_enrich(p1_infos, p1_snaps)
         all_records.extend(batch_records)
         all_drop_log.update(p2_drops)
+
+        # Incremental live output — rewrite after each iteration's records are added
+        if _live_path and app_config and all_records:
+            write_output_live(
+                all_records, _live_path, app_config,
+                max_stocks=app_config.max_number_of_stocks,
+            )
+            log.info("Live output updated: %d record(s) → %s", len(all_records), _live_path)
 
     if not all_scanner_symbols:
         _log_manifest([], {}, [])
