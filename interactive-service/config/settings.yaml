@@ -38,7 +38,7 @@ scheduler:
     minute: 0
     timezone: "America/New_York"
 
-max_number_of_stocks: 10 #org : 49 -  How many passing records are written to the output file
+max_number_of_stocks: 4 #org : 49 -  How many passing records are written to the output file
 
 ib_data:
   # ── Core Data Fetches ────────────────────────────────────────────────────────
@@ -54,8 +54,9 @@ ib_data:
                                   #           market_cap, shares_outstanding, beta, fifty_two_week_high,
                                   #           fifty_two_week_low, bid/ask prices
   
-  fetch_pre_market_bars: true     # fetch pre_market 1-min bars - MUST BE TRUE FOR pre-market volume to be accurate !!!!
+  fetch_pre_market_bars: true     # fetch pre_market 1-min bars
                                   # Provides: pre_market_high, pre_market_low, rvol_pre_market
+                                  # NOTE: pre_market_volume is sourced from yfinance, NOT from these bars
   
   fetch_prev_session_vwap: false   # fetch previous session VWAP
                                   # Provides: vwap_prev_session
@@ -73,7 +74,7 @@ ib_data:
   # ── Historical Data Parameters ───────────────────────────────────────────────
   daily_bars_duration: "300 D"    # duration for historical daily bars
                                   # Must be ≥ max(ema_periods) for EMA calculation (e.g., "300 D" for EMA-200)
-  pre_market_rvol_lookback: 20    # days to look back for pre_market relative volume calculation
+  pre_market_rvol_lookback: 5     # days to look back for pre_market relative volume calculation (5 = 7D request, fits IB limits)
   
 
   # ── Output Fields ────────────────────────────────────────────────────────────
@@ -102,16 +103,18 @@ ib_data:
   output_bid_ask: true           # Bid and ask prices
   
   # Volume Data (from various sources)
-  #output_pre_market_volume: "ibk" # org location 
   output_avg_daily_volume_20d: "yfinance"
-  
+
   # Pre-market Bars Data
-  # pre_market_volume source options (to match TradingView SIP-consolidated volume):
-  #   "yfinance"  — Yahoo Finance info.preMarketVolume (real-time consolidated, matches TradingView, no extra IB calls) ← RECOMMENDED
-  #   "ibk"       — IB 1-min TRADES bars sum 4:00–9:30 AM (most authoritative; requires fetch_pre_market_bars: true)
-  #                 Falls back to IB streaming tick when fetch_pre_market_bars: false (undercounts 40–50%)
+  # pre_market_volume source options:
+  #   "yfinance"  — Yahoo Finance info.preMarketVolume (SIP-consolidated, matches TradingView) ← REQUIRED
+  #   "ibk"       — IB 1-min TRADES bars sum — UNDER-REPORTS for most stocks; only accurate for
+  #                 high-volume NASDAQ/NYSE blue-chips (SNAP, MSTR). DO NOT USE.
   #   "finnhub"   — Finnhub /quote session volume (only accurate during pre-market hours)
-  output_pre_market_volume: "ibk"  #ONLY ONE WAY FOR IT TO WORK SET fetch_pre_market_bars: true  !!!!
+  #
+  # !! DO NOT CHANGE TO "ibk" !! — IB bars miss consolidated SIP volume for most stocks.
+  # Root cause of the recurring pre_market_volume bug. See CLAUDE.md → Pre-Market Volume.
+  output_pre_market_volume: "yfinance"
   output_pre_market_price: "ibk"  # it will correct only when running it on the pre-market hours, otherwise it will be the last price of the previous day.
   output_pre_market_chg_pct: "ibk"  # it will correct only when running it on the pre-market hours, otherwise it will be the last price of the previous day.
   output_pre_market_high: "yfinance"

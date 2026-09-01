@@ -90,39 +90,40 @@ class Orchestrator:
             "Orchestrator started",
             extra={"run_id": self.run_id, "model_count": len(self.model_configs)},
         )
-        await self._set_status("running")
+        run_logger: RunLogger | None = None
+        try:
+            await self._set_status("running")
 
-        run_dir = self._make_run_dir()
-        await self._set_output_dir(run_dir)
+            run_dir = self._make_run_dir()
+            await self._set_output_dir(run_dir)
 
-        log_path = str(Path(settings.output_dir) / "logs" / f"{self._dt_str}.html")
-        run_logger = RunLogger(log_path, run_id=self.run_id)
-        started_at = datetime.now(timezone.utc).strftime("%Y-%m-%d  %H:%M:%S UTC")
-        await run_logger.open(run_id=self.run_id, started_at=started_at)
+            log_path = str(Path(settings.output_dir) / "logs" / f"{self._dt_str}.html")
+            run_logger = RunLogger(log_path, run_id=self.run_id)
+            started_at = datetime.now(timezone.utc).strftime("%Y-%m-%d  %H:%M:%S UTC")
+            await run_logger.open(run_id=self.run_id, started_at=started_at)
 
-        ceo_prompts = self.prompts_by_category.get("ceo", [])
-        ceo_manager: CeoManager | None = None
-        if ceo_prompts:
-            ceo_manager = CeoManager(
-                total_tickers=len(self.tickers),
-                model_configs=self.model_configs,
-                prompts=ceo_prompts,
-                semaphore=asyncio.Semaphore(settings.max_concurrent_ceo_pipelines),
+            ceo_prompts = self.prompts_by_category.get("ceo", [])
+            ceo_manager: CeoManager | None = None
+            if ceo_prompts:
+                ceo_manager = CeoManager(
+                    total_tickers=len(self.tickers),
+                    model_configs=self.model_configs,
+                    prompts=ceo_prompts,
+                    semaphore=asyncio.Semaphore(settings.max_concurrent_ceo_pipelines),
+                    run_dir=run_dir,
+                    output_format=settings.output_format,
+                    run_logger=run_logger,
+                )
+
+            stock_aggregator = StockAggregator(
+                expected_pipelines=["stocks"],
                 run_dir=run_dir,
                 output_format=settings.output_format,
                 run_logger=run_logger,
+                ceo_manager=ceo_manager,
             )
 
-        stock_aggregator = StockAggregator(
-            expected_pipelines=["stocks"],
-            run_dir=run_dir,
-            output_format=settings.output_format,
-            run_logger=run_logger,
-            ceo_manager=ceo_manager,
-        )
-
-        run_start = time.monotonic()
-        try:
+            run_start = time.monotonic()
             agent_prompts = self.prompts_by_category.get("agents", [])
             sector_prompts = self.prompts_by_category.get("sectors", [])
             await run_logger.run_start(
@@ -273,9 +274,17 @@ class Orchestrator:
             raise
         except Exception:
             logger.exception("Orchestrator failed", extra={"run_id": self.run_id})
-            await self._set_status("failed")
+            try:
+                await self._set_status("failed")
+            except Exception:
+                logger.exception(
+                    "Could not update run status to 'failed' — run %s may be stuck in 'pending'",
+                    self.run_id,
+                    extra={"run_id": self.run_id},
+                )
         finally:
-            await run_logger.close()
+            if run_logger is not None:
+                await run_logger.close()
 
     def _make_run_dir(self) -> str:
         """Create and return a timestamped output subfolder under outputs/runs/."""

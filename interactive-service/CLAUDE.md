@@ -59,6 +59,17 @@ The app pulls pre-market stock data from Interactive Brokers via `ib_async` (asy
 
 **Scheduler** (`src/scheduler/runner.py`): Uses `AsyncIOScheduler` (not `BackgroundScheduler`) because `ib_async` requires the same asyncio event loop. The scheduler owns the event loop via `loop.run_forever()`.
 
+## Pre-Market Volume — CRITICAL RULE
+
+**`output_pre_market_volume` MUST be `"yfinance"` in `config/settings.yaml`. Do NOT change it to `"ibk"`.**
+
+**Root cause of a persistent recurring bug** (fixed multiple times — do not revert):
+- `"ibk"` uses IB 1-min TRADES bars summed over 4:00–9:30 AM ET. These bars **under-report** pre-market volume for the majority of stocks. Only high-volume NASDAQ/NYSE blue-chips (SNAP, MSTR) happen to get accurate values. All other stocks show volumes far below what TradingView reports.
+- `"yfinance"` uses `info.preMarketVolume` from Yahoo Finance, which is the consolidated SIP tape — the same data source TradingView uses. This is correct for all stocks.
+- `fetch_pre_market_bars: true` is needed for `pre_market_high`, `pre_market_low`, and `rvol_pre_market` — it is **not** the volume source when `output_pre_market_volume: "yfinance"`.
+
+The code-level default in `src/config/loader.py:IBDataConfig.output_pre_market_volume` is also set to `"yfinance"` so a missing or blank settings.yaml line falls back correctly.
+
 ## IB API Quirks
 
 - `marketCapAbove` / `marketCapBelow` on `ScannerSubscription` are in **millions of USD**, not raw dollars — the scanner module divides config values by `1_000_000` before setting them.

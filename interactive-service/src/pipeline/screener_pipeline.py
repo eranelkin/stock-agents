@@ -21,7 +21,7 @@ from src.ib.historical import (
     fetch_premarket_1min_bars,
     fetch_prev_session_vwap,
 )
-from src.ib.market_data import fetch_market_snapshots
+from src.ib.market_data import MarketSnapshot, fetch_market_snapshots
 from src.ib.ratelimiter import limiter
 from src.ib.scanner import run_scanner_batches
 from src.ib.volume_profile import fetch_volume_profile
@@ -87,34 +87,48 @@ def _apply_phase1_snapshot_filters(
     """
     drop_log: dict[str, str] = {}
 
-    # Require a valid price snapshot
-    snapshots_with_price = {
-        sym: snap for sym, snap in snapshots.items()
-        if snap.pre_market_price is not None or snap.prev_close is not None
-    }
+    # Build a snapshot map that covers every symbol. Stocks where IB delivered no
+    # price data get an empty placeholder — they are deferred to Phase 2 where
+    # yfinance fills in prev_close, pre_market_price, and chg_pct.
+    snapshots_with_price: dict = {}
+    deferred_count = 0
     for sym in contract_infos:
-        if sym not in snapshots_with_price:
-            drop_log[sym] = "no market price data received within timeout"
+        snap = snapshots.get(sym)
+        if snap is not None and (snap.pre_market_price is not None or snap.prev_close is not None):
+            snapshots_with_price[sym] = snap
+        else:
+            snapshots_with_price[sym] = MarketSnapshot(
+                symbol=sym,
+                pre_market_price=None, prev_close=None, pre_market_volume=None,
+                market_cap_usd=None, pre_market_chg_pct=None,
+                fifty_two_week_high=None, fifty_two_week_low=None,
+                shares_outstanding=None, beta=None,
+            )
+            deferred_count += 1
+            log.debug("%s: no IB price snapshot — deferred to Phase 2 (yfinance fallback)", sym)
 
-    surviving = {sym: info for sym, info in contract_infos.items() if sym in snapshots_with_price}
+    surviving = dict(contract_infos)
 
-    # price_min filter
+    # price_min filter — skip stocks with no IB price (they are deferred; Phase 2 re-checks via
+    # filters.reject_reason() after yfinance fills in prev_close / pre_market_price)
     if screener_config.price_min is not None:
         pre = dict(surviving)
         surviving = {}
         for sym, info in pre.items():
             snap = snapshots_with_price[sym]
             effective_price = snap.pre_market_price or snap.prev_close
-            if effective_price is not None and effective_price >= screener_config.price_min:
+            if effective_price is None:
+                surviving[sym] = info  # deferred — price check runs again in Phase 2
+            elif effective_price >= screener_config.price_min:
                 surviving[sym] = info
             else:
-                drop_log[sym] = (
-                    f"price {effective_price:.2f} < min {screener_config.price_min:.2f}"
-                    if effective_price is not None
-                    else f"price unavailable (min {screener_config.price_min:.2f})"
-                )
+                drop_log[sym] = f"price {effective_price:.2f} < min {screener_config.price_min:.2f}"
 
     # pre_market_chg_pct_min filter
+    # Only drop stocks where we KNOW the chg% is below threshold.
+    # When chg% is None (IB streaming tick didn't arrive in time), let the stock
+    # through to Phase 2 — yfinance provides preMarketChangePercent there and
+    # filters.reject_reason() re-applies the threshold after enrichment.
     if screener_config.pre_market_chg_pct_min is not None:
         threshold = screener_config.pre_market_chg_pct_min
         pre = dict(surviving)
@@ -122,18 +136,17 @@ def _apply_phase1_snapshot_filters(
         for sym, info in pre.items():
             snap = snapshots_with_price[sym]
             chg = snap.pre_market_chg_pct
-            if chg is not None and chg >= threshold:
+            if chg is None:
+                surviving[sym] = info  # defer to Phase 2 yfinance check
+                log.debug("%s: pre_market_chg_pct unavailable from IB — deferred to Phase 2", sym)
+            elif chg >= threshold:
                 surviving[sym] = info
             else:
-                drop_log[sym] = (
-                    f"pre_market_chg_pct {chg:+.2f}% < min {threshold:+.2f}%"
-                    if chg is not None
-                    else f"pre_market_chg_pct unavailable (min {threshold:+.2f}%)"
-                )
+                drop_log[sym] = f"pre_market_chg_pct {chg:+.2f}% < min {threshold:+.2f}%"
 
     log.info(
-        "Phase 1 snapshot filter: %d candidates → %d passed (price_min=%s, chg_pct_min=%s)",
-        len(contract_infos), len(surviving),
+        "Phase 1 snapshot filter: %d candidates → %d passed (%d deferred to Phase 2, price_min=%s, chg_pct_min=%s)",
+        len(contract_infos), len(surviving), deferred_count,
         screener_config.price_min, screener_config.pre_market_chg_pct_min,
     )
     return surviving, snapshots_with_price, drop_log
@@ -584,6 +597,11 @@ async def collect_screener_records(
                         rec.price = yf.get("prev_close")
                     elif ib_data_cfg.output_prev_close is None:
                         rec.price = None
+                    elif ib_data_cfg.output_prev_close == "ibk" and rec.price is None:
+                        yf_pc = yf.get("prev_close")
+                        if yf_pc is not None:
+                            rec.price = yf_pc
+                            log.debug("%s: prev_close filled from yfinance fallback (%.2f)", rec.symbol, yf_pc)
                     if ib_data_cfg.output_fifty_two_week_high != "ibk" and ib_data_cfg.output_fifty_two_week_high is not None:
                         rec.fifty_two_week_high = yf.get("fifty_two_week_high")
                     elif ib_data_cfg.output_fifty_two_week_high is None:
@@ -608,6 +626,23 @@ async def collect_screener_records(
                         yf_pmv = yf.get("pre_market_volume")
                         if yf_pmv is not None:
                             rec.pre_market_volume = yf_pmv
+
+                    # Fallback: if IB streaming didn't deliver a pre-market price within
+                    # the wait window, use yfinance preMarketPrice / preMarketChangePercent.
+                    # This handles pre-market hours where IB tick delivery is slower for
+                    # some stocks (DUOL etc.) even with a live data subscription.
+                    if ib_data_cfg.output_pre_market_price == "ibk" and rec.pre_market_price is None:
+                        yf_pmp = yf.get("pre_market_price")
+                        if yf_pmp is not None:
+                            rec.pre_market_price = yf_pmp
+                            log.debug("%s: pre_market_price filled from yfinance fallback (%.2f)", rec.symbol, yf_pmp)
+                    if ib_data_cfg.output_pre_market_chg_pct == "ibk" and rec.pre_market_chg_pct is None:
+                        yf_chg = yf.get("pre_market_chg_pct")
+                        if yf_chg is not None:
+                            rec.pre_market_chg_pct = yf_chg
+                            log.debug("%s: pre_market_chg_pct filled from yfinance fallback (%.2f%%)", rec.symbol, yf_chg)
+                        elif rec.pre_market_price is not None and rec.price is not None and rec.price > 0:
+                            rec.pre_market_chg_pct = (rec.pre_market_price - rec.price) / rec.price * 100
 
                 if _should_output_external_data("output_float_pct", source="yfinance"):
                     raw_float = yf.get("float_shares")

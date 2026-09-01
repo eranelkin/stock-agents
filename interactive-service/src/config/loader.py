@@ -101,7 +101,10 @@ class IBDataConfig:
     output_bid_ask: Optional[bool] = True # This one can remain Optional[bool] as it's not a source choice
     
     # Volume Data (from various sources)
-    output_pre_market_volume: Optional[str] = "ibk"
+    # IMPORTANT: "yfinance" uses info.preMarketVolume (consolidated SIP tape = TradingView).
+    # "ibk" uses IB 1-min TRADES bars which UNDER-REPORT for most stocks — only accurate
+    # for high-volume major-exchange stocks (SNAP, MSTR). Default must stay "yfinance".
+    output_pre_market_volume: Optional[str] = "yfinance"
     output_avg_daily_volume_20d: Optional[str] = "ibk"
     
     # Pre-market Bars Data
@@ -221,6 +224,16 @@ def load_settings(path: Path) -> AppConfig:
                 f"Invalid settings.yaml: {f} cannot be 'yfinance' — "
                 "volume profile data is only available from IB (set to 'ibk' or null)"
             )
+
+    # Warn when the wrong pre-market volume source is configured.
+    # "ibk" (IB 1-min TRADES bars) under-reports pre-market volume for most stocks;
+    # "yfinance" (info.preMarketVolume) is the SIP-consolidated value matching TradingView.
+    if cfg.ib_data.output_pre_market_volume == "ibk":
+        log.warning(
+            "output_pre_market_volume='ibk' uses IB 1-min TRADES bars which UNDER-REPORT "
+            "pre-market volume for most stocks. Set output_pre_market_volume to 'yfinance' "
+            "in settings.yaml to match TradingView SIP-consolidated volume."
+        )
 
     # Patch API keys from environment if the yaml left them blank.
     # This lets secrets live in .env without being embedded in yaml.

@@ -31,7 +31,7 @@ class Settings(BaseSettings):
 
     # Database
     postgres_host: str = "localhost"
-    postgres_port: int = 5432
+    postgres_port: int = 5434
     postgres_db: str = "stock_agents"
     postgres_user: str = "sa_user"
     postgres_password: str = "changeme"

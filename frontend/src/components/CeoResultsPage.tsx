@@ -16,6 +16,7 @@ import Typography from '@mui/material/Typography'
 import CloseIcon from '@mui/icons-material/Close'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import CheckIcon from '@mui/icons-material/Check'
+import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import type { Run } from '../types/run'
 
 interface CeoResultsPageProps {
@@ -313,13 +314,68 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
               <>
                 <CircularProgress size={36} thickness={3} sx={{ color: '#90caf9' }} />
                 <Typography sx={{ color: 'text.disabled', fontSize: '0.9rem' }}>
-                  Waiting for CEO analysis…
+                  Stock agents are running — CEO analysis appears here when complete.
                 </Typography>
+                {run.output_dir && (
+                  <Box
+                    component="a"
+                    href={`${import.meta.env.VITE_BACKEND_URL ?? 'http://127.0.0.1:4101'}/runs/${run.id}/log`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    sx={{
+                      display: 'inline-flex', alignItems: 'center', gap: 0.75,
+                      mt: 1, px: 2, py: 0.75,
+                      border: '1px solid rgba(144,202,249,0.35)',
+                      borderRadius: 1.5,
+                      color: '#90caf9',
+                      fontSize: '0.85rem',
+                      fontWeight: 600,
+                      textDecoration: 'none',
+                      transition: 'background 0.15s, border-color 0.15s',
+                      '&:hover': {
+                        bgcolor: 'rgba(144,202,249,0.08)',
+                        borderColor: '#90caf9',
+                      },
+                    }}
+                  >
+                    <OpenInNewIcon sx={{ fontSize: 15 }} />
+                    View live pipeline log
+                  </Box>
+                )}
               </>
             ) : (
-              <Typography sx={{ color: 'text.disabled', fontSize: '0.9rem' }}>
-                No CEO results found for this run.
-              </Typography>
+              <>
+                <Typography sx={{ color: 'text.disabled', fontSize: '0.9rem' }}>
+                  No CEO results found for this run.
+                </Typography>
+                {run.output_dir && (
+                  <Box
+                    component="a"
+                    href={`${import.meta.env.VITE_BACKEND_URL ?? 'http://127.0.0.1:4101'}/runs/${run.id}/log`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    sx={{
+                      display: 'inline-flex', alignItems: 'center', gap: 0.75,
+                      px: 2, py: 0.75,
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      borderRadius: 1.5,
+                      color: 'text.secondary',
+                      fontSize: '0.85rem',
+                      fontWeight: 600,
+                      textDecoration: 'none',
+                      transition: 'background 0.15s, border-color 0.15s',
+                      '&:hover': {
+                        bgcolor: 'rgba(255,255,255,0.05)',
+                        borderColor: 'rgba(255,255,255,0.25)',
+                        color: 'text.primary',
+                      },
+                    }}
+                  >
+                    <OpenInNewIcon sx={{ fontSize: 15 }} />
+                    View run log
+                  </Box>
+                )}
+              </>
             )}
           </Box>
         ) : (
