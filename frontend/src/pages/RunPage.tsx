@@ -132,6 +132,19 @@ export default function RunPage({
     }
   }, [runs, onRunActiveChange]);
 
+  function extractTickers(parsed: unknown): Record<string, unknown>[] | null {
+    if (Array.isArray(parsed)) return parsed;
+    if (
+      parsed !== null &&
+      typeof parsed === "object" &&
+      "stocks" in parsed &&
+      Array.isArray((parsed as Record<string, unknown>).stocks)
+    ) {
+      return (parsed as { stocks: Record<string, unknown>[] }).stocks;
+    }
+    return null;
+  }
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setFileError(null);
     setRawFileText(null);
@@ -152,13 +165,14 @@ export default function RunPage({
       } else {
         parsed = JSON.parse(text);
       }
-      if (!Array.isArray(parsed)) {
+      const tickers = extractTickers(parsed);
+      if (!tickers) {
         setFileError(
-          'File must contain a JSON/YAML array of ticker objects, e.g. [{"name":"AAPL"}]',
+          'File must contain a JSON/YAML array of ticker objects, or a screener JSON with a "stocks" key.',
         );
         return;
       }
-      if (parsed.length === 0) {
+      if (tickers.length === 0) {
         setFileError("Ticker list is empty.");
         return;
       }
@@ -206,11 +220,11 @@ export default function RunPage({
       const lower = selectedFile.name.toLowerCase();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let tickers: Record<string, unknown>[];
-      if (lower.endsWith(".yaml") || lower.endsWith(".yml")) {
-        tickers = jsyaml.load(processedText) as Record<string, unknown>[];
-      } else {
-        tickers = JSON.parse(processedText);
-      }
+      const rawParsed =
+        lower.endsWith(".yaml") || lower.endsWith(".yml")
+          ? jsyaml.load(processedText)
+          : JSON.parse(processedText);
+      tickers = extractTickers(rawParsed) ?? [];
       const created = await createRun(
         selectedModelIds,
         selectedFile.name,
