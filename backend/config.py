@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     # Database
     postgres_host: str = "localhost"
-    postgres_port: int = 5432
+    postgres_port: int = 5434
     postgres_db: str = "stock_agents"
     postgres_user: str = "sa_user"
     postgres_password: str = "changeme"
@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     def ai_service_url(self) -> str:
         return f"http://{self.ai_service_host}:{self.ai_service_port}"
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
 settings = Settings()

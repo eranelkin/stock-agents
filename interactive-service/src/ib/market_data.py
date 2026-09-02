@@ -19,9 +19,11 @@ log = logging.getLogger(__name__)
 _GENERIC_TICKS = "165,233,236,258"
 
 # Seconds to wait after opening subscriptions before reading ticks.
-# Using snapshot=False (streaming) so IB pushes all ticks continuously;
-# 10 s is enough for close, bid/ask, volume, and fundamentalRatios to arrive.
-_STREAM_WAIT = 10.0
+# Using snapshot=False (streaming) so IB pushes all ticks continuously.
+# 20 s provides a comfortable margin during pre-market when IB data servers
+# are under higher load and some ticks (close, last) arrive slower than
+# during the regular session.
+_STREAM_WAIT = 20.0
 
 
 @dataclass
@@ -75,9 +77,11 @@ async def fetch_market_snapshots(
     results: Dict[str, MarketSnapshot] = {}
 
     # Use delayed streaming (type 3) so ticks arrive even without a live subscription.
-    # ib_async maps delayed tick types 66/67/68/74 to the same ticker.bid/ask/last/volume
-    # fields as their live counterparts, so _extract_snapshot needs no changes.
-    # For accounts with live subscriptions IB will still deliver live data.
+    # ib_async maps delayed tick types 66/67/68/74 to the same ticker fields as their
+    # live counterparts. When a live subscription exists IB still delivers live data.
+    # Type 1 (live-only) breaks for accounts without active per-stock subscriptions
+    # because IB sends no ticks at all — not even the close price.
+    # Pre-market price and chg% are handled by the yfinance fallback in Phase 2.
     ib.reqMarketDataType(3)
 
     for batch_num, batch_start in enumerate(range(0, len(contracts), pacing.max_concurrent_mkt_data), 1):
@@ -132,7 +136,6 @@ async def fetch_market_snapshots(
             log.debug("Waiting 3s for market data subscription cancellations to process...")
             await asyncio.sleep(3.0)
 
-    ib.reqMarketDataType(1)  # restore default (live) for any subsequent IB calls
     log.info("Fetched market snapshots for %d / %d symbols", len(results), len(contracts))
     return results
 

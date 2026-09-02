@@ -120,14 +120,21 @@ def _fetch_yfinance_sync(symbols: List[str], rvol_lookback_days: int = 5) -> Dic
                 except (TypeError, ValueError):
                     pass
 
-            pre_market_chg_pct: Optional[float] = None
-            raw_pm_chg_pct = info.get("preMarketChangePercent")
-            if raw_pm_chg_pct is not None:
+            pre_market_price_yf: Optional[float] = None
+            raw_pmp = info.get("preMarketPrice")
+            if raw_pmp is not None:
                 try:
-                    # yfinance provides this as a ratio (e.g., 0.01), convert to percent
-                    pre_market_chg_pct = float(raw_pm_chg_pct) * 100
+                    val_pmp = float(raw_pmp)
+                    if val_pmp > 0:
+                        pre_market_price_yf = val_pmp
                 except (TypeError, ValueError):
                     pass
+
+            # pre_market_chg_pct is computed from bar data below (after 1-min bars are fetched).
+            # We do NOT use info["preMarketChangePercent"]: it is already a percentage (not a
+            # ratio), it's calculated vs regularMarketPrice (not previousClose), and it
+            # disappears after 9:30 AM ET — all three diverge from TradingView's formula.
+            pre_market_chg_pct: Optional[float] = None
 
             # Real-time cumulative pre-market volume from Yahoo Finance info (matches TradingView)
             pre_market_volume_info: Optional[float] = None
@@ -207,6 +214,17 @@ def _fetch_yfinance_sync(symbols: List[str], rvol_lookback_days: int = 5) -> Dic
                                 pre_market_volume_info if pre_market_volume_info is not None
                                 else (today_vol if today_vol > 0 else None)
                             )
+
+                            # Use last 1-min bar close as pre_market_price — more reliable than
+                            # info["preMarketPrice"] and available after 9:30 AM ET.
+                            # Compute chg% vs previousClose — same formula as TradingView.
+                            bar_close = float(today_pm["Close"].iloc[-1])
+                            if bar_close > 0:
+                                pre_market_price_yf = bar_close
+                                if prev_close is not None and prev_close > 0:
+                                    pre_market_chg_pct = round(
+                                        (bar_close - prev_close) / prev_close * 100, 4
+                                    )
                             latest_t    = today_pm.index.time.max()
 
                             prior_vols = []
@@ -244,6 +262,7 @@ def _fetch_yfinance_sync(symbols: List[str], rvol_lookback_days: int = 5) -> Dic
                 log.debug("%s: yfinance VWAP bars failed: %s", sym, e)
 
             results[sym] = {
+                "pre_market_price":   pre_market_price_yf,
                 "pre_market_chg_pct": pre_market_chg_pct,
                 "float_shares":       float_shares,
                 "next_earnings_date": next_date,
@@ -278,6 +297,7 @@ def _fetch_yfinance_sync(symbols: List[str], rvol_lookback_days: int = 5) -> Dic
                 "short_ratio":        None,
                 "institutional_holding_pct": None,
                 "history":            None,
+                "pre_market_price":   None,
                 "pre_market_chg_pct": None,
                 "pre_market_high":    None,
                 "pre_market_low":     None,

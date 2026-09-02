@@ -104,6 +104,7 @@ class StockRecord:
 
     # ── New fields added in Phase 1 (derived from existing data) ──────────────
     industry: str = ""
+    prev_chg_pct: Optional[float] = None
     prev_day_high: Optional[float] = None
     prev_day_low: Optional[float] = None
     prev_day_open: Optional[float] = None
@@ -147,99 +148,108 @@ class StockRecord:
 
 # ── Builder ────────────────────────────────────────────────────────────────────
 
+def build_single_record(
+    symbol: str,
+    info: ContractInfo,
+    snap: MarketSnapshot | None,
+    bars: List[BarData],
+    app_config: AppConfig | None = None,
+    atr_val: float | None = None,
+    atr_period: int = 14,
+    ema_periods: List[int] | None = None,
+    rsi_period: int = 14,
+) -> StockRecord:
+    """Build one StockRecord from a single symbol's data.
+
+    atr_val: pre-computed ATR (skips recalculation when provided).
+    """
+    if ema_periods is None:
+        ema_periods = [9, 20, 50, 200]
+
+    ib_data_cfg = app_config.ib_data if app_config else None
+
+    if atr_val is None and (ib_data_cfg is None or ib_data_cfg.output_atr == "ibk"):
+        atr_val = calculate_atr(bars, atr_period) if bars else None
+
+    prev_day_high_val = None
+    if ib_data_cfg is None or ib_data_cfg.output_prev_day_high == "ibk":
+        prev_day_high_val = bars[-2].high if len(bars) >= 2 else None
+
+    prev_day_low_val = None
+    if ib_data_cfg is None or ib_data_cfg.output_prev_day_low == "ibk":
+        prev_day_low_val = bars[-2].low if len(bars) >= 2 else None
+
+    prev_day_open_val = None
+    if ib_data_cfg is None or ib_data_cfg.output_prev_day_open == "ibk":
+        prev_day_open_val = bars[-2].open if len(bars) >= 2 else None
+
+    avg_daily_volume_20d_val = None
+    if ib_data_cfg is None or ib_data_cfg.output_avg_daily_volume_20d == "ibk":
+        avg_daily_volume_20d_val = (
+            sum(b.volume for b in bars) / len(bars) if bars else None
+        )
+
+    emas_val: Dict[int, Optional[float]] = {}
+    if (ib_data_cfg is None or ib_data_cfg.output_ema == "ibk") and ema_periods:
+        for period in ema_periods:
+            emas_val[period] = _compute_ema(bars, period)
+
+    rsi_14_val = None
+    if ib_data_cfg is None or ib_data_cfg.output_rsi == "ibk":
+        rsi_14_val = _compute_rsi(bars, rsi_period)
+
+    return StockRecord(
+        symbol=symbol,
+        contract=info.contract,
+        company_name=info.company_name if (ib_data_cfg is None or ib_data_cfg.output_company_name == "ibk") else None,
+        sector=info.sector if (ib_data_cfg is None or ib_data_cfg.output_sector == "ibk") else None,
+        market_cap_usd=(snap.market_cap_usd if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_market_cap == "ibk") else None,
+        pre_market_price=(snap.pre_market_price if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_pre_market_price == "ibk") else None,
+        pre_market_volume=(snap.pre_market_volume if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_pre_market_volume in ("ibk", "finnhub", "yfinance")) else None,
+        pre_market_chg_pct=(snap.pre_market_chg_pct if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_pre_market_chg_pct == "ibk") else None,
+        price=(snap.prev_close if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_prev_close == "ibk") else None,
+        atr=atr_val,
+        industry=info.industry if (ib_data_cfg is None or ib_data_cfg.output_industry == "ibk") else None,
+        prev_day_high=prev_day_high_val,
+        prev_day_low=prev_day_low_val,
+        prev_day_open=prev_day_open_val,
+        avg_daily_volume_20d=avg_daily_volume_20d_val,
+        fifty_two_week_high=(snap.fifty_two_week_high if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_fifty_two_week_high == "ibk") else None,
+        fifty_two_week_low=(snap.fifty_two_week_low if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_fifty_two_week_low == "ibk") else None,
+        shares_outstanding=(snap.shares_outstanding if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_shares_outstanding == "ibk") else None,
+        beta=(snap.beta if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_beta == "ibk") else None,
+        emas=emas_val,
+        rsi_14=rsi_14_val,
+        mc_vol_ratio=None,
+    )
+
+
 def build_records(
     contract_infos: Dict[str, ContractInfo],
     snapshots: Dict[str, MarketSnapshot],
     bars_map: Dict[str, List[BarData]],
-    app_config: AppConfig | None = None, # Added app_config
+    app_config: AppConfig | None = None,
     atr_map: Dict[str, float | None] | None = None,
     atr_period: int = 14,
     ema_periods: List[int] | None = None,
     rsi_period: int = 14,
 ) -> List[StockRecord]:
-    """Assemble a StockRecord for every symbol that has contract details.
-
-    atr_map: pre-computed ATR values from the pipeline's pre-filter stage.
-    When provided it avoids recomputing ATR from bars a second time.
-    ema_periods: list of EMA periods to calculate (default: [9, 20, 50, 200])
-    rsi_period: RSI calculation period (default: 14)
-    """
+    """Assemble a StockRecord for every symbol that has contract details."""
     if ema_periods is None:
         ema_periods = [9, 20, 50, 200]
-    records: List[StockRecord] = []
-
-    for symbol, info in contract_infos.items():
-        snap = snapshots.get(symbol)
-        bars = bars_map.get(symbol, [])
-
-        # Determine if app_config.ib_data exists for easier access
-        ib_data_cfg = app_config.ib_data if app_config else None
-
-        # ── ATR ────────────────────────────────────────────────────────────────
-        atr_val = None
-        if ib_data_cfg is None or ib_data_cfg.output_atr == "ibk":
-            if atr_map is not None:
-                atr_val = atr_map.get(symbol)
-            else:
-                atr_val = calculate_atr(bars, atr_period) if bars else None
-
-        # ── Previous session OHLC (second-to-last bar = last full session) ─────
-        prev_day_high_val = None
-        if ib_data_cfg is None or ib_data_cfg.output_prev_day_high == "ibk":
-            prev_day_high_val = bars[-2].high if len(bars) >= 2 else None
-
-        prev_day_low_val = None
-        if ib_data_cfg is None or ib_data_cfg.output_prev_day_low == "ibk":
-            prev_day_low_val = bars[-2].low if len(bars) >= 2 else None
-            
-        prev_day_open_val = None
-        if ib_data_cfg is None or ib_data_cfg.output_prev_day_open == "ibk":
-            prev_day_open_val = bars[-2].open if len(bars) >= 2 else None
-
-        # ── 20-day average daily volume ────────────────────────────────────────
-        avg_daily_volume_20d_val = None
-        if ib_data_cfg is None or ib_data_cfg.output_avg_daily_volume_20d == "ibk":
-            avg_daily_volume_20d_val = (
-                sum(b.volume for b in bars) / len(bars) if bars else None
-            )
-
-        # ── Technical indicators ───────────────────────────────────────────────
-        emas_val: Dict[int, Optional[float]] = {}
-        if (ib_data_cfg is None or ib_data_cfg.output_ema == "ibk") and ema_periods:
-            for period in ema_periods:
-                emas_val[period] = _compute_ema(bars, period)
-
-        rsi_14_val = None
-        if ib_data_cfg is None or ib_data_cfg.output_rsi == "ibk":
-            rsi_14_val  = _compute_rsi(bars, rsi_period)
-
-        records.append(StockRecord(
-            symbol=symbol,
-            contract=info.contract,
-            company_name=info.company_name if (ib_data_cfg is None or ib_data_cfg.output_company_name == "ibk") else None,
-            sector=info.sector if (ib_data_cfg is None or ib_data_cfg.output_sector == "ibk") else None,
-
-            market_cap_usd=(snap.market_cap_usd if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_market_cap == "ibk") else None,
-            pre_market_price=(snap.pre_market_price if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_pre_market_price == "ibk") else None,
-            pre_market_volume=(snap.pre_market_volume if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_pre_market_volume in ("ibk", "finnhub", "yfinance")) else None,
-            pre_market_chg_pct=(snap.pre_market_chg_pct if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_pre_market_chg_pct == "ibk") else None,
-            price=(snap.prev_close if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_prev_close == "ibk") else None,
-            atr=atr_val,
-            
-            # Phase 1 additions
-            industry=info.industry if (ib_data_cfg is None or ib_data_cfg.output_industry == "ibk") else None,
-            prev_day_high=prev_day_high_val,
-            prev_day_low=prev_day_low_val,
-            prev_day_open=prev_day_open_val,
-            avg_daily_volume_20d=avg_daily_volume_20d_val,
-            fifty_two_week_high=(snap.fifty_two_week_high if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_fifty_two_week_high == "ibk") else None,
-            fifty_two_week_low=(snap.fifty_two_week_low if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_fifty_two_week_low == "ibk") else None,
-            shares_outstanding=(snap.shares_outstanding if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_shares_outstanding == "ibk") else None,
-            beta=(snap.beta if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_beta == "ibk") else None,
-            emas=emas_val,
-            rsi_14=rsi_14_val,
-            mc_vol_ratio=None,
-        ))
-
+    records = [
+        build_single_record(
+            symbol=sym,
+            info=info,
+            snap=snapshots.get(sym),
+            bars=bars_map.get(sym, []),
+            app_config=app_config,
+            atr_val=(atr_map.get(sym) if atr_map is not None else None),
+            atr_period=atr_period,
+            ema_periods=ema_periods,
+            rsi_period=rsi_period,
+        )
+        for sym, info in contract_infos.items()
+    ]
     log.info("Built %d stock records", len(records))
     return records

@@ -29,6 +29,13 @@ def apply_screener_filters(records: List[StockRecord], config: ScreenerConfig) -
 
 
 def reject_reason(rec: StockRecord, cfg: ScreenerConfig) -> str:
+    # Re-apply pre_market_chg_pct_min for stocks deferred from Phase 1 (IB tick arrived late;
+    # rec.pre_market_chg_pct was filled by yfinance fallback during Phase 2 enrichment).
+    if cfg.pre_market_chg_pct_min is not None:
+        chg = rec.pre_market_chg_pct
+        if chg is not None and chg < cfg.pre_market_chg_pct_min:
+            return f"pre_market_chg_pct {chg:+.2f}% < min {cfg.pre_market_chg_pct_min:+.2f}%"
+
     if cfg.atr_min is not None:
         if rec.atr is None:
             return f"ATR unavailable (min required: {cfg.atr_min}%)"

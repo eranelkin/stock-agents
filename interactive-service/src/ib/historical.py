@@ -5,7 +5,7 @@ import logging
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import time as dtime
-from typing import Dict, List, Optional
+from typing import AsyncIterator, Dict, List, Optional
 
 from ib_async import IB, BarData, Contract
 
@@ -106,6 +106,40 @@ async def fetch_all_daily_bars(
 
     log.info("Fetched historical bars for %d / %d symbols", len(results), len(contracts))
     return results
+
+
+async def fetch_daily_bars_stream(
+    ib: IB,
+    contracts: List[Contract],
+    pacing: PacingConfig,
+    duration: str = "20 D",
+    concurrency: int = 10,
+) -> AsyncIterator[tuple[str, list[BarData]]]:
+    """Yield (symbol, bars) as each symbol's daily bars complete (earliest-done first).
+
+    Identical rate-limiting to fetch_all_daily_bars(); the difference is that
+    results are yielded one by one as they arrive instead of being gathered into
+    a single dict, allowing downstream processing to start immediately.
+    """
+    semaphore = asyncio.Semaphore(concurrency)
+    timeout = pacing.historical_request_timeout_seconds
+
+    async def worker(contract: Contract) -> tuple[str, list[BarData]] | None:
+        async with semaphore:
+            await limiter.acquire(min_gap=pacing.historical_delay_seconds)
+            bars = await fetch_daily_bars(ib, contract, duration=duration, timeout=timeout)
+            if bars:
+                return contract.symbol, bars
+        return None
+
+    tasks = [asyncio.ensure_future(worker(c)) for c in contracts]
+    for future in asyncio.as_completed(tasks):
+        try:
+            result = await future
+            if result:
+                yield result
+        except Exception as e:
+            log.error("daily bars stream worker failed: %s", e)
 
 
 # ── Pre-market 1-min bars (Phase 2A) ──────────────────────────────────────────

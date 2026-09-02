@@ -595,13 +595,56 @@ def _log_file_path(output_dir: str) -> Path:
     return Path(output_dir).parent.parent / "logs" / f"{ts}.html"
 
 
+def _try_parse_raw_output(raw: str) -> dict | None:
+    """Parse a (possibly truncated) JSON string from raw_output.
+
+    Tries the string as-is first, then attempts structural repair by stripping
+    any trailing incomplete key and closing unclosed braces/brackets.
+    Returns a flat dict of CEO fields (unwrapping one level of nesting if needed).
+    """
+    def _extract(obj: dict) -> dict:
+        # Unwrap {"symbol": {...}} or {"key": {...}} → use inner dict
+        for v in obj.values():
+            if isinstance(v, dict) and v:
+                return v
+        return obj
+
+    # 1. Try as-is (valid complete JSON)
+    try:
+        result = json.loads(raw)
+        if isinstance(result, dict):
+            return _extract(result)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # 2. Repair: strip trailing incomplete key like `"key":` or `"key": `
+    text = re.sub(r',?\s*"[^"]*":\s*$', '', raw.strip())
+
+    # Count unclosed braces and brackets
+    opens_brace = text.count('{') - text.count('}')
+    opens_bracket = text.count('[') - text.count(']')
+    if opens_brace < 0 or opens_bracket < 0:
+        return None
+
+    repaired = text + ']' * opens_bracket + '}' * opens_brace
+    try:
+        result = json.loads(repaired)
+        if isinstance(result, dict):
+            return _extract(result)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    return None
+
+
 def _parse_ceo_file(file_path: Path) -> dict | None:
     """Extract the stock analysis dict from a CEO_*.yaml or CEO_*.json output file.
 
-    Handles two LLM output patterns:
+    Handles three LLM output patterns:
     - Each analysis field as a separate list item under `stocks` (old JSON pattern)
     - Analysis fields nested under a key (e.g. "symbol") in agent_data (current YAML pattern)
-    Both are merged into one flat dict.
+    - parse_error: true with raw_output containing a JSON string (LLM returned invalid JSON)
+    All are merged into one flat dict.
     """
     try:
         with open(file_path) as f:
@@ -624,6 +667,13 @@ def _parse_ceo_file(file_path: Path) -> dict | None:
                     merged.update(v)
                 else:
                     merged.setdefault(k, v)
+            # Fallback: parse_error pattern — LLM returned a JSON string in raw_output
+            # The string may be truncated mid-stream, so we attempt repair before parsing.
+            if not merged and agent_data.get("parse_error") and agent_data.get("raw_output"):
+                raw_str = agent_data["raw_output"]
+                parsed = _try_parse_raw_output(raw_str)
+                if parsed:
+                    merged.update(parsed)
             if merged:
                 return merged
     except Exception:
