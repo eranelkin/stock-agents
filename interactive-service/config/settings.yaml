@@ -3,7 +3,7 @@
 # final max number of stocks in the file 
 # even if more pass all filters. 
 #Set to null to disable limit.
-max_number_of_stocks: 1
+max_number_of_stocks: 7
 
 #To reduce or eliminate the 442s pause, the options are:                                                                                                                            
  # 1. Disable volume profile — set fetch_volume_profile: false in settings.yaml → cuts from 6 to 3 calls/symbol, 10 symbols = 30 calls (well under limit)  
@@ -157,7 +157,7 @@ stock_agents:
   run_name_prefix: "IBK Pre-Market"     # prefix for the run name shown in the History tab
   enrichment_enabled: false    # false = use IB data as-is; true = re-enrich via yfinance/FMP
   candle_frequency: "1d"
-  model_names: ["FREE Gemini FLASH 3"] #["Gemini 2.5 Pro"]   # which models to use — !!! if empty = all active models!!!!
+  model_names: ["Gemini 2.5 Pro"] # ["FREE Gemini FLASH 3"]   # which models to use — !!! if empty = all active models!!!!
                                # example: ["Gemini 2.5 Flash", "Gemini 2.5 Flash Lite""Claude Sonnet", "GPT-4o"]
 
 external_apis:
