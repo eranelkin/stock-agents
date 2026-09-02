@@ -71,7 +71,14 @@ def trigger_stock_agents_run(
         }
 
         resp = requests.post(f"{backend_url}/runs", json=payload, timeout=30)
-        resp.raise_for_status()
+        if not resp.ok:
+            detail = resp.json().get("detail", resp.text) if resp.content else resp.reason
+            log.error(
+                "stock_agents_trigger: backend rejected run — HTTP %d: %s",
+                resp.status_code,
+                detail,
+            )
+            return
         run = resp.json()
 
         log.info(
