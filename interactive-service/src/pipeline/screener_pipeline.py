@@ -430,9 +430,16 @@ async def collect_screener_records(
                 rec.pre_market_low = pm_data.pre_market_low
             if _should_output_ib_data("output_rvol_pre_market"):
                 rec.rvol_pre_market = pm_data.rvol_pre_market
-            if (pm_data.pre_market_volume is not None
-                    and _should_output_ib_data("output_pre_market_volume", source="ibk")):
-                rec.pre_market_volume = pm_data.pre_market_volume
+            if pm_data.pre_market_volume is not None and pm_data.pre_market_volume > 0:
+                if _should_output_ib_data("output_pre_market_volume", source="ibk"):
+                    rec.pre_market_volume = pm_data.pre_market_volume
+                else:
+                    # Store IB TRADES bars volume as a baseline even when the config
+                    # requests yfinance. Phase 2 yfinance override will replace this only
+                    # if yfinance returns a higher value — preventing yfinance 0/stale
+                    # readings from wiping out real exchange data (e.g. GTLB: IB=80k, yf=1538).
+                    if not rec.pre_market_volume or pm_data.pre_market_volume > rec.pre_market_volume:
+                        rec.pre_market_volume = pm_data.pre_market_volume
 
             if _should_output_ib_data("output_vwap_prev_session", source="ibk"):
                 rec.vwap_prev_session = vwap_val
@@ -624,8 +631,13 @@ async def collect_screener_records(
                         rec.vwap_prev_session = yf.get("vwap_prev_session")
                     if ib_data_cfg.output_pre_market_volume == "yfinance":
                         yf_pmv = yf.get("pre_market_volume")
-                        if yf_pmv is not None:
-                            rec.pre_market_volume = yf_pmv
+                        if yf_pmv is not None and yf_pmv > 0:
+                            # Take whichever is higher: yfinance consolidated or IB TRADES baseline.
+                            # yfinance can return stale/partial values (e.g. 1538 vs real 110k);
+                            # IB TRADES bars cover primary ECNs and often give a better floor.
+                            if not rec.pre_market_volume or yf_pmv > rec.pre_market_volume:
+                                rec.pre_market_volume = yf_pmv
+                        # If yfinance has no usable data (None/0), keep the IB TRADES baseline.
 
                     # Fallback: if IB streaming didn't deliver a pre-market price within
                     # the wait window, use yfinance preMarketPrice / preMarketChangePercent.
