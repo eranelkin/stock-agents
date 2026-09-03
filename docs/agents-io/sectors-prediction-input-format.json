@@ -1,0 +1,26 @@
+{
+  "sectors": [
+    {
+      "name": "",
+      "etf_symbol": "",
+      "etf_name": "",
+      "pre_market_chg": "",
+      "pre_market_volume": "",
+      "pre_market_price": "",
+      "price": "",
+      "tradingview_link": "",
+      "industry_groups": [
+        {
+          "name": "",
+          "etf_symbol": "",
+          "etf_name": "",
+          "pre_market_chg": "",
+          "pre_market_volume": "",
+          "pre_market_price": "",
+          "price": "",
+          "tradingview_link": ""
+        }
+      ]
+    }
+  ]
+}
