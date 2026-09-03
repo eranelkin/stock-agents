@@ -3,6 +3,8 @@ import * as jsyaml from "js-yaml";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
+import ButtonGroup from "@mui/material/ButtonGroup";
+import Menu from "@mui/material/Menu";
 import Divider from "@mui/material/Divider";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
@@ -29,13 +31,14 @@ import Switch from "@mui/material/Switch";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import ScienceIcon from "@mui/icons-material/Science";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import TableSortLabel from "@mui/material/TableSortLabel";
 import DeleteIcon from "@mui/icons-material/Delete";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CheckIcon from "@mui/icons-material/Check";
 import ArticleIcon from "@mui/icons-material/Article";
-import { createRun, deleteRun, deleteRuns, enrichPreview, stopRun } from "../api/runs";
+import { createRun, deleteRun, deleteRuns, enrichPreview, pollScreenerDone, stopRun, stopScreener, triggerScreener } from "../api/runs";
 import CeoResultsPage from "../components/CeoResultsPage";
 import type { Run } from "../types/run";
 
@@ -88,6 +91,11 @@ export default function RunPage({
   const [enrichmentEnabled, setEnrichmentEnabled] = useState(false);
   const [testingEnrich, setTestingEnrich] = useState(false);
   const [enrichResults, setEnrichResults] = useState<Record<string, unknown>[] | null>(null);
+  const [runMode, setRunMode] = useState<"run" | "pull-run" | "pull" | "watchlist">("run");
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const [pullStage, setPullStage] = useState<string | null>(null);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [stopping, setStopping] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const esRef = useRef<EventSource | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -241,6 +249,64 @@ export default function RunPage({
     }
   };
 
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:4101";
+
+  const RUN_MODE_OPTIONS = [
+    { mode: "run" as const,       label: "Run",                  desc: "AI analysis on uploaded file" },
+    { mode: "pull-run" as const,  label: "Pull & Run",           desc: "Pull from IBK then run AI analysis" },
+    { mode: "pull" as const,      label: "Pull",                 desc: "Pull from IBK only (no analysis)" },
+    { mode: "watchlist" as const, label: "Run-Pull - Watchlist", desc: "Screener + watchlist, then AI analysis" },
+  ] as const;
+
+  const runModeLabel = RUN_MODE_OPTIONS.find((o) => o.mode === runMode)?.label ?? "Run";
+
+  const handlePullClick = async (mode: "screener" | "screener-only-pull" | "merged") => {
+    setError(null);
+    setStarting(true);
+    const stageCount = mode === "screener-only-pull" ? 1 : 2;
+    setPullStage(`Stage 1/${stageCount} — Pulling data from IBK...`);
+    try {
+      const { session_id } = await triggerScreener(mode, selectedModelIds);
+      setActiveSessionId(session_id);
+      window.open(`${BACKEND_URL}/screener/log/${session_id}`, "_blank");
+      if (stageCount === 2) {
+        setPullStage(`Stage 2/${stageCount} — IBK pull running, AI analysis will start automatically...`);
+      }
+      pollScreenerDone(session_id, () => { setPullStage(null); setActiveSessionId(null); });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to trigger pull");
+      setPullStage(null);
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const handleRunClick = async () => {
+    if (runMode === "run")       return handleRun();
+    if (runMode === "pull-run")  return handlePullClick("screener");
+    if (runMode === "pull")      return handlePullClick("screener-only-pull");
+    if (runMode === "watchlist") return handlePullClick("merged");
+  };
+
+  const handleStopAll = async () => {
+    setStopping(true);
+    try {
+      if (activeSessionId) {
+        await stopScreener(activeSessionId);
+        setPullStage(null);
+        setActiveSessionId(null);
+      }
+      const activeRun = runs.find((r) => r.status === "pending" || r.status === "running");
+      if (activeRun) {
+        await stopRun(activeRun.id);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to stop");
+    } finally {
+      setStopping(false);
+    }
+  };
+
   const handleTestEnrich = async () => {
     if (!rawFileText || !selectedFile) return;
     setError(null);
@@ -340,11 +406,12 @@ export default function RunPage({
     (r) => r.status === "pending" || r.status === "running",
   );
   const runDisabled =
-    !selectedFile ||
-    !rawFileText ||
-    selectedModelIds.length === 0 ||
     starting ||
-    runInProgress;
+    runInProgress ||
+    Boolean(pullStage) ||
+    (runMode === "run" && (!selectedFile || !rawFileText || selectedModelIds.length === 0)) ||
+    (runMode === "pull-run" && selectedModelIds.length === 0) ||
+    (runMode === "watchlist" && selectedModelIds.length === 0);
 
   return (
     <Box
@@ -492,27 +559,85 @@ export default function RunPage({
             {testingEnrich ? "Fetching…" : "Test Enrichment"}
           </Button>
 
-          <Button
-            variant="contained"
-            startIcon={
-              starting ? (
-                <CircularProgress size={16} color="inherit" />
-              ) : (
-                <PlayArrowIcon />
-              )
-            }
-            onClick={handleRun}
-            disabled={runDisabled}
-            sx={{
-              borderRadius: 1.5,
-              px: 3,
-              textTransform: "none",
-              fontWeight: 600,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {starting ? "Starting…" : "Run"}
-          </Button>
+          {(Boolean(pullStage) || runInProgress) && (
+            <Button
+              variant="contained"
+              onClick={handleStopAll}
+              disabled={stopping}
+              sx={{
+                borderRadius: 1.5,
+                px: 2.5,
+                textTransform: "none",
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+                bgcolor: "#b71c1c",
+                "&:hover": { bgcolor: "#d32f2f" },
+                "&.Mui-disabled": { bgcolor: "rgba(183,28,28,0.4)", color: "rgba(255,255,255,0.4)" },
+              }}
+            >
+              {stopping ? <CircularProgress size={16} color="inherit" /> : "Stop"}
+            </Button>
+          )}
+
+          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 0.5 }}>
+            {pullStage && (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <CircularProgress size={12} sx={{ color: "text.secondary" }} />
+                <Typography variant="caption" sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
+                  {pullStage}
+                </Typography>
+              </Box>
+            )}
+            <ButtonGroup variant="contained">
+              <Button
+                startIcon={
+                  starting || Boolean(pullStage) ? (
+                    <CircularProgress size={16} color="inherit" />
+                  ) : (
+                    <PlayArrowIcon />
+                  )
+                }
+                onClick={handleRunClick}
+                disabled={runDisabled}
+                sx={{
+                  borderRadius: "6px 0 0 6px",
+                  px: 3,
+                  textTransform: "none",
+                  fontWeight: 600,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {starting ? "Starting…" : runModeLabel}
+              </Button>
+              <Button
+                size="small"
+                onClick={(e) => setMenuAnchor(e.currentTarget)}
+                disabled={starting || Boolean(pullStage)}
+                sx={{ borderRadius: "0 6px 6px 0", px: 0.5, minWidth: 32 }}
+              >
+                <ArrowDropDownIcon />
+              </Button>
+            </ButtonGroup>
+            <Menu
+              anchorEl={menuAnchor}
+              open={Boolean(menuAnchor)}
+              onClose={() => setMenuAnchor(null)}
+              anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+              transformOrigin={{ vertical: "top", horizontal: "right" }}
+            >
+              {RUN_MODE_OPTIONS.map(({ mode, label, desc }) => (
+                <MenuItem
+                  key={mode}
+                  selected={runMode === mode}
+                  onClick={() => { setRunMode(mode); setMenuAnchor(null); }}
+                  sx={{ flexDirection: "column", alignItems: "flex-start", py: 1.2 }}
+                >
+                  <Typography variant="body2" fontWeight={600}>{label}</Typography>
+                  <Typography variant="caption" color="text.secondary">{desc}</Typography>
+                </MenuItem>
+              ))}
+            </Menu>
+          </Box>
         </Box>
       </Box>
 

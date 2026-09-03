@@ -114,6 +114,11 @@ def _check_premarket_hours(tz_name: str) -> bool:
     default=False,
     help="Fetch data from Interactive Brokers but skip the stock-agents analysis trigger.",
 )
+@click.option(
+    "--model-ids",
+    default=None,
+    help="Comma-separated model IDs to use for the analysis run. Overrides settings.yaml model_names.",
+)
 def main(
     mode: str | None,
     use_scheduler: bool,
@@ -122,6 +127,7 @@ def main(
     no_hours_check: bool,
     log_level: str,
     only_pull: bool,
+    model_ids: str | None,
 ) -> None:
     log_mode = "scheduler" if use_scheduler else (mode or "run")
     _setup_logging(log_level.upper(), mode=log_mode)
@@ -187,13 +193,15 @@ def main(
         if path and app_config.stock_agents.enabled and not only_pull:
             from src.integration.stock_agents_trigger import trigger_stock_agents_run
             sa = app_config.stock_agents
+            explicit_model_ids = [m.strip() for m in model_ids.split(",")] if model_ids else None
             trigger_stock_agents_run(
                 output_path=path,
                 backend_url=sa.backend_url,
                 run_name_prefix=sa.run_name_prefix,
                 enrichment_enabled=sa.enrichment_enabled,
                 candle_frequency=sa.candle_frequency,
-                model_names=sa.model_names or None,
+                model_ids=explicit_model_ids,
+                model_names=sa.model_names or None if not explicit_model_ids else None,
             )
 
 

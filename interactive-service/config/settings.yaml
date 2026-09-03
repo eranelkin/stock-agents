@@ -3,7 +3,7 @@
 # final max number of stocks in the file 
 # even if more pass all filters. 
 #Set to null to disable limit.
-max_number_of_stocks: 1
+max_number_of_stocks: 10
 
 #To reduce or eliminate the 442s pause, the options are:                                                                                                                            
  # 1. Disable volume profile — set fetch_volume_profile: false in settings.yaml → cuts from 6 to 3 calls/symbol, 10 symbols = 30 calls (well under limit)  
