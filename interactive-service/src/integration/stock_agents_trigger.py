@@ -17,12 +17,13 @@ def trigger_stock_agents_run(
     run_name_prefix: str,
     enrichment_enabled: bool,
     candle_frequency: str,
+    model_ids: list[str] | None = None,
     model_names: list[str] | None = None,
 ) -> None:
     """Read the interactive-service output file and submit a run to stock-agents backend.
 
-    Fetches active model IDs from the backend (filtered by model_names if provided),
-    then calls POST /runs with the full stock dicts as the tickers payload.
+    If model_ids is provided, uses them directly (UI selection takes priority).
+    Otherwise fetches active model IDs from the backend, filtered by model_names if set.
     Errors are logged but never raised so they never interrupt the main pipeline.
     """
     try:
@@ -34,30 +35,33 @@ def trigger_stock_agents_run(
             log.warning("stock_agents_trigger: output file has no stocks — skipping")
             return
 
-        resp = requests.get(
-            f"{backend_url}/models",
-            params={"active": "true"},
-            timeout=10,
-        )
-        resp.raise_for_status()
-        models: list[dict] = resp.json()
+        if model_ids:
+            log.info("stock_agents_trigger: using %d model(s) from caller", len(model_ids))
+        else:
+            resp = requests.get(
+                f"{backend_url}/models",
+                params={"active": "true"},
+                timeout=10,
+            )
+            resp.raise_for_status()
+            models: list[dict] = resp.json()
 
-        if not models:
-            log.warning("stock_agents_trigger: no active models in backend — skipping")
-            return
-
-        if model_names:
-            wanted = {n.lower() for n in model_names}
-            models = [m for m in models if m.get("name", "").lower() in wanted]
             if not models:
-                log.warning(
-                    "stock_agents_trigger: none of the configured model_names %s matched "
-                    "active models — skipping",
-                    model_names,
-                )
+                log.warning("stock_agents_trigger: no active models in backend — skipping")
                 return
 
-        model_ids = [m["id"] for m in models]
+            if model_names:
+                wanted = {n.lower() for n in model_names}
+                models = [m for m in models if m.get("name", "").lower() in wanted]
+                if not models:
+                    log.warning(
+                        "stock_agents_trigger: none of the configured model_names %s matched "
+                        "active models — skipping",
+                        model_names,
+                    )
+                    return
+
+            model_ids = [m["id"] for m in models]
 
         ts = datetime.now().strftime("%Y-%m-%d %H:%M")
         run_name = f"{run_name_prefix} — {ts} ({len(stocks)} stocks)"

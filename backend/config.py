@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     ai_service_host: str = "ai-service"  # use "localhost" when running outside Docker
     ai_service_port: int = 4102
 
+    # Interactive service (CLI subprocess for IBK pulls)
+    interactive_service_path: str = "../interactive-service"
+    interactive_service_python: str = "python3"
+
     # Tavily web search
     tavily_api_key: str = ""
     search_enabled: bool = False
