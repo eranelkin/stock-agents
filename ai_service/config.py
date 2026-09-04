@@ -44,12 +44,6 @@ class Settings(BaseSettings):
     search_mode: str = "prefetch"  # prefetch | tool_call
     search_max_tool_rounds: int = 10  # max LLM↔tool cycles before forcing final answer
 
-    # Enrichment
-    enrichment_enabled: bool = True
-    enrichment_period: str = "3y"          # yfinance history window for daily/hourly data
-    enrichment_max_concurrent: int = 5     # max parallel Yahoo Finance fetches
-    indicators_json: str = "./indicators.json"
-
     # Pre-market data
     finnhub_api_key: str = ""
     premarket_enabled: bool = True
