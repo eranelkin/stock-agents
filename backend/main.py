@@ -18,6 +18,7 @@ from sqlalchemy import update as sql_update
 from backend.api.broadcaster import broadcaster
 from backend.api.routes import chat, feargreed, models, prompts, results, runs
 from backend.api.routes.screener import router as screener_router
+from backend.api.routes.market_data import router as market_data_router
 from backend.config import settings
 from backend.db.models import Run
 from backend.db.session import AsyncSessionLocal
@@ -66,6 +67,7 @@ app.include_router(prompts.router)
 app.include_router(chat.router)
 app.include_router(feargreed.router)
 app.include_router(screener_router)
+app.include_router(market_data_router)
 
 
 @app.get("/health")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 import uuid
 from pathlib import Path
@@ -39,6 +40,7 @@ async def _run_subprocess(session_id: str, cmd: list[str], cwd: str) -> None:
             cwd=cwd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
+            env={**os.environ, "PYTHONUNBUFFERED": "1"},
         )
         session["proc"] = proc
         assert proc.stdout is not None
@@ -67,11 +69,11 @@ async def trigger_screener(
     main_py = str(base_path / "main.py")
 
     if body.mode == "screener":
-        cmd = [python, main_py, "--mode", "screener"]
+        cmd = [python, "-u", main_py, "--mode", "screener"]
     elif body.mode == "screener-only-pull":
-        cmd = [python, main_py, "--mode", "screener", "--only-pull"]
+        cmd = [python, "-u", main_py, "--mode", "screener", "--only-pull"]
     else:
-        cmd = [python, main_py, "--mode", "merged"]
+        cmd = [python, "-u", main_py, "--mode", "merged"]
 
     if body.model_ids:
         cmd += ["--model-ids", ",".join(body.model_ids)]
@@ -202,8 +204,18 @@ function setDone(returnCode) {{
 function poll() {{
   if (done) return;
   fetch('/screener/log-rows/{session_id}?since=' + since)
-    .then(function(r) {{ return r.json(); }})
+    .then(function(r) {{
+      if (r.status === 404) {{
+        done = true;
+        var chip = document.getElementById('status-chip');
+        chip.textContent = 'Session expired (backend restarted)';
+        chip.className = 'status-chip done';
+        return null;
+      }}
+      return r.json();
+    }})
     .then(function(data) {{
+      if (!data) return;
       if (data.lines && data.lines.length > 0) {{
         appendLines(data.lines);
         since += data.lines.length;

@@ -38,7 +38,7 @@ import AttachFileIcon from "@mui/icons-material/AttachFile";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CheckIcon from "@mui/icons-material/Check";
 import ArticleIcon from "@mui/icons-material/Article";
-import { createRun, deleteRun, deleteRuns, enrichPreview, pollScreenerDone, stopRun, stopScreener, triggerScreener } from "../api/runs";
+import { createRun, deleteRun, deleteRuns, enrichPreview, pollScreenerDone, pollSessionDone, stopMarketData, stopRun, stopScreener, triggerMarketData, triggerScreener } from "../api/runs";
 import CeoResultsPage from "../components/CeoResultsPage";
 import type { Run } from "../types/run";
 
@@ -91,7 +91,7 @@ export default function RunPage({
   const [enrichmentEnabled, setEnrichmentEnabled] = useState(false);
   const [testingEnrich, setTestingEnrich] = useState(false);
   const [enrichResults, setEnrichResults] = useState<Record<string, unknown>[] | null>(null);
-  const [runMode, setRunMode] = useState<"run" | "pull-run" | "pull" | "watchlist">("run");
+  const [runMode, setRunMode] = useState<"run" | "pull-run" | "pull" | "watchlist" | "market-data">("run");
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [pullStage, setPullStage] = useState<string | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -252,10 +252,11 @@ export default function RunPage({
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:4101";
 
   const RUN_MODE_OPTIONS = [
-    { mode: "run" as const,       label: "Run",                  desc: "AI analysis on uploaded file" },
-    { mode: "pull-run" as const,  label: "Pull & Run",           desc: "Pull from IBK then run AI analysis" },
-    { mode: "pull" as const,      label: "Pull",                 desc: "Pull from IBK only (no analysis)" },
-    { mode: "watchlist" as const, label: "Run-Pull - Watchlist", desc: "Screener + watchlist, then AI analysis" },
+    { mode: "run" as const,         label: "Run",                  desc: "AI analysis on uploaded file" },
+    { mode: "pull-run" as const,    label: "Pull & Run",           desc: "Pull from IBK then run AI analysis" },
+    { mode: "pull" as const,        label: "Pull",                 desc: "Pull from IBK only (no analysis)" },
+    { mode: "watchlist" as const,   label: "Run-Pull - Watchlist", desc: "Screener + watchlist, then AI analysis" },
+    { mode: "market-data" as const, label: "Get market data",      desc: "Fetch ETF, S&P 500, VIX & sentiment via Alpha Vantage" },
   ] as const;
 
   const runModeLabel = RUN_MODE_OPTIONS.find((o) => o.mode === runMode)?.label ?? "Run";
@@ -281,20 +282,42 @@ export default function RunPage({
     }
   };
 
+  const handleMarketDataClick = async () => {
+    setError(null);
+    setStarting(true);
+    setPullStage("Fetching ETF, S&P 500, VIX & sentiment data…");
+    try {
+      const { session_id } = await triggerMarketData();
+      setActiveSessionId(session_id);
+      window.open(`${BACKEND_URL}/market-data/log/${session_id}`, "_blank");
+      pollSessionDone(`${BACKEND_URL}/market-data/log-rows/${session_id}`, () => { setPullStage(null); setActiveSessionId(null); });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to trigger market data fetch");
+      setPullStage(null);
+    } finally {
+      setStarting(false);
+    }
+  };
+
   const handleRunClick = async () => {
-    if (runMode === "run")       return handleRun();
-    if (runMode === "pull-run")  return handlePullClick("screener");
-    if (runMode === "pull")      return handlePullClick("screener-only-pull");
-    if (runMode === "watchlist") return handlePullClick("merged");
+    if (runMode === "run")          return handleRun();
+    if (runMode === "pull-run")     return handlePullClick("screener");
+    if (runMode === "pull")         return handlePullClick("screener-only-pull");
+    if (runMode === "watchlist")    return handlePullClick("merged");
+    if (runMode === "market-data")  return handleMarketDataClick();
   };
 
   const handleStopAll = async () => {
     setStopping(true);
+    const sessionId = activeSessionId;
+    const mode = runMode;
     try {
-      if (activeSessionId) {
-        await stopScreener(activeSessionId);
-        setPullStage(null);
-        setActiveSessionId(null);
+      if (sessionId) {
+        if (mode === "market-data") {
+          await stopMarketData(sessionId);
+        } else {
+          await stopScreener(sessionId);
+        }
       }
       const activeRun = runs.find((r) => r.status === "pending" || r.status === "running");
       if (activeRun) {
@@ -303,6 +326,8 @@ export default function RunPage({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to stop");
     } finally {
+      setPullStage(null);
+      setActiveSessionId(null);
       setStopping(false);
     }
   };
@@ -411,7 +436,8 @@ export default function RunPage({
     Boolean(pullStage) ||
     (runMode === "run" && (!selectedFile || !rawFileText || selectedModelIds.length === 0)) ||
     (runMode === "pull-run" && selectedModelIds.length === 0) ||
-    (runMode === "watchlist" && selectedModelIds.length === 0);
+    (runMode === "watchlist" && selectedModelIds.length === 0)
+    // market-data mode has no extra requirements
 
   return (
     <Box

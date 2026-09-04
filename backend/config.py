@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     interactive_service_path: str = "../interactive-service"
     interactive_service_python: str = "python3"
 
+    # Market data service (CLI subprocess for Alpha Vantage pulls)
+    market_data_path: str = "../market-data"
+    market_data_python: str = "python3"
+
     # Tavily web search
     tavily_api_key: str = ""
     search_enabled: bool = False
