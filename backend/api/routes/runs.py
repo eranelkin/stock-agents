@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.broadcaster import broadcaster
 from backend.config import settings
-from backend.db.models import AIModel, Prompt, Run, TickerResult
+from backend.db.models import AIModel, AnalyticsRun, Prompt, Run, TickerResult
 from backend.db.session import AsyncSessionLocal, get_session
 from backend.schemas.run import BulkDeleteRequest, RunCreate, RunResponse
 
@@ -317,6 +317,7 @@ async def delete_runs_bulk(
                     pass
 
         output_dir = run.output_dir
+        await session.execute(sql_delete(AnalyticsRun).where(AnalyticsRun.run_id == run_id))
         await session.execute(sql_delete(TickerResult).where(TickerResult.run_id == run_id))
         await session.delete(run)
 
@@ -356,6 +357,7 @@ async def delete_run(
 
     output_dir = run.output_dir
 
+    await session.execute(sql_delete(AnalyticsRun).where(AnalyticsRun.run_id == run_id))
     await session.execute(sql_delete(TickerResult).where(TickerResult.run_id == run_id))
     await session.delete(run)
     await session.commit()

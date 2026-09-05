@@ -25,6 +25,7 @@ import { fetchPrompts, deletePrompt, togglePromptActive } from "../api/prompts";
 import type { Prompt } from "../types/prompt";
 import PromptDialog from "../components/PromptDialog";
 import { resolvePlaceholders } from "../utils/placeholders";
+import { formatDateTime } from "../utils/date";
 
 const CATEGORIES = [
   "agents",
@@ -321,7 +322,7 @@ export default function PromptsPage({ onRunPrompt }: PromptsPageProps) {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {new Date(prompt.created_at).toLocaleString()}
+                      {formatDateTime(prompt.created_at)}
                     </TableCell>
                     <TableCell sx={{ ...cellBorder }}>
                       <Switch

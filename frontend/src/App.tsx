@@ -10,8 +10,9 @@ import ModelsPage from './pages/ModelsPage'
 import PromptsPage from './pages/PromptsPage'
 import ChatPage from './pages/ChatPage'
 import MarketPage from './pages/MarketPage'
+import AnalyticsPage from './pages/AnalyticsPage'
 
-export type TabId = 'run' | 'prompts' | 'chat' | 'models' | 'market'
+export type TabId = 'run' | 'prompts' | 'chat' | 'models' | 'analytics' | 'market'
 
 function App() {
   const [activeTab, setActiveTab] = useState<TabId>('run')
@@ -44,6 +45,7 @@ function App() {
           {activeTab === 'prompts' && <PromptsPage onRunPrompt={handleRunPrompt} />}
           {activeTab === 'chat' && <ChatPage selectedModelIds={selectedModelIds} pendingInput={pendingChatInput} onClearPendingInput={() => setPendingChatInput(null)} />}
           {activeTab === 'models' && <ModelsPage onModelsChange={refreshModels} />}
+          {activeTab === 'analytics' && <AnalyticsPage />}
           {activeTab === 'market' && <MarketPage />}
         </Box>
       </Box>

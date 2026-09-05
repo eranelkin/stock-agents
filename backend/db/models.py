@@ -51,6 +51,18 @@ class TickerResult(Base):
     run: Mapped[Run] = relationship(back_populates="results")
 
 
+class AnalyticsRun(Base):
+    """Tracks which completed runs have been surfaced in the Analytics tab."""
+
+    __tablename__ = "analytics_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("runs.id"), nullable=False, unique=True)
+    added_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class Prompt(Base):
     """A user-managed prompt, organised by category. Agents-category prompts drive the pipeline."""
 

@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import update as sql_update
 
 from backend.api.broadcaster import broadcaster
-from backend.api.routes import chat, feargreed, models, prompts, results, runs
+from backend.api.routes import analytics, chat, feargreed, models, prompts, results, runs
 from backend.api.routes.screener import router as screener_router
 from backend.config import settings
 from backend.db.models import Run
@@ -61,6 +61,7 @@ app.add_middleware(
 
 app.include_router(runs.router)
 app.include_router(results.router)
+app.include_router(analytics.router)
 app.include_router(models.router)
 app.include_router(prompts.router)
 app.include_router(chat.router)

@@ -37,6 +37,7 @@ import ArticleIcon from "@mui/icons-material/Article";
 import { createRun, deleteRun, deleteRuns, pollScreenerDone, stopRun, stopScreener, triggerScreener } from "../api/runs";
 import CeoResultsPage from "../components/CeoResultsPage";
 import type { Run } from "../types/run";
+import { formatDateTime } from "../utils/date";
 
 interface RunPageProps {
   selectedModelIds: string[];
@@ -733,7 +734,7 @@ export default function RunPage({
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {new Date(run.created_at).toLocaleString()}
+                      {formatDateTime(run.created_at)}
                     </TableCell>
                     <TableCell
                       sx={{

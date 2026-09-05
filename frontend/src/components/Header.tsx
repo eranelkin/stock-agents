@@ -31,6 +31,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'prompts', label: 'Prompts' },
   { id: 'chat', label: 'Chat' },
   { id: 'models', label: 'Models' },
+  { id: 'analytics', label: 'Analytics' },
 ]
 
 export default function Header({
