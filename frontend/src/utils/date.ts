@@ -13,3 +13,9 @@ export function formatDateTime(value: string | Date): string {
   const minutes = String(d.getMinutes()).padStart(2, "0")
   return `${day}-${month}-${year}, ${hours}:${minutes}`
 }
+
+/** True if the given date's calendar day is strictly before today (local time). */
+export function isBeforeToday(dateStr: string): boolean {
+  const d = new Date(dateStr)
+  return d.toDateString() !== new Date().toDateString() && d < new Date()
+}

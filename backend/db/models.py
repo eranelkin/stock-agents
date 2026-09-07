@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -59,6 +59,45 @@ class AnalyticsRun(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("runs.id"), nullable=False, unique=True)
     added_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class ScanResult(Base):
+    """Backtest simulation of a CEO recommendation against real 1-minute market data."""
+
+    __tablename__ = "scan_results"
+    __table_args__ = (UniqueConstraint("run_id", "ticker", name="uq_scan_results_run_ticker"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("runs.id"), nullable=False)
+    ticker: Mapped[str] = mapped_column(String(20), nullable=False)
+
+    status: Mapped[str] = mapped_column(String(20), nullable=False)  # completed | no_data | error
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    recommendation: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    entry_low: Mapped[float | None] = mapped_column(nullable=True)
+    entry_high: Mapped[float | None] = mapped_column(nullable=True)
+    entry_time_start: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    entry_time_end: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    sl_low: Mapped[float | None] = mapped_column(nullable=True)
+    sl_high: Mapped[float | None] = mapped_column(nullable=True)
+    tp_low: Mapped[float | None] = mapped_column(nullable=True)
+    tp_high: Mapped[float | None] = mapped_column(nullable=True)
+    entry_window_low: Mapped[float | None] = mapped_column(nullable=True)
+    entry_window_high: Mapped[float | None] = mapped_column(nullable=True)
+
+    fill_status: Mapped[str] = mapped_column(String(20), nullable=False)  # filled | no_fill
+    fill_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    fill_price: Mapped[float | None] = mapped_column(nullable=True)
+    exit_reason: Mapped[str | None] = mapped_column(String(20), nullable=True)  # take_profit | stop_loss | open_eod
+    exit_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    exit_price: Mapped[float | None] = mapped_column(nullable=True)
+    pnl_pct: Mapped[float | None] = mapped_column(nullable=True)
+    r_multiple: Mapped[float | None] = mapped_column(nullable=True)
+
+    scanned_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
 

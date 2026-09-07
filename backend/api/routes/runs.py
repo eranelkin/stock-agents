@@ -11,7 +11,6 @@ from typing import Any, AsyncGenerator
 
 import aiofiles
 import httpx
-import yaml
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
 from sqlalchemy import delete as sql_delete, select
@@ -19,9 +18,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.broadcaster import broadcaster
 from backend.config import settings
-from backend.db.models import AIModel, AnalyticsRun, Prompt, Run, TickerResult
+from backend.db.models import AIModel, AnalyticsRun, Prompt, Run, ScanResult, TickerResult
 from backend.db.session import AsyncSessionLocal, get_session
 from backend.schemas.run import BulkDeleteRequest, RunCreate, RunResponse
+from backend.services.ceo_parser import parse_ceo_file
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -318,6 +318,7 @@ async def delete_runs_bulk(
 
         output_dir = run.output_dir
         await session.execute(sql_delete(AnalyticsRun).where(AnalyticsRun.run_id == run_id))
+        await session.execute(sql_delete(ScanResult).where(ScanResult.run_id == run_id))
         await session.execute(sql_delete(TickerResult).where(TickerResult.run_id == run_id))
         await session.delete(run)
 
@@ -358,6 +359,7 @@ async def delete_run(
     output_dir = run.output_dir
 
     await session.execute(sql_delete(AnalyticsRun).where(AnalyticsRun.run_id == run_id))
+    await session.execute(sql_delete(ScanResult).where(ScanResult.run_id == run_id))
     await session.execute(sql_delete(TickerResult).where(TickerResult.run_id == run_id))
     await session.delete(run)
     await session.commit()
@@ -518,7 +520,7 @@ async def stream_ceo_results(run_id: uuid.UUID) -> StreamingResponse:
             for ext in ("yaml", "json"):
                 for f in sorted(Path(run.output_dir).glob(f"CEO_*.{ext}")):
                     ticker = f.stem[4:]
-                    data = _parse_ceo_file(f)
+                    data = parse_ceo_file(f)
                     if data:
                         seen.add(ticker)
                         yield f"data: {json.dumps({'ticker': ticker, 'data': data})}\n\n"
@@ -545,7 +547,7 @@ async def stream_ceo_results(run_id: uuid.UUID) -> StreamingResponse:
                     for f in sorted(Path(run.output_dir).glob(f"CEO_*.{ext}")):
                         ticker = f.stem[4:]
                         if ticker not in seen:
-                            data = _parse_ceo_file(f)
+                            data = parse_ceo_file(f)
                             if data:
                                 seen.add(ticker)
                                 yield f"data: {json.dumps({'ticker': ticker, 'data': data})}\n\n"
@@ -573,92 +575,6 @@ def _log_file_path(output_dir: str) -> Path:
     """Derive the HTML log file path from a run's output_dir."""
     ts = Path(output_dir).name  # e.g. "2026-06-04_10-00-00"
     return Path(output_dir).parent.parent / "logs" / f"{ts}.html"
-
-
-def _try_parse_raw_output(raw: str) -> dict | None:
-    """Parse a (possibly truncated) JSON string from raw_output.
-
-    Tries the string as-is first, then attempts structural repair by stripping
-    any trailing incomplete key and closing unclosed braces/brackets.
-    Returns a flat dict of CEO fields (unwrapping one level of nesting if needed).
-    """
-    def _extract(obj: dict) -> dict:
-        # Unwrap {"symbol": {...}} or {"key": {...}} → use inner dict
-        for v in obj.values():
-            if isinstance(v, dict) and v:
-                return v
-        return obj
-
-    # 1. Try as-is (valid complete JSON)
-    try:
-        result = json.loads(raw)
-        if isinstance(result, dict):
-            return _extract(result)
-    except (json.JSONDecodeError, ValueError):
-        pass
-
-    # 2. Repair: strip trailing incomplete key like `"key":` or `"key": `
-    text = re.sub(r',?\s*"[^"]*":\s*$', '', raw.strip())
-
-    # Count unclosed braces and brackets
-    opens_brace = text.count('{') - text.count('}')
-    opens_bracket = text.count('[') - text.count(']')
-    if opens_brace < 0 or opens_bracket < 0:
-        return None
-
-    repaired = text + ']' * opens_bracket + '}' * opens_brace
-    try:
-        result = json.loads(repaired)
-        if isinstance(result, dict):
-            return _extract(result)
-    except (json.JSONDecodeError, ValueError):
-        pass
-
-    return None
-
-
-def _parse_ceo_file(file_path: Path) -> dict | None:
-    """Extract the stock analysis dict from a CEO_*.yaml or CEO_*.json output file.
-
-    Handles three LLM output patterns:
-    - Each analysis field as a separate list item under `stocks` (old JSON pattern)
-    - Analysis fields nested under a key (e.g. "symbol") in agent_data (current YAML pattern)
-    - parse_error: true with raw_output containing a JSON string (LLM returned invalid JSON)
-    All are merged into one flat dict.
-    """
-    try:
-        with open(file_path) as f:
-            doc = yaml.safe_load(f) if file_path.suffix == ".yaml" else json.load(f)
-        for agent_data in doc.get("agents", {}).values():
-            if not isinstance(agent_data, dict):
-                continue
-            merged: dict = {}
-            _SKIP = {"stocks", "raw_output", "parse_error", "reasoning"}
-            # Old JSON pattern: stocks is a list of single-key dicts
-            for item in agent_data.get("stocks") or []:
-                if isinstance(item, dict):
-                    merged.update(item)
-            # Current YAML pattern: data is a dict nested under a key (e.g. "symbol"),
-            # or flat sibling keys alongside stocks
-            for k, v in agent_data.items():
-                if k in _SKIP:
-                    continue
-                if isinstance(v, dict):
-                    merged.update(v)
-                else:
-                    merged.setdefault(k, v)
-            # Fallback: parse_error pattern — LLM returned a JSON string in raw_output
-            # The string may be truncated mid-stream, so we attempt repair before parsing.
-            if not merged and agent_data.get("parse_error") and agent_data.get("raw_output"):
-                raw_str = agent_data["raw_output"]
-                parsed = _try_parse_raw_output(raw_str)
-                if parsed:
-                    merged.update(parsed)
-            if merged:
-                return merged
-    except Exception:
-        pass
-    return None
 
 
 def _parse_log_stats(html: str) -> dict[str, int]:

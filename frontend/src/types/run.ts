@@ -8,4 +8,5 @@ export interface Run {
   output_dir: string | null
   model_names: string[] | null
   ticker_count: number | null
+  last_scanned_at: string | null
 }
