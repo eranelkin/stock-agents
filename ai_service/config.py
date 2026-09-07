@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     premarket_enabled: bool = True
     premarket_source: str = "auto"         # auto | finnhub | yfinance
 
+    # Market data enrichment
+    market_data_output_dir: str = "../market-data/outputs"
+
     # Service
     ai_service_port: int = 4102
 

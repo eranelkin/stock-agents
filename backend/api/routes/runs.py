@@ -41,19 +41,16 @@ _SECTOR_SCHEMA: dict | None = _load_schema("sector_schema.json")
 _MACRO_SCHEMA: dict | None = _load_schema("macro_schema.json")
 
 
-def _build_ceo_input_schema(agent_prompts: list[Prompt]) -> dict | None:
+def _build_ceo_input_schema(agent_prompts: list[Prompt]) -> dict:
     """Build the CEO input schema from active stock agent output schemas.
 
-    Returns None if no agent has an output_schema defined yet.
-    The CEO always receives {"name": <ticker>, "agents": {<title>: <agent_output>, ...}}.
+    Always includes market_snapshot (sector ETF data injected by CeoManager).
+    The CEO always receives {"name": <ticker>, "agents": {...}, "market_snapshot": {...}}.
     """
     agent_properties: dict[str, Any] = {}
     for p in agent_prompts:
         if p.output_schema:
             agent_properties[p.title] = p.output_schema
-
-    if not agent_properties:
-        return None
 
     return {
         "type": "object",
@@ -62,6 +59,50 @@ def _build_ceo_input_schema(agent_prompts: list[Prompt]) -> dict | None:
             "agents": {
                 "type": "object",
                 "properties": agent_properties,
+            },
+            "market_snapshot": {
+                "type": "object",
+                "nullable": True,
+                "properties": {
+                    "generated_at": {"type": "string"},
+                    "indices": {
+                        "type": "object",
+                        "properties": {
+                            "vix": {"type": "object", "properties": {"price": {"type": "number"}, "change_percent": {"type": "number"}, "pre_market": {"type": "object"}}},
+                            "spy": {"type": "object", "properties": {"price": {"type": "number"}, "change_percent": {"type": "number"}, "pre_market": {"type": "object"}}},
+                            "qqq": {"type": "object", "properties": {"price": {"type": "number"}, "change_percent": {"type": "number"}, "pre_market": {"type": "object"}}},
+                        },
+                    },
+                    "sector_etfs": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "etf": {"type": "string"},
+                                "sector": {"type": "string"},
+                                "price": {"type": "number"},
+                                "change_percent": {"type": "number"},
+                                "pre_market": {
+                                    "type": "object",
+                                    "properties": {
+                                        "price": {"type": "number"},
+                                        "change": {"type": "number"},
+                                        "change_percent": {"type": "number"},
+                                    },
+                                },
+                                "sentiment": {
+                                    "type": "object",
+                                    "properties": {
+                                        "score": {"type": "number"},
+                                        "label": {"type": "string"},
+                                        "bullish_signals": {"type": "integer"},
+                                        "bearish_signals": {"type": "integer"},
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
             },
         },
         "required": ["name", "agents"],
@@ -93,9 +134,6 @@ async def create_run(
     body: RunCreate, session: AsyncSession = Depends(get_session)
 ) -> Run:
     """Create a Run record and trigger the AI service to begin processing."""
-    if not body.tickers:
-        raise HTTPException(status_code=400, detail="Tickers list is empty.")
-
     result = await session.execute(
         select(AIModel).where(
             AIModel.id.in_(body.model_ids),
@@ -114,11 +152,6 @@ async def create_run(
         select(Prompt).where(Prompt.category == "agents", Prompt.is_active == True)  # noqa: E712
     )
     agent_prompts = prompt_result.scalars().all()
-    if not agent_prompts:
-        raise HTTPException(
-            status_code=400,
-            detail="No active Agent prompts configured. Enable prompts in the Agents tab first.",
-        )
 
     sector_prompt_result = await session.execute(
         select(Prompt).where(Prompt.category == "sectors", Prompt.is_active == True)  # noqa: E712
@@ -129,6 +162,13 @@ async def create_run(
         select(Prompt).where(Prompt.category == "macro", Prompt.is_active == True)  # noqa: E712
     )
     macro_prompts = macro_prompt_result.scalars().all()
+
+    # At least one pipeline must have something to do.
+    if not body.tickers and not macro_prompts and not sector_prompts:
+        raise HTTPException(
+            status_code=400,
+            detail="Nothing to run: provide tickers or enable Macro/Sector prompts.",
+        )
 
     ceo_prompt_result = await session.execute(
         select(Prompt).where(Prompt.category == "ceo", Prompt.is_active == True)  # noqa: E712
@@ -619,6 +659,10 @@ def _try_parse_raw_output(raw: str) -> dict | None:
 
     # 2. Repair: strip trailing incomplete key like `"key":` or `"key": `
     text = re.sub(r',?\s*"[^"]*":\s*$', '', raw.strip())
+
+    # Close any unterminated string value before brace repair
+    if text.count('"') % 2 != 0:
+        text += '"'
 
     # Count unclosed braces and brackets
     opens_brace = text.count('{') - text.count('}')

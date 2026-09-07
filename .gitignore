@@ -26,3 +26,6 @@ frontend/.vite/
 # ── Editor ───────────────────────────────────────────
 .history/
 .aider*
+
+# ── market-data  ───────────────────────────────────────────
+market-data/outputs/

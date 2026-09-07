@@ -183,6 +183,31 @@ class Orchestrator:
                     entities = await self._load_entities(
                         getattr(settings, cfg.data_source_key), cfg.entity_schema
                     )
+                    md = self._latest_market_data()
+                    if md:
+                        generated_at = md.get("generated_at", "unknown")
+                        md_dir = Path(settings.market_data_output_dir)
+                        latest_file = sorted(md_dir.glob("market_*.json"), reverse=True)[0].name
+                        if cfg.name == "sectors":
+                            entities = self._enrich_sectors(entities, md)
+                            logger.info(
+                                "Sectors enrichment source: market-data file '%s' (generated %s)",
+                                latest_file, generated_at,
+                                extra={"run_id": self.run_id},
+                            )
+                        elif cfg.name == "macro":
+                            entities = self._enrich_macro(entities, md)
+                            logger.info(
+                                "Macro enrichment source: market-data file '%s' (generated %s)",
+                                latest_file, generated_at,
+                                extra={"run_id": self.run_id},
+                            )
+                    else:
+                        logger.warning(
+                            "%s enrichment source: NONE — no market-data file found at '%s'. Agent will rely on web search only.",
+                            cfg.name.capitalize(), settings.market_data_output_dir,
+                            extra={"run_id": self.run_id},
+                        )
 
                 if not entities:
                     logger.warning(
@@ -285,6 +310,72 @@ class Orchestrator:
         finally:
             if run_logger is not None:
                 await run_logger.close()
+
+    def _latest_market_data(self) -> dict[str, Any] | None:
+        """Return the contents of the most recent market_*.json file, or None if unavailable."""
+        d = Path(settings.market_data_output_dir)
+        if not d.exists():
+            return None
+        files = sorted(d.glob("market_*.json"), reverse=True)
+        if not files:
+            return None
+        try:
+            return json.loads(files[0].read_text(encoding="utf-8"))
+        except Exception:
+            logger.exception("Failed to read market-data file: %s", files[0], extra={"run_id": self.run_id})
+            return None
+
+    def _enrich_sectors(self, entities: list[Any], md: dict[str, Any]) -> list[Any]:
+        """Inject per-ETF quote/pre_market/sentiment from market-data into each sector entity."""
+        from ai_service.schemas.sector_input import SectorInput
+        symbols = md.get("symbols", {})
+        enriched = []
+        for e in entities:
+            if not isinstance(e, SectorInput):
+                enriched.append(e)
+                continue
+            etf = e.etf_symbol
+            data = symbols.get(etf, {}) if etf else {}
+            enriched.append(e.model_copy(update={
+                "quote": data.get("quote"),
+                "pre_market": data.get("pre_market"),
+                "sentiment": data.get("sentiment"),
+            }))
+        return enriched
+
+    def _enrich_macro(self, entities: list[Any], md: dict[str, Any]) -> list[Any]:
+        """Inject market-wide index data and sector summary into each macro entity."""
+        from ai_service.schemas.macro_input import MacroInput
+        symbols = md.get("symbols", {})
+        sectors_summary = [
+            {
+                "sector": v.get("sector", ""),
+                "etf": k,
+                "price": v.get("quote", {}).get("price"),
+                "change_percent": v.get("quote", {}).get("change_percent"),
+                "pre_market_change_percent": v.get("pre_market", {}).get("change_percent"),
+                "sentiment": v.get("sentiment", {}).get("label"),
+            }
+            for k, v in symbols.items()
+            if v.get("type") == "sector_etf"
+        ]
+
+        def _index(sym: str) -> dict[str, Any]:
+            data = symbols.get(sym, {})
+            return {"quote": data.get("quote"), "pre_market": data.get("pre_market")}
+
+        update: dict[str, Any] = {
+            "name": "Market Overview",
+            "generated_at": md.get("generated_at"),
+            "vix": _index("VIX"),
+            "spy": _index("SPY"),
+            "qqq": _index("QQQ"),
+            "sectors_summary": sectors_summary,
+        }
+        return [
+            e.model_copy(update=update) if isinstance(e, MacroInput) else e
+            for e in entities
+        ]
 
     def _make_run_dir(self) -> str:
         """Create and return a timestamped output subfolder under outputs/runs/."""

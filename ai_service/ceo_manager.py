@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import json
+from pathlib import Path
 from typing import Any
 
+from ai_service.config import settings
 from ai_service.models.llm_client import LLMClient
 from ai_service.models.search_client import SearchClient
 from ai_service.pipeline import Pipeline
@@ -13,6 +16,9 @@ from ai_service.utils.output_writer import write_output
 from ai_service.utils.run_logger import RunLogger
 
 logger = get_logger(__name__)
+
+_BROAD_SECTOR_ETFS = {"XLB", "XLC", "XLE", "XLF", "XLI", "XLK", "XLP", "XLRE", "XLU", "XLV", "XLY"}
+_INDEX_SYMBOLS = {"VIX": "vix", "SPY": "spy", "QQQ": "qqq"}
 
 
 class CeoManager:
@@ -44,6 +50,58 @@ class CeoManager:
         self._output_format = output_format
         self._run_logger = run_logger
         self._queue: asyncio.Queue[tuple[str, dict[str, Any]]] = asyncio.Queue()
+        self._market_snapshot: dict[str, Any] | None = self._load_market_snapshot()
+
+    def _load_market_snapshot(self) -> dict[str, Any] | None:
+        """Load the latest market-data file and return a compact snapshot with indices + 11 broad sector ETFs."""
+        d = Path(settings.market_data_output_dir)
+        if not d.exists():
+            return None
+        files = sorted(d.glob("market_*.json"), reverse=True)
+        if not files:
+            return None
+        md = json.loads(files[0].read_text())
+        symbols = md.get("symbols", {})
+
+        def _extract(v: dict) -> dict:
+            return {
+                "price": v.get("quote", {}).get("price"),
+                "change_percent": v.get("quote", {}).get("change_percent"),
+                "pre_market": {
+                    "price": (v.get("pre_market") or {}).get("price"),
+                    "change": (v.get("pre_market") or {}).get("change"),
+                    "change_percent": (v.get("pre_market") or {}).get("change_percent"),
+                },
+            }
+
+        indices = {
+            label: _extract(symbols[sym])
+            for sym, label in _INDEX_SYMBOLS.items()
+            if sym in symbols
+        }
+
+        sector_etfs = [
+            {
+                "etf": k,
+                "sector": v.get("sector", ""),
+                **_extract(v),
+                "sentiment": {
+                    "score": (v.get("sentiment") or {}).get("score"),
+                    "label": (v.get("sentiment") or {}).get("label"),
+                    "bullish_signals": (v.get("sentiment") or {}).get("bullish_signals"),
+                    "bearish_signals": (v.get("sentiment") or {}).get("bearish_signals"),
+                },
+            }
+            for k, v in symbols.items()
+            if k in _BROAD_SECTOR_ETFS
+        ]
+
+        logger.info(
+            "CEO market snapshot loaded: %d sector ETFs + indices from %s",
+            len(sector_etfs),
+            files[0].name,
+        )
+        return {"generated_at": md.get("generated_at"), "indices": indices, "sector_etfs": sector_etfs}
 
     async def on_ticker_ready(self, ticker: str, agents: dict[str, Any]) -> None:
         """Called by StockAggregator when a ticker's aggregated data is ready.
@@ -66,7 +124,7 @@ class CeoManager:
         tasks: list[asyncio.Task[None]] = []
         for _ in range(self._total):
             ticker, agents = await self._queue.get()
-            entity = CeoInput(symbol=ticker, agents=agents)
+            entity = CeoInput(symbol=ticker, agents=agents, market_snapshot=self._market_snapshot)
             for mc in self._model_configs:
                 tasks.append(asyncio.create_task(self._run_one(entity, mc)))
 

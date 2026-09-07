@@ -217,25 +217,25 @@ export default function RunPage({
   };
 
   const handleRun = async () => {
-    if (!rawFileText || !selectedFile) return;
     setError(null);
     setStarting(true);
     try {
-      const processedText = rawFileText.replace(
-        /CURRENTDATE/g,
-        formatCurrentDate(),
-      );
-      const lower = selectedFile.name.toLowerCase();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let tickers: Record<string, unknown>[];
-      const rawParsed =
-        lower.endsWith(".yaml") || lower.endsWith(".yml")
-          ? jsyaml.load(processedText)
-          : JSON.parse(processedText);
-      tickers = extractTickers(rawParsed) ?? [];
+      let tickers: Record<string, unknown>[] = [];
+      let runName = "macro-sector-run";
+      if (rawFileText && selectedFile) {
+        const processedText = rawFileText.replace(/CURRENTDATE/g, formatCurrentDate());
+        const lower = selectedFile.name.toLowerCase();
+        const rawParsed =
+          lower.endsWith(".yaml") || lower.endsWith(".yml")
+            ? jsyaml.load(processedText)
+            : JSON.parse(processedText);
+        tickers = extractTickers(rawParsed) ?? [];
+        runName = selectedFile.name;
+      }
       const created = await createRun(
         selectedModelIds,
-        selectedFile.name,
+        runName,
         tickers,
         candleFrequency,
         enrichmentEnabled,
@@ -434,10 +434,11 @@ export default function RunPage({
     starting ||
     runInProgress ||
     Boolean(pullStage) ||
-    (runMode === "run" && (!selectedFile || !rawFileText || selectedModelIds.length === 0)) ||
+    (runMode === "run" && selectedModelIds.length === 0) ||
     (runMode === "pull-run" && selectedModelIds.length === 0) ||
     (runMode === "watchlist" && selectedModelIds.length === 0)
     // market-data mode has no extra requirements
+    // "run" mode no longer requires a file — macro/sector-only runs work without tickers
 
   return (
     <Box

@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # Market data service (CLI subprocess for Alpha Vantage pulls)
     market_data_path: str = "../market-data"
     market_data_python: str = "python3"
+    market_data_schedule_enabled: bool = False
+    market_data_schedule_hour: int = 8
+    market_data_schedule_minute: int = 30
 
     # Tavily web search
     tavily_api_key: str = ""
