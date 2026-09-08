@@ -68,6 +68,7 @@ class SearchClient:
                 query=query,
                 search_depth=search_depth or settings.search_depth,
                 max_results=settings.search_max_results,
+                days=settings.search_days,
             )
             duration_ms = int((time.monotonic() - start) * 1000)
             items = [
@@ -76,6 +77,7 @@ class SearchClient:
                     url=r.get("url", ""),
                     content=r.get("content", ""),
                     score=float(r.get("score", 0.0)),
+                    published_date=r.get("published_date"),
                 )
                 for r in raw.get("results", [])
             ]
@@ -112,10 +114,15 @@ class SearchClient:
 
 def _format_context(response: SearchResponse) -> str:
     """Format a SearchResponse as a plain-text block for LLM injection."""
+    from datetime import timedelta
+    retrieved = datetime.fromisoformat(response.retrieved_at.replace("Z", "+00:00"))
+    cutoff = retrieved - timedelta(hours=72)
+    cutoff_str = cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
     lines: list[str] = [
         "--- LIVE WEB SEARCH CONTEXT ---",
         f'Query: "{response.query}"',
         f"Retrieved: {response.retrieved_at}",
+        f"72-hour cutoff: {cutoff_str}  <- EXCLUDE any article whose event/publish date is before this",
         "",
     ]
     for i, item in enumerate(response.results, start=1):
@@ -123,9 +130,11 @@ def _format_context(response: SearchResponse) -> str:
         snippet = item.content[:400].rstrip()
         if len(item.content) > 400:
             snippet += "..."
+        date_line = f"    Published: {item.published_date}" if item.published_date else "    Published: unknown"
         lines += [
             f"[{i}] {item.title}",
             f"    Source: {domain}",
+            date_line,
             f"    {snippet}",
             "",
         ]

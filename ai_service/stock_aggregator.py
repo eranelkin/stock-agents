@@ -123,4 +123,6 @@ class StockAggregator:
             extra={"ticker": ticker, "source_pipelines": sorted(contributions.keys())},
         )
         if self._ceo_manager:
-            await self._ceo_manager.on_ticker_ready(ticker, merged_agents)
+            await self._ceo_manager.on_ticker_ready(
+                ticker, merged_agents, self._entity_dicts.get(ticker, {})
+            )

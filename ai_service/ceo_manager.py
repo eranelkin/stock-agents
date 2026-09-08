@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import yaml
 from pathlib import Path
 from typing import Any
 
@@ -17,8 +18,22 @@ from ai_service.utils.run_logger import RunLogger
 
 logger = get_logger(__name__)
 
-_BROAD_SECTOR_ETFS = {"XLB", "XLC", "XLE", "XLF", "XLI", "XLK", "XLP", "XLRE", "XLU", "XLV", "XLY"}
-_INDEX_SYMBOLS = {"VIX": "vix", "SPY": "spy", "QQQ": "qqq"}
+# Maps yfinance/enrichment sector names (lowercase) to ETF sector names (lowercase)
+# used in the market-data file, covering common mismatches.
+_SECTOR_ALIASES: dict[str, str] = {
+    "computers": "information technology",
+    "technology": "information technology",
+    "semiconductors": "semiconductors & semiconductor equipment",
+    "telecom": "telecommunications services",
+    "telecommunications": "telecommunications services",
+    "consumer electronics": "consumer discretionary",
+    "internet content & information": "communication services",
+    "software—application": "software & services",
+    "software—infrastructure": "software & services",
+    "drug manufacturers": "pharmaceuticals",
+    "aerospace & defense": "industrials",
+    "medical devices": "health care equipment & supplies",
+}
 
 
 class CeoManager:
@@ -49,82 +64,105 @@ class CeoManager:
         self._run_dir = run_dir
         self._output_format = output_format
         self._run_logger = run_logger
-        self._queue: asyncio.Queue[tuple[str, dict[str, Any]]] = asyncio.Queue()
-        self._market_snapshot: dict[str, Any] | None = self._load_market_snapshot()
+        self._queue: asyncio.Queue[tuple[str, dict[str, Any], dict[str, Any]]] = asyncio.Queue()
+        self._sector_etf_map: dict[str, dict[str, Any]] = self._build_sector_etf_map()
 
-    def _load_market_snapshot(self) -> dict[str, Any] | None:
-        """Load the latest market-data file and return a compact snapshot with indices + 11 broad sector ETFs."""
+    def _build_sector_etf_map(self) -> dict[str, dict[str, Any]]:
+        """Build lowercase sector-name → ETF-data dict from the latest market-data file."""
         d = Path(settings.market_data_output_dir)
         if not d.exists():
-            return None
+            return {}
         files = sorted(d.glob("market_*.json"), reverse=True)
         if not files:
+            return {}
+        try:
+            symbols = json.loads(files[0].read_text()).get("symbols", {})
+        except Exception as exc:
+            logger.warning("Failed to load market-data for sector ETF map: %s", exc)
+            return {}
+        mapping: dict[str, dict[str, Any]] = {}
+        for etf_data in symbols.values():
+            sector = etf_data.get("sector", "")
+            if sector and etf_data.get("type") == "sector_etf":
+                mapping[sector.lower()] = etf_data
+        logger.info("Sector ETF map built: %d entries from %s", len(mapping), files[0].name)
+        return mapping
+
+    def _lookup_sector_etf(self, sector: str | None) -> dict[str, Any] | None:
+        """Return the ETF data dict for the given sector name, or None if not found."""
+        if not sector:
             return None
-        md = json.loads(files[0].read_text())
-        symbols = md.get("symbols", {})
-
-        def _extract(v: dict) -> dict:
-            return {
-                "price": v.get("quote", {}).get("price"),
-                "change_percent": v.get("quote", {}).get("change_percent"),
-                "pre_market": {
-                    "price": (v.get("pre_market") or {}).get("price"),
-                    "change": (v.get("pre_market") or {}).get("change"),
-                    "change_percent": (v.get("pre_market") or {}).get("change_percent"),
-                },
-            }
-
-        indices = {
-            label: _extract(symbols[sym])
-            for sym, label in _INDEX_SYMBOLS.items()
-            if sym in symbols
+        key = sector.lower()
+        data = self._sector_etf_map.get(key) or \
+               self._sector_etf_map.get(_SECTOR_ALIASES.get(key, ""))
+        if not data:
+            logger.info("No sector ETF found for sector '%s'", sector)
+            return None
+        return {
+            "etf": data.get("symbol"),
+            "name": data.get("name"),
+            "sector": data.get("sector"),
+            "quote": data.get("quote"),
+            "pre_market": data.get("pre_market"),
+            "sentiment": data.get("sentiment"),
         }
 
-        sector_etfs = [
-            {
-                "etf": k,
-                "sector": v.get("sector", ""),
-                **_extract(v),
-                "sentiment": {
-                    "score": (v.get("sentiment") or {}).get("score"),
-                    "label": (v.get("sentiment") or {}).get("label"),
-                    "bullish_signals": (v.get("sentiment") or {}).get("bullish_signals"),
-                    "bearish_signals": (v.get("sentiment") or {}).get("bearish_signals"),
-                },
-            }
-            for k, v in symbols.items()
-            if k in _BROAD_SECTOR_ETFS
-        ]
+    async def _load_macro_analysis(self) -> dict[str, Any] | None:
+        """Wait for macro.yaml to appear in the run directory and return its parsed content.
 
-        logger.info(
-            "CEO market snapshot loaded: %d sector ETFs + indices from %s",
-            len(sector_etfs),
-            files[0].name,
-        )
-        return {"generated_at": md.get("generated_at"), "indices": indices, "sector_etfs": sector_etfs}
-
-    async def on_ticker_ready(self, ticker: str, agents: dict[str, Any]) -> None:
-        """Called by StockAggregator when a ticker's aggregated data is ready.
-
-        Non-blocking: puts the ticker into the internal queue so CeoManager.run()
-        can spawn pipelines immediately.
+        Retries for up to 30 seconds so CEO doesn't start before macro pipeline finishes.
+        Returns None if macro was not configured or did not complete in time.
         """
-        await self._queue.put((ticker, agents))
+        macro_path = Path(self._run_dir) / "macro.yaml"
+        for attempt in range(15):
+            if macro_path.exists():
+                try:
+                    data = yaml.safe_load(macro_path.read_text())
+                    logger.info("Macro analysis loaded from %s", macro_path.name)
+                    return data
+                except Exception as exc:
+                    logger.warning("Failed to parse macro.yaml: %s", exc)
+                    return None
+            if attempt == 0:
+                logger.info("Waiting for macro.yaml in %s ...", self._run_dir)
+            await asyncio.sleep(2)
+        logger.warning("macro.yaml not found after 30s — CEO will proceed without macro context")
+        return None
+
+    async def on_ticker_ready(
+        self,
+        ticker: str,
+        agents: dict[str, Any],
+        entity_dict: dict[str, Any] | None = None,
+    ) -> None:
+        """Called by StockAggregator when a ticker's aggregated data is ready."""
+        await self._queue.put((ticker, agents, entity_dict or {}))
         logger.info("CEO ticker enqueued", extra={"ticker": ticker})
 
     async def run(self) -> None:
-        """Consume the queue and spawn CEO Pipeline tasks as tickers arrive.
-
-        Waits until all expected tickers have been received, then waits for all
-        spawned tasks to complete before returning.
-        """
+        """Consume the queue and spawn CEO Pipeline tasks as tickers arrive."""
         if not self._prompts:
             return
 
+        macro_analysis = await self._load_macro_analysis()
+
         tasks: list[asyncio.Task[None]] = []
         for _ in range(self._total):
-            ticker, agents = await self._queue.get()
-            entity = CeoInput(symbol=ticker, agents=agents, market_snapshot=self._market_snapshot)
+            ticker, agents, entity_dict = await self._queue.get()
+            sector = entity_dict.get("sector")
+            sector_etf = self._lookup_sector_etf(sector)
+            if sector_etf:
+                logger.info(
+                    "CEO sector ETF resolved: %s → %s",
+                    sector, sector_etf.get("etf"),
+                    extra={"ticker": ticker},
+                )
+            entity = CeoInput(
+                symbol=ticker,
+                agents=agents,
+                macro_analysis=macro_analysis,
+                sector_etf=sector_etf,
+            )
             for mc in self._model_configs:
                 tasks.append(asyncio.create_task(self._run_one(entity, mc)))
 

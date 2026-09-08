@@ -14,7 +14,8 @@ class CeoInput(BaseModel):
 
     symbol: str
     agents: dict[str, Any]
-    market_snapshot: dict[str, Any] | None = None
+    macro_analysis: dict[str, Any] | None = None
+    sector_etf: dict[str, Any] | None = None
 
 
 class TickerInput(BaseModel):

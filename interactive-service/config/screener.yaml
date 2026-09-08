@@ -1,6 +1,6 @@
 screener:
-  # IB scanner parameters
-  number_of_rows: 25  #### Max symbols per IB scanner call (hard cap = 50) ###
+  # IB scanner parameters best is 24
+  number_of_rows: 24  #### Max symbols per IB scanner call (hard cap = 50) ###
   scan_code: "TOP_PERC_GAIN"     # Rank by pre-market % gainers
   instrument: "STK"
   stockTypeFilter : "STOCK"     # Filter out ETFs/ETNs (stockType check via IB ContractDetails)

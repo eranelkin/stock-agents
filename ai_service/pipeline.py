@@ -183,15 +183,34 @@ class Pipeline:
         return results
 
     async def _fetch_search(self, prompt_config: PromptConfig) -> str:
-        """Build the query and call Tavily for a single prompt."""
+        """Build the query and call Tavily. Supports pipe-separated multi-queries."""
         assert self._search is not None
-        query = build_search_query(self.entity_name, prompt_config.search_query_template)
-        return await self._search.search(
-            query,
-            ticker=self.entity_name,
-            agent_id=prompt_config.id,
-            prompt_title=prompt_config.title,
-            pipeline_id=self.pipeline_id,
-            pipeline_type=self._pipeline_type,
-            search_depth=prompt_config.search_depth or self._llm.search_depth,
-        )
+        template = prompt_config.search_query_template or ""
+        templates = [t.strip() for t in template.split("|") if t.strip()] if "|" in template else [template or None]
+
+        if len(templates) == 1:
+            query = build_search_query(self.entity_name, templates[0])
+            return await self._search.search(
+                query,
+                ticker=self.entity_name,
+                agent_id=prompt_config.id,
+                prompt_title=prompt_config.title,
+                pipeline_id=self.pipeline_id,
+                pipeline_type=self._pipeline_type,
+                search_depth=prompt_config.search_depth or self._llm.search_depth,
+            )
+
+        # Multi-query: run all in parallel, concatenate results
+        contexts = await asyncio.gather(*[
+            self._search.search(
+                build_search_query(self.entity_name, t),
+                ticker=self.entity_name,
+                agent_id=prompt_config.id,
+                prompt_title=f"{prompt_config.title} [{i + 1}/{len(templates)}]",
+                pipeline_id=self.pipeline_id,
+                pipeline_type=self._pipeline_type,
+                search_depth=prompt_config.search_depth or self._llm.search_depth,
+            )
+            for i, t in enumerate(templates)
+        ])
+        return "\n\n".join(ctx for ctx in contexts if ctx)

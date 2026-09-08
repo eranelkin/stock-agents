@@ -44,8 +44,8 @@ _MACRO_SCHEMA: dict | None = _load_schema("macro_schema.json")
 def _build_ceo_input_schema(agent_prompts: list[Prompt]) -> dict:
     """Build the CEO input schema from active stock agent output schemas.
 
-    Always includes market_snapshot (sector ETF data injected by CeoManager).
-    The CEO always receives {"name": <ticker>, "agents": {...}, "market_snapshot": {...}}.
+    The CEO receives {"name": <ticker>, "agents": {...}, "macro_analysis": {...}}.
+    macro_analysis is the full output of the Macro agent for this run.
     """
     agent_properties: dict[str, Any] = {}
     for p in agent_prompts:
@@ -60,49 +60,25 @@ def _build_ceo_input_schema(agent_prompts: list[Prompt]) -> dict:
                 "type": "object",
                 "properties": agent_properties,
             },
-            "market_snapshot": {
+            "macro_analysis": {
                 "type": "object",
                 "nullable": True,
-                "properties": {
-                    "generated_at": {"type": "string"},
-                    "indices": {
-                        "type": "object",
-                        "properties": {
-                            "vix": {"type": "object", "properties": {"price": {"type": "number"}, "change_percent": {"type": "number"}, "pre_market": {"type": "object"}}},
-                            "spy": {"type": "object", "properties": {"price": {"type": "number"}, "change_percent": {"type": "number"}, "pre_market": {"type": "object"}}},
-                            "qqq": {"type": "object", "properties": {"price": {"type": "number"}, "change_percent": {"type": "number"}, "pre_market": {"type": "object"}}},
-                        },
-                    },
-                    "sector_etfs": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "etf": {"type": "string"},
-                                "sector": {"type": "string"},
-                                "price": {"type": "number"},
-                                "change_percent": {"type": "number"},
-                                "pre_market": {
-                                    "type": "object",
-                                    "properties": {
-                                        "price": {"type": "number"},
-                                        "change": {"type": "number"},
-                                        "change_percent": {"type": "number"},
-                                    },
-                                },
-                                "sentiment": {
-                                    "type": "object",
-                                    "properties": {
-                                        "score": {"type": "number"},
-                                        "label": {"type": "string"},
-                                        "bullish_signals": {"type": "integer"},
-                                        "bearish_signals": {"type": "integer"},
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
+                "description": (
+                    "Macro agent's full output analysis for this run: market regime, "
+                    "VIX/SPY/QQQ readings, macro news events with risk-on/off rating, "
+                    "and sector context. Use this as the macro specialist's already-interpreted "
+                    "market view — do not re-derive what the macro agent has already concluded."
+                ),
+            },
+            "sector_etf": {
+                "type": "object",
+                "nullable": True,
+                "description": (
+                    "Live market data for the sector ETF that corresponds to this stock's industry. "
+                    "Fields: etf (symbol), name, sector, quote (price/change_percent/volume), "
+                    "pre_market (price/change/change_percent), sentiment (score/label/bullish_signals/bearish_signals). "
+                    "Use this to assess whether the stock is moving with or against its sector."
+                ),
             },
         },
         "required": ["name", "agents"],
@@ -302,10 +278,21 @@ async def stream_runs() -> StreamingResponse:
                 yield "data: []\n\n"  # DB unavailable; broadcaster will push real data once it connects
             while True:
                 try:
-                    data = await asyncio.wait_for(q.get(), timeout=15.0)
+                    data = await asyncio.wait_for(q.get(), timeout=5.0)
                     yield f"data: {data}\n\n"
                 except asyncio.TimeoutError:
-                    yield ": keepalive\n\n"
+                    # Broadcaster may have missed an update — re-poll DB directly as fallback
+                    try:
+                        async with AsyncSessionLocal() as session:
+                            result = await session.execute(select(Run).order_by(Run.created_at.desc()))
+                            runs = result.scalars().all()
+                        payload = json.dumps(
+                            [RunResponse.model_validate(r).model_dump(mode="json") for r in runs],
+                            default=str,
+                        )
+                        yield f"data: {payload}\n\n"
+                    except Exception:
+                        yield ": keepalive\n\n"
                 except asyncio.CancelledError:
                     return
         finally:
@@ -648,6 +635,10 @@ def _try_parse_raw_output(raw: str) -> dict | None:
             if isinstance(v, dict) and v:
                 return v
         return obj
+
+    # Strip markdown code fences (```json ... ``` or ``` ... ```)
+    raw = re.sub(r'^```[a-zA-Z]*\n?', '', raw.strip())
+    raw = re.sub(r'\n?```$', '', raw.strip())
 
     # 1. Try as-is (valid complete JSON)
     try:
