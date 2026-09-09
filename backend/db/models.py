@@ -31,6 +31,7 @@ class Run(Base):
     output_dir: Mapped[str | None] = mapped_column(Text, nullable=True)
     model_names: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     ticker_count: Mapped[int | None] = mapped_column(nullable=True)
+    ibk_session_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     results: Mapped[list[TickerResult]] = relationship(back_populates="run")
 

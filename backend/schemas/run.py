@@ -29,5 +29,6 @@ class RunResponse(BaseModel):
     output_dir: str | None = None
     model_names: list[str] | None = None
     ticker_count: int | None = None
+    ibk_session_id: str | None = None
 
     model_config = {"from_attributes": True}

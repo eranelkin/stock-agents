@@ -185,7 +185,11 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
 
   const isLive = open && !streamDone
 
-  const stockCount = run.ticker_count ?? (rows.length > 0 ? rows.length : null)
+  const stockCount = (() => {
+    if (!streamDone && rows.length === 0) return run.ticker_count != null ? String(run.ticker_count) : '—'
+    if (run.ticker_count != null && rows.length < run.ticker_count) return `${rows.length} / ${run.ticker_count}`
+    return rows.length > 0 ? String(rows.length) : (run.ticker_count != null ? String(run.ticker_count) : '—')
+  })()
   const dateStr = new Date(run.created_at).toLocaleString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric',
     hour: '2-digit', minute: '2-digit', hour12: false,
@@ -290,7 +294,7 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0, px: 3, py: 1.5 }}>
           <StatItem
             label="Stocks"
-            value={stockCount != null ? String(stockCount) : '—'}
+            value={stockCount}
             valueColor="#90caf9"
           />
           <Box sx={{ mx: 3 }}><StatSep /></Box>

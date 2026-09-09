@@ -38,6 +38,7 @@ import AttachFileIcon from "@mui/icons-material/AttachFile";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CheckIcon from "@mui/icons-material/Check";
 import ArticleIcon from "@mui/icons-material/Article";
+import StorageIcon from "@mui/icons-material/Storage";
 import { createRun, deleteRun, deleteRuns, enrichPreview, pollScreenerDone, pollSessionDone, stopMarketData, stopRun, stopScreener, triggerMarketData, triggerScreener } from "../api/runs";
 import CeoResultsPage from "../components/CeoResultsPage";
 import type { Run } from "../types/run";
@@ -51,6 +52,7 @@ const STATUS_COLOR: Record<
   string,
   "default" | "info" | "success" | "error" | "warning"
 > = {
+  fetching: "warning",
   pending: "warning",
   running: "info",
   completed: "success",
@@ -126,7 +128,7 @@ export default function RunPage({
   // Live duration tick + parent notification when active-run state changes
   useEffect(() => {
     const hasActive = runs.some(
-      (r) => r.status === "pending" || r.status === "running",
+      (r) => r.status === "fetching" || r.status === "pending" || r.status === "running",
     );
     onRunActiveChange?.(hasActive);
     if (hasActive) {
@@ -362,6 +364,9 @@ export default function RunPage({
     )
       return;
     try {
+      if (run.status === "fetching" && run.ibk_session_id) {
+        await stopScreener(run.ibk_session_id);
+      }
       await stopRun(run.id);
       // SSE broadcaster will push the updated status automatically
     } catch (err) {
@@ -428,7 +433,7 @@ export default function RunPage({
   const displayedRuns = sorted;
 
   const runInProgress = runs.some(
-    (r) => r.status === "pending" || r.status === "running",
+    (r) => r.status === "fetching" || r.status === "pending" || r.status === "running",
   );
   const runDisabled =
     starting ||
@@ -682,6 +687,11 @@ export default function RunPage({
       {selectedModelIds.length === 0 && selectedFile && (
         <Alert severity="warning">
           Select one or more models from the header dropdown.
+        </Alert>
+      )}
+      {selectedModelIds.length === 0 && ["pull-run", "watchlist"].includes(runMode) && (
+        <Alert severity="warning">
+          &ldquo;{RUN_MODE_OPTIONS.find(o => o.mode === runMode)?.label}&rdquo; runs AI analysis after pulling — select one or more models from the header dropdown to enable the button.
         </Alert>
       )}
 
@@ -996,7 +1006,7 @@ export default function RunPage({
                           ? new Date(run.completed_at).getTime()
                           : null;
                         const active =
-                          run.status === "pending" || run.status === "running";
+                          run.status === "fetching" || run.status === "pending" || run.status === "running";
                         if (active) {
                           return (
                             <Typography
@@ -1037,7 +1047,7 @@ export default function RunPage({
                     </TableCell>
                     <TableCell sx={{ borderColor: "rgba(255,255,255,0.06)" }}>
                       <Chip
-                        label={run.status.toUpperCase()}
+                        label={run.status === "fetching" ? "FETCHING DATA" : run.status.toUpperCase()}
                         color={STATUS_COLOR[run.status] ?? "default"}
                         size="small"
                         sx={{
@@ -1062,7 +1072,8 @@ export default function RunPage({
                           gap: 0.75,
                         }}
                       >
-                        {(run.status === "pending" ||
+                        {(run.status === "fetching" ||
+                          run.status === "pending" ||
                           run.status === "running") && (
                           <Tooltip title="Stop run">
                             <Box
@@ -1102,7 +1113,28 @@ export default function RunPage({
                             </Box>
                           </Tooltip>
                         )}
-                        <Tooltip title="View live log">
+                        {run.ibk_session_id && (
+                          <Tooltip title="View IBK pull log">
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() =>
+                                  window.open(
+                                    `${import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:4101"}/screener/log/${run.ibk_session_id}`,
+                                    "_blank",
+                                  )
+                                }
+                                sx={{
+                                  color: "text.secondary",
+                                  "&:hover": { color: "#fbbf24" },
+                                }}
+                              >
+                                <StorageIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        )}
+                        <Tooltip title="View AI analysis log">
                           <span>
                             <IconButton
                               size="small"
