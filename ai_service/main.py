@@ -7,7 +7,7 @@ from typing import Any, AsyncGenerator
 
 from dotenv import load_dotenv
 
-load_dotenv()  # must run before litellm is imported so API keys are in os.environ
+load_dotenv(override=True)  # must run before litellm is imported so API keys are in os.environ; override=True ensures .env wins over any stale shell exports
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -23,10 +23,44 @@ logger = get_logger(__name__)
 _active_tasks: dict[str, asyncio.Task[None]] = {}
 
 
+async def _recover_stale_runs() -> None:
+    """Mark any 'running' runs as 'failed' on startup.
+
+    When the process is killed mid-run (e.g. uvicorn --reload on file save),
+    in-flight tasks die but the DB row stays 'running' forever. The CEO SSE
+    stream polls status and never sends 'done', leaving the frontend stuck.
+    This cleanup runs once at startup so those runs close immediately.
+    """
+    try:
+        from datetime import datetime, timezone
+        from sqlalchemy import update
+        from ai_service.db.session import AsyncSessionLocal
+        from ai_service.db.models import Run
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                update(Run)
+                .where(Run.status == "running")
+                .values(status="failed", completed_at=datetime.now(timezone.utc))
+                .returning(Run.id)
+            )
+            stale = result.fetchall()
+            await session.commit()
+        if stale:
+            logger.warning(
+                "Startup recovery: marked %d stale run(s) as failed: %s",
+                len(stale),
+                [str(r[0]) for r in stale],
+            )
+    except Exception as exc:
+        logger.warning("Startup run recovery failed (non-fatal): %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     Path(settings.output_dir, "runs").mkdir(parents=True, exist_ok=True)
     Path(settings.output_dir, "logs").mkdir(parents=True, exist_ok=True)
+
+    await _recover_stale_runs()
 
     # Start Finnhub WebSocket streamer if a key is configured
     streamer = None

@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 
 from sqlalchemy import select
 
 from backend.db.models import Run
 from backend.schemas.run import RunResponse
+
+logger = logging.getLogger(__name__)
 
 
 class RunBroadcaster:
@@ -52,8 +55,8 @@ class RunBroadcaster:
                 if payload != self._last_payload:
                     self._last_payload = payload
                     self.broadcast(payload)
-            except Exception:
-                pass  # never crash the background task
+            except Exception as exc:
+                logger.warning("Broadcaster DB poll failed: %s", exc)
             await asyncio.sleep(1.0)
 
 

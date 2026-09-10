@@ -1,0 +1,185 @@
+2026-09-04 11:06:09  INFO      __main__  Log file: /Users/davidalfassi/Projects/stock-agents/market-data/logs/market_data_20260904_080609.log
+2026-09-04 11:06:10  INFO      __main__  ============================================================
+2026-09-04 11:06:10  INFO      __main__  Market Data Service — starting run 20260904_080609
+2026-09-04 11:06:10  INFO      __main__  ============================================================
+2026-09-04 11:06:10  INFO      __main__  Loading ETF list from: /Users/davidalfassi/Projects/stock-agents/market-data/ETF_list.json
+2026-09-04 11:06:10  INFO      __main__  Symbol cap: ALPHA_VANTAGE_MAX_SYMBOLS=2 — limiting from 44 to 2 symbols.
+2026-09-04 11:06:10  INFO      __main__  Total symbols to fetch: 2
+2026-09-04 11:06:10  INFO      __main__    (Set ALPHA_VANTAGE_MAX_SYMBOLS=0 in .env to fetch all 56)
+2026-09-04 11:06:10  INFO      __main__  Alpha Vantage: 1 sentiment batch call for 2 symbols (free tier: 25 calls/day).
+2026-09-04 11:06:10  DEBUG     asyncio  Using selector: KqueueSelector
+2026-09-04 11:06:10  INFO      fetcher  Downloading quotes for 2 symbols via yfinance...
+2026-09-04 11:06:10  DEBUG     yfinance  get_raw_json(): https://query2.finance.yahoo.com/v10/finance/quoteSummary/XLE
+2026-09-04 11:06:10  DEBUG     yfinance  Entering get()
+2026-09-04 11:06:10  DEBUG     yfinance   Entering _make_request()
+2026-09-04 11:06:10  DEBUG     yfinance  url=https://query2.finance.yahoo.com/v10/finance/quoteSummary/XLE
+2026-09-04 11:06:10  DEBUG     yfinance  params={'modules': 'financialData,quoteType,defaultKeyStatistics,assetProfile,summaryDetail', 'corsDomain': 'finance.yahoo.com', 'formatted': 'false', 'symbol': 'XLE', 'lang': 'en-US', 'region': 'US'}
+2026-09-04 11:06:10  DEBUG     yfinance    Entering _get_cookie_and_crumb()
+2026-09-04 11:06:10  DEBUG     yfinance  cookie_mode = 'basic'
+2026-09-04 11:06:10  DEBUG     yfinance     Entering _get_cookie_and_crumb_basic()
+2026-09-04 11:06:10  DEBUG     yfinance      Entering _get_cookie_basic()
+2026-09-04 11:06:10  DEBUG     yfinance       Entering _load_cookie_curlCffi()
+2026-09-04 11:06:10  DEBUG     peewee  ('CREATE TABLE IF NOT EXISTS "_cookieschema" ("strategy" VARCHAR(255) NOT NULL PRIMARY KEY, "fetch_date" DATETIME NOT NULL, "cookie_bytes" BLOB NOT NULL) WITHOUT ROWID', [])
+2026-09-04 11:06:10  DEBUG     peewee  ('SELECT "t1"."strategy", "t1"."fetch_date", "t1"."cookie_bytes" FROM "_cookieschema" AS "t1" WHERE ("t1"."strategy" = ?) LIMIT ? OFFSET ?', ['curlCffi', 1, 0])
+2026-09-04 11:06:10  DEBUG     yfinance       Exiting _load_cookie_curlCffi()
+2026-09-04 11:06:10  DEBUG     yfinance  reusing persistent cookie
+2026-09-04 11:06:10  DEBUG     yfinance      Exiting _get_cookie_basic()
+2026-09-04 11:06:10  DEBUG     yfinance      Entering _get_crumb_basic()
+2026-09-04 11:06:10  DEBUG     yfinance       Entering _get_cookie_basic()
+2026-09-04 11:06:10  DEBUG     yfinance  reusing cookie
+2026-09-04 11:06:10  DEBUG     yfinance       Exiting _get_cookie_basic()
+2026-09-04 11:06:11  DEBUG     yfinance  crumb = 'ugmS.8vGn4K'
+2026-09-04 11:06:11  DEBUG     yfinance      Exiting _get_crumb_basic()
+2026-09-04 11:06:11  DEBUG     yfinance     Exiting _get_cookie_and_crumb_basic()
+2026-09-04 11:06:11  DEBUG     yfinance    Exiting _get_cookie_and_crumb()
+2026-09-04 11:06:12  DEBUG     yfinance  response code=200
+2026-09-04 11:06:12  DEBUG     yfinance   Exiting _make_request()
+2026-09-04 11:06:12  DEBUG     yfinance  Exiting get()
+2026-09-04 11:06:12  DEBUG     yfinance  get_raw_json(): https://query1.finance.yahoo.com/v7/finance/quote?
+2026-09-04 11:06:12  DEBUG     yfinance  Entering get()
+2026-09-04 11:06:12  DEBUG     yfinance   Entering _make_request()
+2026-09-04 11:06:12  DEBUG     yfinance  url=https://query1.finance.yahoo.com/v7/finance/quote?
+2026-09-04 11:06:12  DEBUG     yfinance  params={'symbols': 'XLE', 'formatted': 'false', 'lang': 'en-US', 'region': 'US'}
+2026-09-04 11:06:12  DEBUG     yfinance    Entering _get_cookie_and_crumb()
+2026-09-04 11:06:12  DEBUG     yfinance  cookie_mode = 'basic'
+2026-09-04 11:06:12  DEBUG     yfinance     Entering _get_cookie_and_crumb_basic()
+2026-09-04 11:06:12  DEBUG     yfinance      Entering _get_cookie_basic()
+2026-09-04 11:06:12  DEBUG     yfinance  reusing cookie
+2026-09-04 11:06:12  DEBUG     yfinance      Exiting _get_cookie_basic()
+2026-09-04 11:06:12  DEBUG     yfinance      Entering _get_crumb_basic()
+2026-09-04 11:06:12  DEBUG     yfinance  reusing crumb
+2026-09-04 11:06:12  DEBUG     yfinance      Exiting _get_crumb_basic()
+2026-09-04 11:06:12  DEBUG     yfinance     Exiting _get_cookie_and_crumb_basic()
+2026-09-04 11:06:12  DEBUG     yfinance    Exiting _get_cookie_and_crumb()
+2026-09-04 11:06:12  DEBUG     yfinance  response code=200
+2026-09-04 11:06:12  DEBUG     yfinance   Exiting _make_request()
+2026-09-04 11:06:12  DEBUG     yfinance  Exiting get()
+2026-09-04 11:06:12  DEBUG     yfinance  Entering get()
+2026-09-04 11:06:12  DEBUG     yfinance   Entering _make_request()
+2026-09-04 11:06:12  DEBUG     yfinance  url=https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/XLE?symbol=XLE&type=trailingPegRatio&period1=1772755200&period2=1788566400
+2026-09-04 11:06:12  DEBUG     yfinance  params=None
+2026-09-04 11:06:12  DEBUG     yfinance    Entering _get_cookie_and_crumb()
+2026-09-04 11:06:12  DEBUG     yfinance  cookie_mode = 'basic'
+2026-09-04 11:06:12  DEBUG     yfinance     Entering _get_cookie_and_crumb_basic()
+2026-09-04 11:06:12  DEBUG     yfinance      Entering _get_cookie_basic()
+2026-09-04 11:06:12  DEBUG     yfinance  reusing cookie
+2026-09-04 11:06:12  DEBUG     yfinance      Exiting _get_cookie_basic()
+2026-09-04 11:06:12  DEBUG     yfinance      Entering _get_crumb_basic()
+2026-09-04 11:06:12  DEBUG     yfinance  reusing crumb
+2026-09-04 11:06:12  DEBUG     yfinance      Exiting _get_crumb_basic()
+2026-09-04 11:06:12  DEBUG     yfinance     Exiting _get_cookie_and_crumb_basic()
+2026-09-04 11:06:12  DEBUG     yfinance    Exiting _get_cookie_and_crumb()
+2026-09-04 11:06:12  DEBUG     yfinance  response code=200
+2026-09-04 11:06:12  DEBUG     yfinance   Exiting _make_request()
+2026-09-04 11:06:12  DEBUG     yfinance  Exiting get()
+2026-09-04 11:06:12  INFO      fetcher    ✓ XLE     price=64.62     chg=-0.74%  pre=64.42     src=info
+2026-09-04 11:06:12  DEBUG     yfinance  get_raw_json(): https://query2.finance.yahoo.com/v10/finance/quoteSummary/XES
+2026-09-04 11:06:12  DEBUG     yfinance  Entering get()
+2026-09-04 11:06:12  DEBUG     yfinance   Entering _make_request()
+2026-09-04 11:06:12  DEBUG     yfinance  url=https://query2.finance.yahoo.com/v10/finance/quoteSummary/XES
+2026-09-04 11:06:12  DEBUG     yfinance  params={'modules': 'financialData,quoteType,defaultKeyStatistics,assetProfile,summaryDetail', 'corsDomain': 'finance.yahoo.com', 'formatted': 'false', 'symbol': 'XES', 'lang': 'en-US', 'region': 'US'}
+2026-09-04 11:06:12  DEBUG     yfinance    Entering _get_cookie_and_crumb()
+2026-09-04 11:06:12  DEBUG     yfinance  cookie_mode = 'basic'
+2026-09-04 11:06:12  DEBUG     yfinance     Entering _get_cookie_and_crumb_basic()
+2026-09-04 11:06:12  DEBUG     yfinance      Entering _get_cookie_basic()
+2026-09-04 11:06:12  DEBUG     yfinance  reusing cookie
+2026-09-04 11:06:12  DEBUG     yfinance      Exiting _get_cookie_basic()
+2026-09-04 11:06:12  DEBUG     yfinance      Entering _get_crumb_basic()
+2026-09-04 11:06:12  DEBUG     yfinance  reusing crumb
+2026-09-04 11:06:12  DEBUG     yfinance      Exiting _get_crumb_basic()
+2026-09-04 11:06:12  DEBUG     yfinance     Exiting _get_cookie_and_crumb_basic()
+2026-09-04 11:06:12  DEBUG     yfinance    Exiting _get_cookie_and_crumb()
+2026-09-04 11:06:13  DEBUG     yfinance  response code=200
+2026-09-04 11:06:13  DEBUG     yfinance   Exiting _make_request()
+2026-09-04 11:06:13  DEBUG     yfinance  Exiting get()
+2026-09-04 11:06:13  DEBUG     yfinance  get_raw_json(): https://query1.finance.yahoo.com/v7/finance/quote?
+2026-09-04 11:06:13  DEBUG     yfinance  Entering get()
+2026-09-04 11:06:13  DEBUG     yfinance   Entering _make_request()
+2026-09-04 11:06:13  DEBUG     yfinance  url=https://query1.finance.yahoo.com/v7/finance/quote?
+2026-09-04 11:06:13  DEBUG     yfinance  params={'symbols': 'XES', 'formatted': 'false', 'lang': 'en-US', 'region': 'US'}
+2026-09-04 11:06:13  DEBUG     yfinance    Entering _get_cookie_and_crumb()
+2026-09-04 11:06:13  DEBUG     yfinance  cookie_mode = 'basic'
+2026-09-04 11:06:13  DEBUG     yfinance     Entering _get_cookie_and_crumb_basic()
+2026-09-04 11:06:13  DEBUG     yfinance      Entering _get_cookie_basic()
+2026-09-04 11:06:13  DEBUG     yfinance  reusing cookie
+2026-09-04 11:06:13  DEBUG     yfinance      Exiting _get_cookie_basic()
+2026-09-04 11:06:13  DEBUG     yfinance      Entering _get_crumb_basic()
+2026-09-04 11:06:13  DEBUG     yfinance  reusing crumb
+2026-09-04 11:06:13  DEBUG     yfinance      Exiting _get_crumb_basic()
+2026-09-04 11:06:13  DEBUG     yfinance     Exiting _get_cookie_and_crumb_basic()
+2026-09-04 11:06:13  DEBUG     yfinance    Exiting _get_cookie_and_crumb()
+2026-09-04 11:06:13  DEBUG     yfinance  response code=200
+2026-09-04 11:06:13  DEBUG     yfinance   Exiting _make_request()
+2026-09-04 11:06:13  DEBUG     yfinance  Exiting get()
+2026-09-04 11:06:13  DEBUG     yfinance  Entering get()
+2026-09-04 11:06:13  DEBUG     yfinance   Entering _make_request()
+2026-09-04 11:06:13  DEBUG     yfinance  url=https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/XES?symbol=XES&type=trailingPegRatio&period1=1772755200&period2=1788566400
+2026-09-04 11:06:13  DEBUG     yfinance  params=None
+2026-09-04 11:06:13  DEBUG     yfinance    Entering _get_cookie_and_crumb()
+2026-09-04 11:06:13  DEBUG     yfinance  cookie_mode = 'basic'
+2026-09-04 11:06:13  DEBUG     yfinance     Entering _get_cookie_and_crumb_basic()
+2026-09-04 11:06:13  DEBUG     yfinance      Entering _get_cookie_basic()
+2026-09-04 11:06:13  DEBUG     yfinance  reusing cookie
+2026-09-04 11:06:13  DEBUG     yfinance      Exiting _get_cookie_basic()
+2026-09-04 11:06:13  DEBUG     yfinance      Entering _get_crumb_basic()
+2026-09-04 11:06:13  DEBUG     yfinance  reusing crumb
+2026-09-04 11:06:13  DEBUG     yfinance      Exiting _get_crumb_basic()
+2026-09-04 11:06:13  DEBUG     yfinance     Exiting _get_cookie_and_crumb_basic()
+2026-09-04 11:06:13  DEBUG     yfinance    Exiting _get_cookie_and_crumb()
+2026-09-04 11:06:13  DEBUG     yfinance  response code=200
+2026-09-04 11:06:13  DEBUG     yfinance   Exiting _make_request()
+2026-09-04 11:06:13  DEBUG     yfinance  Exiting get()
+2026-09-04 11:06:13  DEBUG     yfinance  Entering history()
+2026-09-04 11:06:13  DEBUG     peewee  ('CREATE TABLE IF NOT EXISTS "_tz_kv" ("key" VARCHAR(255) NOT NULL PRIMARY KEY, "value" VARCHAR(255)) WITHOUT ROWID', [])
+2026-09-04 11:06:13  DEBUG     peewee  ('SELECT "t1"."key", "t1"."value" FROM "_tz_kv" AS "t1" WHERE ("t1"."key" = ?) LIMIT ? OFFSET ?', ['XES', 1, 0])
+2026-09-04 11:06:13  DEBUG     yfinance   Entering history()
+2026-09-04 11:06:13  DEBUG     yfinance  XES: Yahoo GET parameters: {'range': '2d', 'interval': '1m', 'includePrePost': True, 'events': 'div,splits,capitalGains'}
+2026-09-04 11:06:13  DEBUG     yfinance    Entering get()
+2026-09-04 11:06:13  DEBUG     yfinance     Entering _make_request()
+2026-09-04 11:06:13  DEBUG     yfinance  url=https://query2.finance.yahoo.com/v8/finance/chart/XES
+2026-09-04 11:06:13  DEBUG     yfinance  params={'range': '2d', 'interval': '1m', 'includePrePost': True, 'events': 'div,splits,capitalGains'}
+2026-09-04 11:06:13  DEBUG     yfinance      Entering _get_cookie_and_crumb()
+2026-09-04 11:06:13  DEBUG     yfinance  cookie_mode = 'basic'
+2026-09-04 11:06:13  DEBUG     yfinance       Entering _get_cookie_and_crumb_basic()
+2026-09-04 11:06:13  DEBUG     yfinance        Entering _get_cookie_basic()
+2026-09-04 11:06:13  DEBUG     yfinance  reusing cookie
+2026-09-04 11:06:13  DEBUG     yfinance        Exiting _get_cookie_basic()
+2026-09-04 11:06:13  DEBUG     yfinance        Entering _get_crumb_basic()
+2026-09-04 11:06:13  DEBUG     yfinance  reusing crumb
+2026-09-04 11:06:13  DEBUG     yfinance        Exiting _get_crumb_basic()
+2026-09-04 11:06:13  DEBUG     yfinance       Exiting _get_cookie_and_crumb_basic()
+2026-09-04 11:06:13  DEBUG     yfinance      Exiting _get_cookie_and_crumb()
+2026-09-04 11:06:13  DEBUG     yfinance  response code=200
+2026-09-04 11:06:13  DEBUG     yfinance     Exiting _make_request()
+2026-09-04 11:06:13  DEBUG     yfinance    Exiting get()
+2026-09-04 11:06:13  DEBUG     yfinance  XES: yfinance received OHLC data: 2026-09-03 08:00:00 -> 2026-09-03 23:47:00
+2026-09-04 11:06:13  DEBUG     yfinance  XES: OHLC after cleaning: 2026-09-03 04:00:00-04:00 -> 2026-09-03 19:47:00-04:00
+2026-09-04 11:06:13  DEBUG     yfinance  XES: OHLC after combining events: 2026-09-03 04:00:00-04:00 -> 2026-09-03 19:47:00-04:00
+2026-09-04 11:06:13  DEBUG     yfinance  XES: yfinance returning OHLC: 2026-09-03 04:00:00-04:00 -> 2026-09-03 19:47:00-04:00
+2026-09-04 11:06:13  DEBUG     yfinance   Exiting history()
+2026-09-04 11:06:13  DEBUG     yfinance  Exiting history()
+2026-09-04 11:06:13  INFO      fetcher    ✓ XES     price=123.15    chg=-1.58%  pre=125.13    src=history
+2026-09-04 11:06:13  INFO      fetcher  Fetching sentiment via Alpha Vantage (batches of 50)...
+2026-09-04 11:06:13  DEBUG     httpcore.connection  connect_tcp.started host='www.alphavantage.co' port=443 local_address=None timeout=60 socket_options=None
+2026-09-04 11:06:14  DEBUG     httpcore.connection  connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x12d763e00>
+2026-09-04 11:06:14  DEBUG     httpcore.connection  start_tls.started ssl_context=<ssl.SSLContext object at 0x12d7b7e30> server_hostname='www.alphavantage.co' timeout=60
+2026-09-04 11:06:14  DEBUG     httpcore.connection  start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x12d7520d0>
+2026-09-04 11:06:14  DEBUG     httpcore.http11  send_request_headers.started request=<Request [b'GET']>
+2026-09-04 11:06:14  DEBUG     httpcore.http11  send_request_headers.complete
+2026-09-04 11:06:14  DEBUG     httpcore.http11  send_request_body.started request=<Request [b'GET']>
+2026-09-04 11:06:14  DEBUG     httpcore.http11  send_request_body.complete
+2026-09-04 11:06:14  DEBUG     httpcore.http11  receive_response_headers.started request=<Request [b'GET']>
+2026-09-04 11:06:14  DEBUG     httpcore.http11  receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Fri, 04 Sep 2026 08:06:14 GMT'), (b'Content-Type', b'application/json'), (b'Transfer-Encoding', b'chunked'), (b'Connection', b'keep-alive'), (b'allow', b'GET, HEAD, OPTIONS'), (b'cross-origin-opener-policy', b'same-origin'), (b'nel', b'{"report_to":"heroku-nel","response_headers":["Via"],"max_age":3600,"success_fraction":0.01,"failure_fraction":0.1}'), (b'referrer-policy', b'same-origin'), (b'report-to', b'{"group":"heroku-nel","endpoints":[{"url":"https://nel.heroku.com/reports?s=lVmgVqPidRTMqJH3XfJ7TsI7xA0JHry79pAIixMFJEY%3D\\u0026sid=1b10b0ff-8a76-4548-befa-353fc6c6c045\\u0026ts=1788509174"}],"max_age":3600}'), (b'reporting-endpoints', b'heroku-nel="https://nel.heroku.com/reports?s=lVmgVqPidRTMqJH3XfJ7TsI7xA0JHry79pAIixMFJEY%3D&sid=1b10b0ff-8a76-4548-befa-353fc6c6c045&ts=1788509174"'), (b'Server', b'cloudflare'), (b'vary', b'Cookie, Origin'), (b'via', b'2.0 heroku-router'), (b'x-content-type-options', b'nosniff'), (b'x-frame-options', b'DENY'), (b'cf-cache-status', b'DYNAMIC'), (b'Content-Encoding', b'gzip'), (b'CF-RAY', b'a35b7e64d99fb7c6-LHR')])
+2026-09-04 11:06:14  INFO      httpx  HTTP Request: GET https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers=XLE%2CXES&limit=200&apikey=AHYPHWHSPW5EYGNQ "HTTP/1.1 200 OK"
+2026-09-04 11:06:14  DEBUG     httpcore.http11  receive_response_body.started request=<Request [b'GET']>
+2026-09-04 11:06:14  DEBUG     httpcore.http11  receive_response_body.complete
+2026-09-04 11:06:14  DEBUG     httpcore.http11  response_closed.started
+2026-09-04 11:06:14  DEBUG     httpcore.http11  response_closed.complete
+2026-09-04 11:06:14  WARNING   fetcher  Sentiment API limit hit: We have detected your API key as AHYPHWHSPW5EYGNQ and our standard API rate limit is 25 requests per day. Please subscribe to any of the premium plans at https://www.alphavantage.co/premium/ to instantly remove all daily rate limits.
+2026-09-04 11:06:14  DEBUG     httpcore.connection  close.started
+2026-09-04 11:06:14  DEBUG     httpcore.connection  close.complete
+2026-09-04 11:06:14  INFO      __main__  ============================================================
+2026-09-04 11:06:14  INFO      __main__  Run complete in 3.7s
+2026-09-04 11:06:14  INFO      __main__  Symbols fetched: 2/2 (failed: 0)
+2026-09-04 11:06:14  INFO      __main__  Output written: /Users/davidalfassi/Projects/stock-agents/market-data/outputs/market_20260904_080609.json
+2026-09-04 11:06:14  INFO      __main__  ============================================================

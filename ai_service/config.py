@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     llm_timeout_seconds: int = 60
     llm_max_retries: int = 5
     llm_request_delay_seconds: float = 0.0
+    llm_json_mode: bool = True  # set False for models that don't support response_format JSON mode (e.g. openrouter/owl-alpha)
 
     # Agent behavior
     agent_mode: str = "parallel"  # parallel | chain
@@ -43,11 +44,15 @@ class Settings(BaseSettings):
     search_depth: str = "basic"  # basic | advanced
     search_mode: str = "prefetch"  # prefetch | tool_call
     search_max_tool_rounds: int = 10  # max LLM↔tool cycles before forcing final answer
+    search_days: int = 3              # Tavily `days` param — hard cutoff (3 = last 72h)
 
     # Pre-market data
     finnhub_api_key: str = ""
     premarket_enabled: bool = True
     premarket_source: str = "auto"         # auto | finnhub | yfinance
+
+    # Market data enrichment
+    market_data_output_dir: str = "market-data/outputs"
 
     # Service
     ai_service_port: int = 4102

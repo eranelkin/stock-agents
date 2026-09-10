@@ -1,6 +1,41 @@
 screener:
-  # IB scanner parameters
-  number_of_rows: 30  #### Max symbols per IB scanner call (hard cap = 50) ###
+# (number_of_rows: 24, phase2_batch_limit: 27,
+#   max_number_of_stocks: 8):                                                                                                                      
+                                                                                                                                               
+#   ┌───────────────────────┬──────────────────────────────────────────┬───────────────────────────┐                                               
+#   │         Step          │               What happens               │           Value           │                                               
+#   ├───────────────────────┼──────────────────────────────────────────┼───────────────────────────┤                                               
+#   │ Scanner (iteration 0) │ Requests 24 rows/batch × 2 batches       │ up to 48 candidates       │                                               
+#   ├───────────────────────┼──────────────────────────────────────────┼───────────────────────────┤                                               
+#   │ Phase 1               │ Cheap filters (price, pre-mkt %, sector) │ ~20–30 survive            │                                               
+#   ├───────────────────────┼──────────────────────────────────────────┼───────────────────────────┤                                               
+#   │ Phase 2 cap           │ Truncated to phase2_batch_limit          │ max 27 enter Phase 2      │                                               
+#   ├───────────────────────┼──────────────────────────────────────────┼───────────────────────────┤                                               
+#   │ Historical requests   │ 27 × 2 = 54 requests                     │ under 59 limit → no pause │                                             
+#   ├───────────────────────┼──────────────────────────────────────────┼───────────────────────────┤                                               
+#   │ Phase 2 filters       │ ATR, volume, pre-mkt vol                 │ maybe 5–10 pass           │                                             
+#   ├───────────────────────┼──────────────────────────────────────────┼───────────────────────────┤                                               
+#   │ Top-up check          │ 5–10 < target (8) → run top-up           │ if needed                 │                                             
+#   ├───────────────────────┼──────────────────────────────────────────┼───────────────────────────┤                                               
+#   │ Top-up (iteration 1)  │ 48 rows/batch → capped to 27 in Phase 2  │ stops when 8 total pass   │                                             
+#   ├───────────────────────┼──────────────────────────────────────────┼───────────────────────────┤                                               
+#   │ Output                │ Truncated to max_number_of_stocks        │ 8 stocks written          │                                             
+#   └───────────────────────┴──────────────────────────────────────────┴───────────────────────────┘                                               
+                                                                                                                                               
+#   Three independent concerns are now properly separated — scanner breadth (number_of_rows), rate limit safety (phase2_batch_limit), and output   
+#   size (max_number_of_stocks). Safe to run.          
+#Fix A — Top-up target (screener_pipeline.py line ~791): Changed target = screener_config.number_of_rows (24) to target =                       
+#   app_config.max_number_of_stocks (8). The top-up loop now stops as soon as 8 stocks pass all filters instead of running until 24 pass.          
+                                                                                                                                                 
+#   Fix B — Phase 2 batch limit (3 files):                                                                                                                                                                                 
+#   - screener_pipeline.py: Before calling _phase2_enrich, the survivors list is capped at 27 (27 × 2 requests = 54, safely under IB's 59/10-min
+#   limit)   
+  # IB scanner parameters best is 24 
+  number_of_rows: 2  ####  best value for prod 24 Max symbols per IB scanner call (hard cap = 50) ###
+  # Max Phase 1 survivors sent to Phase 2 per iteration.
+  # IB allows 59 historical requests per 10 min. With 2 req/stock (daily bars + pre-market bars):
+  # 27 × 2 = 54 requests → safely under limit. Prevents the ~8 min rate-limit pause.
+  phase2_batch_limit: 2 # 27 best value for prod  27
   scan_code: "TOP_PERC_GAIN"     # Rank by pre-market % gainers
   instrument: "STK"
   stockTypeFilter : "STOCK"     # Filter out ETFs/ETNs (stockType check via IB ContractDetails)
@@ -28,7 +63,7 @@ screener:
   # the streaming tick undercounts by 40–50% and would incorrectly drop valid stocks.
   exclude_etfs: true             # drop ETFs/ETNs from results (stockType check via IB ContractDetails)
   price_min: 2.0                 # minimum stock price (filters penny stocks)
-  pre_market_chg_pct_min: 2  # defualt 2% minimum pre-market change % — drops flat/down stocks before expensive fetches
+  pre_market_chg_pct_min: 1  # defualt 2% minimum pre-market change % — drops flat/down stocks before expensive fetches
                                  # Set to null to disable
 
   # ── Phase 2 filters (applied after historical bars and pre-market bars are fetched) ──

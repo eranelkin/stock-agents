@@ -119,6 +119,11 @@ def _check_premarket_hours(tz_name: str) -> bool:
     default=None,
     help="Comma-separated model IDs to use for the analysis run. Overrides settings.yaml model_names.",
 )
+@click.option(
+    "--run-id",
+    default=None,
+    help="Existing Run ID (UUID) to continue after IBK pull. When set, start-ai is called instead of creating a new run.",
+)
 def main(
     mode: str | None,
     use_scheduler: bool,
@@ -128,6 +133,7 @@ def main(
     log_level: str,
     only_pull: bool,
     model_ids: str | None,
+    run_id: str | None,
 ) -> None:
     log_mode = "scheduler" if use_scheduler else (mode or "run")
     _setup_logging(log_level.upper(), mode=log_mode)
@@ -202,6 +208,7 @@ def main(
                 candle_frequency=sa.candle_frequency,
                 model_ids=explicit_model_ids,
                 model_names=sa.model_names or None if not explicit_model_ids else None,
+                run_id=run_id,
             )
 
 

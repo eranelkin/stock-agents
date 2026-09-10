@@ -788,7 +788,9 @@ async def collect_screener_records(
         return passing_records, batch_drop_log
 
     # ── Orchestration loop: initial pass + up to 2 top-up passes ─────────────
-    target = screener_config.number_of_rows
+    # Target: stop once this many stocks pass ALL Phase 2 filters (= what ends up in output).
+    # Using number_of_rows would over-process — Phase 2 would run until 24 pass, then truncate to 8.
+    target = app_config.max_number_of_stocks if app_config and app_config.max_number_of_stocks else screener_config.number_of_rows
     seen: set[str] = set()
     all_records: list[StockRecord] = []
     all_drop_log: dict[str, str] = {}
@@ -816,7 +818,7 @@ async def collect_screener_records(
                 iteration, _MAX_TOPUP_ITERATIONS - 1, len(all_records), target,
             )
 
-        rows_to_request = min((iteration + 1) * target, 50)
+        rows_to_request = min((iteration + 1) * screener_config.number_of_rows, 50)
         scan_cfg = dataclasses.replace(screener_config, number_of_rows=rows_to_request)
         raw_syms = await run_scanner_batches(ib, scan_cfg)
         await asyncio.sleep(8.0)
@@ -847,8 +849,21 @@ async def collect_screener_records(
             log.info("No symbols survived Phase 1 filter for this iteration")
             continue
 
-        # Phase 2: expensive — only for Phase 1 survivors
-        batch_records, p2_drops = await _phase2_enrich(p1_infos, p1_snaps)
+        # Phase 2: expensive — only for Phase 1 survivors, capped to avoid IB rate limit.
+        # Each stock uses 2 historical requests (daily bars + pre-market bars).
+        # phase2_batch_limit (default 27) × 2 = 54 requests, safely under the 59/10-min IB limit.
+        p2_limit = screener_config.phase2_batch_limit
+        if len(p1_infos) > p2_limit:
+            log.info(
+                "Phase 2 batch limit: capping %d Phase 1 survivors to %d (skipping %d to avoid IB rate limit)",
+                len(p1_infos), p2_limit, len(p1_infos) - p2_limit,
+            )
+            p1_infos_capped = dict(list(p1_infos.items())[:p2_limit])
+            p1_snaps_capped = {s: p1_snaps[s] for s in p1_infos_capped if s in p1_snaps}
+        else:
+            p1_infos_capped = p1_infos
+            p1_snaps_capped = p1_snaps
+        batch_records, p2_drops = await _phase2_enrich(p1_infos_capped, p1_snaps_capped)
         all_records.extend(batch_records)
         all_drop_log.update(p2_drops)
 

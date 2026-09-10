@@ -191,6 +191,7 @@ class ScreenerConfig:
     pre_market_chg_pct_min: Optional[float] = None  # Phase 1 fast filter on snapshot chg%
     exclude_sectors: List[str] = field(default_factory=list)
     scan_batches: List[ScannerBatch] = field(default_factory=list)
+    phase2_batch_limit: int = 27  # max Phase 1 survivors sent to Phase 2 per iteration (prevents IB rate limit)
 
 
 @dataclass

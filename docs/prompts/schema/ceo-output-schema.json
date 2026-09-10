@@ -44,7 +44,8 @@
         "sector sympathy": { "type": "string", "description": "relative industry strength assessment (is it a leader or laggard?)" },
         "spx/qqq_corr": { "type": "number", "description": "beta context and market correlation coefficient" },
         "ai_suggestion": { "type": "string", "description": "(mark with “v” if ceo-added beyond specialist list)" },
-        "ai_model_name": { "type": "string", "description": "what is your AI model name?" }
+        "ai_model_name": { "type": "string", "description": "what is your AI model name?" },
+        "float_turnover_ratio": { "type": ["number", "null"], "description": "Pre-market volume divided by float shares. Measures float rotation intensity pre-market. Values >0.10 signal high participation; <0.01 is negligible." }
       },
       "required": [
         "symbol",
@@ -76,7 +77,8 @@
         "sector sympathy",
         "spx/qqq_corr",
         "ai_suggestion",
-        "ai_model_name"
+        "ai_model_name",
+        "float_turnover_ratio"
       ],
       "additionalProperties": false
     }

@@ -1,16 +1,20 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 import uuid
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import settings
+from backend.db.models import Run
+from backend.db.session import get_session
 
 router = APIRouter(prefix="/screener", tags=["screener"])
 
@@ -39,6 +43,7 @@ async def _run_subprocess(session_id: str, cmd: list[str], cwd: str) -> None:
             cwd=cwd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
+            env={**os.environ, "PYTHONUNBUFFERED": "1"},
         )
         session["proc"] = proc
         assert proc.stdout is not None
@@ -58,8 +63,13 @@ async def _run_subprocess(session_id: str, cmd: list[str], cwd: str) -> None:
 async def trigger_screener(
     body: TriggerRequest,
     background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_session),
 ) -> JSONResponse:
-    """Spawn an interactive-service CLI subprocess and return a session_id for log tracking."""
+    """Spawn an interactive-service CLI subprocess and return a session_id for log tracking.
+
+    For modes that include AI analysis (screener, merged), a Run record is created immediately
+    with status 'fetching' so the run appears in the UI during the IBK pull phase.
+    """
     _prune_sessions()
 
     python = settings.interactive_service_python
@@ -67,16 +77,33 @@ async def trigger_screener(
     main_py = str(base_path / "main.py")
 
     if body.mode == "screener":
-        cmd = [python, main_py, "--mode", "screener"]
+        cmd = [python, "-u", main_py, "--mode", "screener"]
     elif body.mode == "screener-only-pull":
-        cmd = [python, main_py, "--mode", "screener", "--only-pull"]
+        cmd = [python, "-u", main_py, "--mode", "screener", "--only-pull"]
     else:
-        cmd = [python, main_py, "--mode", "merged"]
+        cmd = [python, "-u", main_py, "--mode", "merged"]
 
     if body.model_ids:
         cmd += ["--model-ids", ",".join(body.model_ids)]
 
     session_id = str(uuid.uuid4())
+
+    # For pull-only mode there is no AI run, so no Run record is needed.
+    run_id: str | None = None
+    if body.mode != "screener-only-pull":
+        from datetime import datetime
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+        run = Run(
+            status="fetching",
+            name=f"IBK Pull — {ts}",
+            ibk_session_id=session_id,
+        )
+        session.add(run)
+        await session.commit()
+        await session.refresh(run)
+        run_id = str(run.id)
+        cmd += ["--run-id", run_id]
+
     _sessions[session_id] = {
         "lines": [],
         "done": False,
@@ -84,10 +111,11 @@ async def trigger_screener(
         "created_at": time.time(),
         "mode": body.mode,
         "proc": None,
+        "run_id": run_id,
     }
 
     background_tasks.add_task(_run_subprocess, session_id, cmd, str(base_path))
-    return JSONResponse({"session_id": session_id}, status_code=202)
+    return JSONResponse({"session_id": session_id, "run_id": run_id}, status_code=202)
 
 
 @router.post("/stop/{session_id}", status_code=200)
@@ -202,8 +230,18 @@ function setDone(returnCode) {{
 function poll() {{
   if (done) return;
   fetch('/screener/log-rows/{session_id}?since=' + since)
-    .then(function(r) {{ return r.json(); }})
+    .then(function(r) {{
+      if (r.status === 404) {{
+        done = true;
+        var chip = document.getElementById('status-chip');
+        chip.textContent = 'Session expired (backend restarted)';
+        chip.className = 'status-chip done';
+        return null;
+      }}
+      return r.json();
+    }})
     .then(function(data) {{
+      if (!data) return;
       if (data.lines && data.lines.length > 0) {{
         appendLines(data.lines);
         since += data.lines.length;

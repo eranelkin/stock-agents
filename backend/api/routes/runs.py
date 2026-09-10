@@ -21,6 +21,8 @@ from backend.api.broadcaster import broadcaster
 from backend.config import settings
 from backend.db.models import AIModel, Prompt, Run, TickerResult
 from backend.db.session import AsyncSessionLocal, get_session
+from pydantic import BaseModel
+
 from backend.schemas.run import BulkDeleteRequest, RunCreate, RunResponse
 
 router = APIRouter(prefix="/runs", tags=["runs"])
@@ -41,19 +43,16 @@ _SECTOR_SCHEMA: dict | None = _load_schema("sector_schema.json")
 _MACRO_SCHEMA: dict | None = _load_schema("macro_schema.json")
 
 
-def _build_ceo_input_schema(agent_prompts: list[Prompt]) -> dict | None:
+def _build_ceo_input_schema(agent_prompts: list[Prompt]) -> dict:
     """Build the CEO input schema from active stock agent output schemas.
 
-    Returns None if no agent has an output_schema defined yet.
-    The CEO always receives {"name": <ticker>, "agents": {<title>: <agent_output>, ...}}.
+    The CEO receives {"name": <ticker>, "agents": {...}, "macro_analysis": {...}}.
+    macro_analysis is the full output of the Macro agent for this run.
     """
     agent_properties: dict[str, Any] = {}
     for p in agent_prompts:
         if p.output_schema:
             agent_properties[p.title] = p.output_schema
-
-    if not agent_properties:
-        return None
 
     return {
         "type": "object",
@@ -62,6 +61,26 @@ def _build_ceo_input_schema(agent_prompts: list[Prompt]) -> dict | None:
             "agents": {
                 "type": "object",
                 "properties": agent_properties,
+            },
+            "macro_analysis": {
+                "type": "object",
+                "nullable": True,
+                "description": (
+                    "Macro agent's full output analysis for this run: market regime, "
+                    "VIX/SPY/QQQ readings, macro news events with risk-on/off rating, "
+                    "and sector context. Use this as the macro specialist's already-interpreted "
+                    "market view — do not re-derive what the macro agent has already concluded."
+                ),
+            },
+            "sector_etf": {
+                "type": "object",
+                "nullable": True,
+                "description": (
+                    "Live market data for the sector ETF that corresponds to this stock's industry. "
+                    "Fields: etf (symbol), name, sector, quote (price/change_percent/volume), "
+                    "pre_market (price/change/change_percent), sentiment (score/label/bullish_signals/bearish_signals). "
+                    "Use this to assess whether the stock is moving with or against its sector."
+                ),
             },
         },
         "required": ["name", "agents"],
@@ -73,9 +92,6 @@ async def create_run(
     body: RunCreate, session: AsyncSession = Depends(get_session)
 ) -> Run:
     """Create a Run record and trigger the AI service to begin processing."""
-    if not body.tickers:
-        raise HTTPException(status_code=400, detail="Tickers list is empty.")
-
     result = await session.execute(
         select(AIModel).where(
             AIModel.id.in_(body.model_ids),
@@ -94,11 +110,6 @@ async def create_run(
         select(Prompt).where(Prompt.category == "agents", Prompt.is_active == True)  # noqa: E712
     )
     agent_prompts = prompt_result.scalars().all()
-    if not agent_prompts:
-        raise HTTPException(
-            status_code=400,
-            detail="No active Agent prompts configured. Enable prompts in the Agents tab first.",
-        )
 
     sector_prompt_result = await session.execute(
         select(Prompt).where(Prompt.category == "sectors", Prompt.is_active == True)  # noqa: E712
@@ -109,6 +120,13 @@ async def create_run(
         select(Prompt).where(Prompt.category == "macro", Prompt.is_active == True)  # noqa: E712
     )
     macro_prompts = macro_prompt_result.scalars().all()
+
+    # At least one pipeline must have something to do.
+    if not body.tickers and not macro_prompts and not sector_prompts:
+        raise HTTPException(
+            status_code=400,
+            detail="Nothing to run: provide tickers or enable Macro/Sector prompts.",
+        )
 
     ceo_prompt_result = await session.execute(
         select(Prompt).where(Prompt.category == "ceo", Prompt.is_active == True)  # noqa: E712
@@ -214,6 +232,169 @@ async def create_run(
     return run
 
 
+class StartAiBody(BaseModel):
+    model_ids: list[uuid.UUID]
+    tickers: list[dict[str, Any]]
+    candle_frequency: str = "1d"
+    enrichment_enabled: bool = True
+
+
+@router.post("/{run_id}/start-ai", response_model=RunResponse)
+async def start_ai_for_run(
+    run_id: uuid.UUID,
+    body: StartAiBody,
+    session: AsyncSession = Depends(get_session),
+) -> Run:
+    """Transition a 'fetching' run to the AI pipeline stage.
+
+    Called by the interactive-service after an IBK pull completes. The run record
+    already exists (created when the screener was triggered). This endpoint queries
+    models/prompts, triggers the AI service, and updates the run status to 'pending'.
+    """
+    run = await session.get(Run, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run.status != "fetching":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Run is in '{run.status}' state — expected 'fetching'",
+        )
+
+    result = await session.execute(
+        select(AIModel).where(
+            AIModel.id.in_(body.model_ids),
+            AIModel.is_active == True,  # noqa: E712
+        )
+    )
+    ai_models = result.scalars().all()
+    if not ai_models:
+        raise HTTPException(
+            status_code=400,
+            detail="No active models found for the provided IDs.",
+        )
+
+    prompt_result = await session.execute(
+        select(Prompt).where(Prompt.category == "agents", Prompt.is_active == True)  # noqa: E712
+    )
+    agent_prompts = prompt_result.scalars().all()
+
+    sector_prompt_result = await session.execute(
+        select(Prompt).where(Prompt.category == "sectors", Prompt.is_active == True)  # noqa: E712
+    )
+    sector_prompts = sector_prompt_result.scalars().all()
+
+    macro_prompt_result = await session.execute(
+        select(Prompt).where(Prompt.category == "macro", Prompt.is_active == True)  # noqa: E712
+    )
+    macro_prompts = macro_prompt_result.scalars().all()
+
+    ceo_prompt_result = await session.execute(
+        select(Prompt).where(Prompt.category == "ceo", Prompt.is_active == True)  # noqa: E712
+    )
+    ceo_prompts = ceo_prompt_result.scalars().all()
+
+    run.model_names = [m.name for m in ai_models]
+    run.ticker_count = len(body.tickers)
+    run.status = "pending"
+    await session.commit()
+    await session.refresh(run)
+
+    model_configs = [
+        {
+            "id": str(m.id),
+            "name": m.name,
+            "model_id": m.model_id,
+            "base_url": m.base_url,
+            "api_key": os.environ.get(m.api_key_env_var) if m.api_key_env_var else None,
+            "search_depth": m.search_depth,
+        }
+        for m in ai_models
+    ]
+
+    ceo_input_schema = _build_ceo_input_schema(list(agent_prompts))
+
+    async with httpx.AsyncClient() as client:
+        try:
+            await client.post(
+                f"{settings.ai_service_url}/run",
+                json={
+                    "run_id": str(run.id),
+                    "models": model_configs,
+                    "tickers": body.tickers,
+                    "candle_frequency": body.candle_frequency,
+                    "enrichment_enabled": body.enrichment_enabled,
+                    "prompts": [
+                        {
+                            "id": str(p.id),
+                            "title": p.title,
+                            "content": p.content,
+                            "search_enabled": p.search_enabled,
+                            "search_query_template": p.search_query_template,
+                            "search_mode": p.search_mode,
+                            "search_depth": p.search_depth,
+                            "output_schema": p.output_schema,
+                            "input_schema": p.input_schema or _TICKER_SCHEMA,
+                            "thinking_budget_tokens": p.thinking_budget_tokens,
+                        }
+                        for p in agent_prompts
+                    ],
+                    "sector_prompts": [
+                        {
+                            "id": str(p.id),
+                            "title": p.title,
+                            "content": p.content,
+                            "search_enabled": p.search_enabled,
+                            "search_query_template": p.search_query_template,
+                            "search_mode": p.search_mode,
+                            "search_depth": p.search_depth,
+                            "output_schema": p.output_schema,
+                            "input_schema": p.input_schema or _SECTOR_SCHEMA,
+                            "thinking_budget_tokens": p.thinking_budget_tokens,
+                        }
+                        for p in sector_prompts
+                    ],
+                    "macro_prompts": [
+                        {
+                            "id": str(p.id),
+                            "title": p.title,
+                            "content": p.content,
+                            "search_enabled": p.search_enabled,
+                            "search_query_template": p.search_query_template,
+                            "search_mode": p.search_mode,
+                            "search_depth": p.search_depth,
+                            "output_schema": p.output_schema,
+                            "input_schema": p.input_schema or _MACRO_SCHEMA,
+                            "thinking_budget_tokens": p.thinking_budget_tokens,
+                        }
+                        for p in macro_prompts
+                    ],
+                    "ceo_prompts": [
+                        {
+                            "id": str(p.id),
+                            "title": p.title,
+                            "content": p.content,
+                            "search_enabled": p.search_enabled,
+                            "search_query_template": p.search_query_template,
+                            "search_mode": p.search_mode,
+                            "search_depth": p.search_depth,
+                            "output_schema": p.output_schema,
+                            "input_schema": ceo_input_schema,
+                            "thinking_budget_tokens": p.thinking_budget_tokens,
+                        }
+                        for p in ceo_prompts
+                    ],
+                },
+                timeout=10.0,
+            )
+        except httpx.HTTPError as exc:
+            run.status = "failed"
+            run.error = f"Could not reach ai-service: {exc}"
+            await session.commit()
+            raise HTTPException(status_code=502, detail="Failed to reach ai-service") from exc
+
+    return run
+
+
 @router.get("", response_model=list[RunResponse])
 async def list_runs(session: AsyncSession = Depends(get_session)) -> list[Run]:
     """Return all runs ordered by creation time descending."""
@@ -240,10 +421,21 @@ async def stream_runs() -> StreamingResponse:
                 yield "data: []\n\n"  # DB unavailable; broadcaster will push real data once it connects
             while True:
                 try:
-                    data = await asyncio.wait_for(q.get(), timeout=15.0)
+                    data = await asyncio.wait_for(q.get(), timeout=5.0)
                     yield f"data: {data}\n\n"
                 except asyncio.TimeoutError:
-                    yield ": keepalive\n\n"
+                    # Broadcaster may have missed an update — re-poll DB directly as fallback
+                    try:
+                        async with AsyncSessionLocal() as session:
+                            result = await session.execute(select(Run).order_by(Run.created_at.desc()))
+                            runs = result.scalars().all()
+                        payload = json.dumps(
+                            [RunResponse.model_validate(r).model_dump(mode="json") for r in runs],
+                            default=str,
+                        )
+                        yield f"data: {payload}\n\n"
+                    except Exception:
+                        yield ": keepalive\n\n"
                 except asyncio.CancelledError:
                     return
         finally:
@@ -265,6 +457,36 @@ async def get_run(run_id: uuid.UUID, session: AsyncSession = Depends(get_session
     return run
 
 
+class FailRunBody(BaseModel):
+    error: str = "No stocks passed the screener filters"
+
+
+@router.post("/{run_id}/fail", response_model=RunResponse)
+async def fail_run(
+    run_id: uuid.UUID,
+    body: FailRunBody = FailRunBody(),
+    session: AsyncSession = Depends(get_session),
+) -> Run:
+    """Mark a run as failed. Used by the interactive-service when no stocks pass the screener."""
+    from datetime import datetime, timezone
+
+    run = await session.get(Run, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run.status not in ("fetching", "pending", "running"):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Run is already in terminal state: {run.status}",
+        )
+
+    run.status = "failed"
+    run.error = body.error
+    run.completed_at = datetime.now(timezone.utc)
+    await session.commit()
+    await session.refresh(run)
+    return run
+
+
 @router.post("/{run_id}/stop", response_model=RunResponse)
 async def stop_run(
     run_id: uuid.UUID, session: AsyncSession = Depends(get_session)
@@ -275,20 +497,21 @@ async def stop_run(
     run = await session.get(Run, run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
-    if run.status not in ("pending", "running"):
+    if run.status not in ("fetching", "pending", "running"):
         raise HTTPException(
             status_code=409,
             detail=f"Run is already in terminal state: {run.status}",
         )
 
-    async with httpx.AsyncClient() as client:
-        try:
-            await client.post(
-                f"{settings.ai_service_url}/stop/{run_id}",
-                timeout=5.0,
-            )
-        except httpx.HTTPError:
-            pass  # best-effort; proceed to mark cancelled in DB regardless
+    if run.status in ("pending", "running"):
+        async with httpx.AsyncClient() as client:
+            try:
+                await client.post(
+                    f"{settings.ai_service_url}/stop/{run_id}",
+                    timeout=5.0,
+                )
+            except httpx.HTTPError:
+                pass  # best-effort; proceed to mark cancelled in DB regardless
 
     run.status = "cancelled"
     run.completed_at = datetime.now(timezone.utc)
@@ -587,6 +810,14 @@ def _try_parse_raw_output(raw: str) -> dict | None:
                 return v
         return obj
 
+    # Strip markdown code fences (```json ... ``` or ``` ... ```)
+    raw = re.sub(r'^```[a-zA-Z]*\n?', '', raw.strip())
+    raw = re.sub(r'\n?```$', '', raw.strip())
+
+    # Fix invalid JSON escape sequences the LLM sometimes emits:
+    # \' is not a valid JSON escape (only \" is); replace with bare apostrophe
+    raw = raw.replace("\\'", "'")
+
     # 1. Try as-is (valid complete JSON)
     try:
         result = json.loads(raw)
@@ -597,6 +828,10 @@ def _try_parse_raw_output(raw: str) -> dict | None:
 
     # 2. Repair: strip trailing incomplete key like `"key":` or `"key": `
     text = re.sub(r',?\s*"[^"]*":\s*$', '', raw.strip())
+
+    # Close any unterminated string value before brace repair
+    if text.count('"') % 2 != 0:
+        text += '"'
 
     # Count unclosed braces and brackets
     opens_brace = text.count('{') - text.count('}')

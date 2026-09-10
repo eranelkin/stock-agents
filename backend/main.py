@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import time
+import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator
 
 from dotenv import load_dotenv
@@ -18,9 +21,27 @@ from sqlalchemy import update as sql_update
 from backend.api.broadcaster import broadcaster
 from backend.api.routes import chat, feargreed, models, prompts, results, runs
 from backend.api.routes.screener import router as screener_router
+from backend.api.routes.market_data import router as market_data_router, _run_subprocess, _sessions
 from backend.config import settings
 from backend.db.models import Run
 from backend.db.session import AsyncSessionLocal
+
+
+async def _scheduled_market_data_job() -> None:
+    """Trigger the market-data CLI as a background subprocess (same as POST /market-data/trigger)."""
+    python = settings.market_data_python
+    base_path = Path(settings.market_data_path).resolve()
+    session_id = str(uuid.uuid4())
+    _sessions[session_id] = {
+        "lines": [],
+        "done": False,
+        "return_code": None,
+        "created_at": time.time(),
+        "proc": None,
+    }
+    asyncio.create_task(
+        _run_subprocess(session_id, [python, "-u", str(base_path / "main.py")], str(base_path))
+    )
 
 
 @asynccontextmanager
@@ -31,7 +52,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     async with AsyncSessionLocal() as session:
         await session.execute(
             sql_update(Run)
-            .where(Run.status.in_(["pending", "running"]))
+            .where(Run.status.in_(["fetching", "pending", "running"]))
             .values(
                 status="failed",
                 completed_at=datetime.now(timezone.utc),
@@ -40,10 +61,28 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
         await session.commit()
 
+    scheduler = None
+    if settings.market_data_schedule_enabled:
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from apscheduler.triggers.cron import CronTrigger
+        scheduler = AsyncIOScheduler()
+        scheduler.add_job(
+            _scheduled_market_data_job,
+            CronTrigger(
+                day_of_week="mon-fri",
+                hour=settings.market_data_schedule_hour,
+                minute=settings.market_data_schedule_minute,
+                timezone="America/New_York",
+            ),
+        )
+        scheduler.start()
+
     task = asyncio.create_task(broadcaster.start(AsyncSessionLocal))
     try:
         yield
     finally:
+        if scheduler is not None:
+            scheduler.shutdown(wait=False)
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
@@ -66,6 +105,7 @@ app.include_router(prompts.router)
 app.include_router(chat.router)
 app.include_router(feargreed.router)
 app.include_router(screener_router)
+app.include_router(market_data_router)
 
 
 @app.get("/health")

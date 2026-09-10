@@ -19,8 +19,13 @@ def trigger_stock_agents_run(
     candle_frequency: str,
     model_ids: list[str] | None = None,
     model_names: list[str] | None = None,
+    run_id: str | None = None,
 ) -> None:
     """Read the interactive-service output file and submit a run to stock-agents backend.
+
+    If run_id is provided, calls POST /runs/{run_id}/start-ai to continue an existing
+    'fetching' run (created when the screener was triggered). Otherwise creates a new run
+    via POST /runs.
 
     If model_ids is provided, uses them directly (UI selection takes priority).
     Otherwise fetches active model IDs from the backend, filtered by model_names if set.
@@ -33,6 +38,19 @@ def trigger_stock_agents_run(
         stocks: list[dict] = data.get("stocks", [])
         if not stocks:
             log.warning("stock_agents_trigger: output file has no stocks — skipping")
+            if run_id:
+                try:
+                    resp = requests.post(
+                        f"{backend_url}/runs/{run_id}/fail",
+                        json={"error": "No stocks passed the screener filters"},
+                        timeout=10,
+                    )
+                    if resp.ok:
+                        log.info("stock_agents_trigger: run %s marked as failed (empty screener output)", run_id)
+                    else:
+                        log.error("stock_agents_trigger: could not fail run %s — HTTP %d", run_id, resp.status_code)
+                except Exception:
+                    log.exception("stock_agents_trigger: error marking run %s as failed", run_id)
             return
 
         if model_ids:
@@ -63,34 +81,55 @@ def trigger_stock_agents_run(
 
             model_ids = [m["id"] for m in models]
 
-        ts = datetime.now().strftime("%Y-%m-%d %H:%M")
-        run_name = f"{run_name_prefix} — {ts} ({len(stocks)} stocks)"
-
-        payload = {
-            "model_ids": model_ids,
-            "name": run_name,
-            "tickers": stocks,
-            "candle_frequency": candle_frequency,
-            "enrichment_enabled": enrichment_enabled,
-        }
-
-        resp = requests.post(f"{backend_url}/runs", json=payload, timeout=30)
-        if not resp.ok:
-            detail = resp.json().get("detail", resp.text) if resp.content else resp.reason
-            log.error(
-                "stock_agents_trigger: backend rejected run — HTTP %d: %s",
-                resp.status_code,
-                detail,
+        if run_id:
+            # Continue an existing 'fetching' run created when the screener was triggered.
+            payload = {
+                "model_ids": model_ids,
+                "tickers": stocks,
+                "candle_frequency": candle_frequency,
+                "enrichment_enabled": enrichment_enabled,
+            }
+            resp = requests.post(f"{backend_url}/runs/{run_id}/start-ai", json=payload, timeout=30)
+            if not resp.ok:
+                detail = resp.json().get("detail", resp.text) if resp.content else resp.reason
+                log.error(
+                    "stock_agents_trigger: backend rejected start-ai — HTTP %d: %s",
+                    resp.status_code,
+                    detail,
+                )
+                return
+            run = resp.json()
+            log.info(
+                "stock_agents_trigger: started AI for run id=%s with %d stocks",
+                run.get("id"),
+                len(stocks),
             )
-            return
-        run = resp.json()
-
-        log.info(
-            "stock_agents_trigger: submitted run id=%s name=%r with %d stocks",
-            run.get("id"),
-            run_name,
-            len(stocks),
-        )
+        else:
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+            run_name = f"{run_name_prefix} — {ts} ({len(stocks)} stocks)"
+            payload = {
+                "model_ids": model_ids,
+                "name": run_name,
+                "tickers": stocks,
+                "candle_frequency": candle_frequency,
+                "enrichment_enabled": enrichment_enabled,
+            }
+            resp = requests.post(f"{backend_url}/runs", json=payload, timeout=30)
+            if not resp.ok:
+                detail = resp.json().get("detail", resp.text) if resp.content else resp.reason
+                log.error(
+                    "stock_agents_trigger: backend rejected run — HTTP %d: %s",
+                    resp.status_code,
+                    detail,
+                )
+                return
+            run = resp.json()
+            log.info(
+                "stock_agents_trigger: submitted run id=%s name=%r with %d stocks",
+                run.get("id"),
+                run_name,
+                len(stocks),
+            )
 
     except requests.exceptions.ConnectionError:
         log.error(

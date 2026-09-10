@@ -34,7 +34,8 @@ import AttachFileIcon from "@mui/icons-material/AttachFile";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CheckIcon from "@mui/icons-material/Check";
 import ArticleIcon from "@mui/icons-material/Article";
-import { createRun, deleteRun, deleteRuns, pollScreenerDone, stopRun, stopScreener, triggerScreener } from "../api/runs";
+import StorageIcon from "@mui/icons-material/Storage";
+import { createRun, deleteRun, deleteRuns, enrichPreview, pollScreenerDone, pollSessionDone, stopMarketData, stopRun, stopScreener, triggerMarketData, triggerScreener } from "../api/runs";
 import CeoResultsPage from "../components/CeoResultsPage";
 import type { Run } from "../types/run";
 
@@ -47,6 +48,7 @@ const STATUS_COLOR: Record<
   string,
   "default" | "info" | "success" | "error" | "warning"
 > = {
+  fetching: "warning",
   pending: "warning",
   running: "info",
   completed: "success",
@@ -83,7 +85,11 @@ export default function RunPage({
   const [now, setNow] = useState(() => Date.now());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
-  const [runMode, setRunMode] = useState<"run" | "pull-run" | "pull" | "watchlist">("run");
+  const [candleFrequency, setCandleFrequency] = useState("1d");
+  const [enrichmentEnabled, setEnrichmentEnabled] = useState(false);
+  const [testingEnrich, setTestingEnrich] = useState(false);
+  const [enrichResults, setEnrichResults] = useState<Record<string, unknown>[] | null>(null);
+  const [runMode, setRunMode] = useState<"run" | "pull-run" | "pull" | "watchlist" | "market-data">("run");
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [pullStage, setPullStage] = useState<string | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -118,7 +124,7 @@ export default function RunPage({
   // Live duration tick + parent notification when active-run state changes
   useEffect(() => {
     const hasActive = runs.some(
-      (r) => r.status === "pending" || r.status === "running",
+      (r) => r.status === "fetching" || r.status === "pending" || r.status === "running",
     );
     onRunActiveChange?.(hasActive);
     if (hasActive) {
@@ -209,25 +215,25 @@ export default function RunPage({
   };
 
   const handleRun = async () => {
-    if (!rawFileText || !selectedFile) return;
     setError(null);
     setStarting(true);
     try {
-      const processedText = rawFileText.replace(
-        /CURRENTDATE/g,
-        formatCurrentDate(),
-      );
-      const lower = selectedFile.name.toLowerCase();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let tickers: Record<string, unknown>[];
-      const rawParsed =
-        lower.endsWith(".yaml") || lower.endsWith(".yml")
-          ? jsyaml.load(processedText)
-          : JSON.parse(processedText);
-      tickers = extractTickers(rawParsed) ?? [];
+      let tickers: Record<string, unknown>[] = [];
+      let runName = "macro-sector-run";
+      if (rawFileText && selectedFile) {
+        const processedText = rawFileText.replace(/CURRENTDATE/g, formatCurrentDate());
+        const lower = selectedFile.name.toLowerCase();
+        const rawParsed =
+          lower.endsWith(".yaml") || lower.endsWith(".yml")
+            ? jsyaml.load(processedText)
+            : JSON.parse(processedText);
+        tickers = extractTickers(rawParsed) ?? [];
+        runName = selectedFile.name;
+      }
       const created = await createRun(
         selectedModelIds,
-        selectedFile.name,
+        runName,
         tickers,
       );
       setRuns((prev) => [created, ...prev]);
@@ -242,10 +248,11 @@ export default function RunPage({
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:4101";
 
   const RUN_MODE_OPTIONS = [
-    { mode: "run" as const,       label: "Run",                  desc: "AI analysis on uploaded file" },
-    { mode: "pull-run" as const,  label: "Pull & Run",           desc: "Pull from IBK then run AI analysis" },
-    { mode: "pull" as const,      label: "Pull",                 desc: "Pull from IBK only (no analysis)" },
-    { mode: "watchlist" as const, label: "Run-Pull - Watchlist", desc: "Screener + watchlist, then AI analysis" },
+    { mode: "run" as const,         label: "Run",                  desc: "AI analysis on uploaded file" },
+    { mode: "pull-run" as const,    label: "Pull & Run",           desc: "Pull from IBK then run AI analysis" },
+    { mode: "pull" as const,        label: "Pull",                 desc: "Pull from IBK only (no analysis)" },
+    { mode: "watchlist" as const,   label: "Run-Pull - Watchlist", desc: "Screener + watchlist, then AI analysis" },
+    { mode: "market-data" as const, label: "Get market data",      desc: "Fetch ETF, S&P 500, VIX & sentiment via Alpha Vantage" },
   ] as const;
 
   const runModeLabel = RUN_MODE_OPTIONS.find((o) => o.mode === runMode)?.label ?? "Run";
@@ -271,20 +278,42 @@ export default function RunPage({
     }
   };
 
+  const handleMarketDataClick = async () => {
+    setError(null);
+    setStarting(true);
+    setPullStage("Fetching ETF, S&P 500, VIX & sentiment data…");
+    try {
+      const { session_id } = await triggerMarketData();
+      setActiveSessionId(session_id);
+      window.open(`${BACKEND_URL}/market-data/log/${session_id}`, "_blank");
+      pollSessionDone(`${BACKEND_URL}/market-data/log-rows/${session_id}`, () => { setPullStage(null); setActiveSessionId(null); });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to trigger market data fetch");
+      setPullStage(null);
+    } finally {
+      setStarting(false);
+    }
+  };
+
   const handleRunClick = async () => {
-    if (runMode === "run")       return handleRun();
-    if (runMode === "pull-run")  return handlePullClick("screener");
-    if (runMode === "pull")      return handlePullClick("screener-only-pull");
-    if (runMode === "watchlist") return handlePullClick("merged");
+    if (runMode === "run")          return handleRun();
+    if (runMode === "pull-run")     return handlePullClick("screener");
+    if (runMode === "pull")         return handlePullClick("screener-only-pull");
+    if (runMode === "watchlist")    return handlePullClick("merged");
+    if (runMode === "market-data")  return handleMarketDataClick();
   };
 
   const handleStopAll = async () => {
     setStopping(true);
+    const sessionId = activeSessionId;
+    const mode = runMode;
     try {
-      if (activeSessionId) {
-        await stopScreener(activeSessionId);
-        setPullStage(null);
-        setActiveSessionId(null);
+      if (sessionId) {
+        if (mode === "market-data") {
+          await stopMarketData(sessionId);
+        } else {
+          await stopScreener(sessionId);
+        }
       }
       const activeRun = runs.find((r) => r.status === "pending" || r.status === "running");
       if (activeRun) {
@@ -293,6 +322,8 @@ export default function RunPage({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to stop");
     } finally {
+      setPullStage(null);
+      setActiveSessionId(null);
       setStopping(false);
     }
   };
@@ -305,6 +336,9 @@ export default function RunPage({
     )
       return;
     try {
+      if (run.status === "fetching" && run.ibk_session_id) {
+        await stopScreener(run.ibk_session_id);
+      }
       await stopRun(run.id);
       // SSE broadcaster will push the updated status automatically
     } catch (err) {
@@ -371,15 +405,17 @@ export default function RunPage({
   const displayedRuns = sorted;
 
   const runInProgress = runs.some(
-    (r) => r.status === "pending" || r.status === "running",
+    (r) => r.status === "fetching" || r.status === "pending" || r.status === "running",
   );
   const runDisabled =
     starting ||
     runInProgress ||
     Boolean(pullStage) ||
-    (runMode === "run" && (!selectedFile || !rawFileText || selectedModelIds.length === 0)) ||
+    (runMode === "run" && selectedModelIds.length === 0) ||
     (runMode === "pull-run" && selectedModelIds.length === 0) ||
-    (runMode === "watchlist" && selectedModelIds.length === 0);
+    (runMode === "watchlist" && selectedModelIds.length === 0)
+    // market-data mode has no extra requirements
+    // "run" mode no longer requires a file — macro/sector-only runs work without tickers
 
   return (
     <Box
@@ -545,6 +581,11 @@ export default function RunPage({
       {selectedModelIds.length === 0 && selectedFile && (
         <Alert severity="warning">
           Select one or more models from the header dropdown.
+        </Alert>
+      )}
+      {selectedModelIds.length === 0 && ["pull-run", "watchlist"].includes(runMode) && (
+        <Alert severity="warning">
+          &ldquo;{RUN_MODE_OPTIONS.find(o => o.mode === runMode)?.label}&rdquo; runs AI analysis after pulling — select one or more models from the header dropdown to enable the button.
         </Alert>
       )}
 
@@ -859,7 +900,7 @@ export default function RunPage({
                           ? new Date(run.completed_at).getTime()
                           : null;
                         const active =
-                          run.status === "pending" || run.status === "running";
+                          run.status === "fetching" || run.status === "pending" || run.status === "running";
                         if (active) {
                           return (
                             <Typography
@@ -900,7 +941,7 @@ export default function RunPage({
                     </TableCell>
                     <TableCell sx={{ borderColor: "rgba(255,255,255,0.06)" }}>
                       <Chip
-                        label={run.status.toUpperCase()}
+                        label={run.status === "fetching" ? "FETCHING DATA" : run.status.toUpperCase()}
                         color={STATUS_COLOR[run.status] ?? "default"}
                         size="small"
                         sx={{
@@ -925,7 +966,8 @@ export default function RunPage({
                           gap: 0.75,
                         }}
                       >
-                        {(run.status === "pending" ||
+                        {(run.status === "fetching" ||
+                          run.status === "pending" ||
                           run.status === "running") && (
                           <Tooltip title="Stop run">
                             <Box
@@ -965,7 +1007,28 @@ export default function RunPage({
                             </Box>
                           </Tooltip>
                         )}
-                        <Tooltip title="View live log">
+                        {run.ibk_session_id && (
+                          <Tooltip title="View IBK pull log">
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() =>
+                                  window.open(
+                                    `${import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:4101"}/screener/log/${run.ibk_session_id}`,
+                                    "_blank",
+                                  )
+                                }
+                                sx={{
+                                  color: "text.secondary",
+                                  "&:hover": { color: "#fbbf24" },
+                                }}
+                              >
+                                <StorageIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        )}
+                        <Tooltip title="View AI analysis log">
                           <span>
                             <IconButton
                               size="small"

@@ -27,8 +27,8 @@ export async function stopScreener(sessionId: string): Promise<void> {
   }
 }
 
-export async function pollScreenerDone(
-  sessionId: string,
+export async function pollSessionDone(
+  logRowsUrl: string,
   onDone: () => void,
   intervalMs = 2000,
   maxWaitMs = 20 * 60 * 1000,
@@ -37,7 +37,8 @@ export async function pollScreenerDone(
   const tick = async () => {
     if (Date.now() - started > maxWaitMs) { onDone(); return }
     try {
-      const res = await fetch(`${BACKEND}/screener/log-rows/${sessionId}?since=0`)
+      const res = await fetch(`${logRowsUrl}?since=0`)
+      if (res.status === 404) { onDone(); return }  // session gone (backend restarted)
       if (res.ok) {
         const data = await res.json()
         if (data.done) { onDone(); return }
@@ -46,6 +47,15 @@ export async function pollScreenerDone(
     setTimeout(tick, intervalMs)
   }
   setTimeout(tick, intervalMs)
+}
+
+export async function pollScreenerDone(
+  sessionId: string,
+  onDone: () => void,
+  intervalMs = 2000,
+  maxWaitMs = 20 * 60 * 1000,
+): Promise<void> {
+  return pollSessionDone(`${BACKEND}/screener/log-rows/${sessionId}`, onDone, intervalMs, maxWaitMs)
 }
 
 export async function createRun(
@@ -93,6 +103,39 @@ export async function deleteRuns(ids: string[]): Promise<void> {
     body: JSON.stringify({ run_ids: ids }),
   })
   if (!res.ok) throw new Error(`Failed to delete runs: ${res.statusText}`)
+}
+
+export async function enrichPreview(
+  tickers: Record<string, unknown>[],
+  candleFrequency: string = '1d',
+): Promise<Record<string, unknown>[]> {
+  const res = await fetch(`${BASE}/enrich-preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tickers, candle_frequency: candleFrequency }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.detail ?? `Enrichment failed: ${res.statusText}`)
+  }
+  return res.json()
+}
+
+export async function triggerMarketData(): Promise<{ session_id: string }> {
+  const res = await fetch(`${BACKEND}/market-data/trigger`, { method: 'POST' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.detail ?? `Failed to trigger market data: ${res.statusText}`)
+  }
+  return res.json()
+}
+
+export async function stopMarketData(sessionId: string): Promise<void> {
+  const res = await fetch(`${BACKEND}/market-data/stop/${sessionId}`, { method: 'POST' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.detail ?? `Failed to stop market data: ${res.statusText}`)
+  }
 }
 
 export async function stopRun(id: string): Promise<Run> {
