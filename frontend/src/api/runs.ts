@@ -62,8 +62,6 @@ export async function createRun(
   modelIds: string[],
   name: string,
   tickers: Record<string, unknown>[],
-  candleFrequency: string = '1d',
-  enrichmentEnabled: boolean = true,
 ): Promise<Run> {
   const res = await fetch(BASE, {
     method: 'POST',
@@ -72,8 +70,6 @@ export async function createRun(
       model_ids: modelIds,
       name,
       tickers,
-      candle_frequency: candleFrequency,
-      enrichment_enabled: enrichmentEnabled,
     }),
   })
   if (!res.ok) {
