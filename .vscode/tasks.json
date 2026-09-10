@@ -1,0 +1,44 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "backend",
+            "type": "shell",
+            "command": "uvicorn backend.main:app --port 4101 --reload",
+            "presentation": {
+                "label": "backend (4101)",
+                "panel": "new",
+                "showReuseMessage": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "ai-service",
+            "type": "shell",
+            "command": "uvicorn ai_service.main:app --port 4102 --reload",
+            "presentation": {
+                "label": "ai-service (4102)",
+                "panel": "new",
+                "showReuseMessage": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "frontend",
+            "type": "shell",
+            "command": "cd frontend && npm run dev",
+            "presentation": {
+                "label": "frontend (5173)",
+                "panel": "new",
+                "showReuseMessage": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Start All",
+            "dependsOn": ["backend", "ai-service", "frontend"],
+            "dependsOrder": "parallel",
+            "problemMatcher": []
+        }
+    ]
+}
