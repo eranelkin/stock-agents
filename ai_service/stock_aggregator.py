@@ -124,5 +124,5 @@ class StockAggregator:
         )
         if self._ceo_manager:
             await self._ceo_manager.on_ticker_ready(
-                ticker, merged_agents, self._entity_dicts.get(ticker, {})
+                ticker, merged_agents, stock
             )
