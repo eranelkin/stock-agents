@@ -30,12 +30,12 @@ screener:
 #   Fix B — Phase 2 batch limit (3 files):                                                                                                                                                                                 
 #   - screener_pipeline.py: Before calling _phase2_enrich, the survivors list is capped at 27 (27 × 2 requests = 54, safely under IB's 59/10-min
 #   limit)   
-  # IB scanner parameters best is 24
-  number_of_rows: 24  #### Max symbols per IB scanner call (hard cap = 50) ###
+  # IB scanner parameters best is 24 
+  number_of_rows: 2  ####  best value for prod 24 Max symbols per IB scanner call (hard cap = 50) ###
   # Max Phase 1 survivors sent to Phase 2 per iteration.
   # IB allows 59 historical requests per 10 min. With 2 req/stock (daily bars + pre-market bars):
   # 27 × 2 = 54 requests → safely under limit. Prevents the ~8 min rate-limit pause.
-  phase2_batch_limit: 27
+  phase2_batch_limit: 2 # 27 best value for prod  27
   scan_code: "TOP_PERC_GAIN"     # Rank by pre-market % gainers
   instrument: "STK"
   stockTypeFilter : "STOCK"     # Filter out ETFs/ETNs (stockType check via IB ContractDetails)
@@ -63,7 +63,7 @@ screener:
   # the streaming tick undercounts by 40–50% and would incorrectly drop valid stocks.
   exclude_etfs: true             # drop ETFs/ETNs from results (stockType check via IB ContractDetails)
   price_min: 2.0                 # minimum stock price (filters penny stocks)
-  pre_market_chg_pct_min: 2  # defualt 2% minimum pre-market change % — drops flat/down stocks before expensive fetches
+  pre_market_chg_pct_min: 1  # defualt 2% minimum pre-market change % — drops flat/down stocks before expensive fetches
                                  # Set to null to disable
 
   # ── Phase 2 filters (applied after historical bars and pre-market bars are fetched) ──

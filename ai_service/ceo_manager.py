@@ -18,6 +18,33 @@ from ai_service.utils.run_logger import RunLogger
 
 logger = get_logger(__name__)
 
+
+def _parse_numeric(value: Any) -> float | None:
+    """Parse a raw or formatted numeric value (e.g. '39.33M', '90.28%', 307040) to float."""
+    if isinstance(value, (int, float)):
+        return float(value)
+    if not isinstance(value, str):
+        return None
+    s = value.strip().upper().replace(",", "")
+    if not s or s.startswith("N"):  # catches "N/A", "Not available..."
+        return None
+    multiplier = 1.0
+    if s.endswith("%"):
+        s = s[:-1]
+    elif s.endswith("T"):
+        s, multiplier = s[:-1], 1_000_000_000_000.0
+    elif s.endswith("B"):
+        s, multiplier = s[:-1], 1_000_000_000.0
+    elif s.endswith("M"):
+        s, multiplier = s[:-1], 1_000_000.0
+    elif s.endswith("K"):
+        s, multiplier = s[:-1], 1_000.0
+    try:
+        return float(s) * multiplier
+    except ValueError:
+        return None
+
+
 # Maps yfinance/enrichment sector names (lowercase) to ETF sector names (lowercase)
 # used in the market-data file, covering common mismatches.
 _SECTOR_ALIASES: dict[str, str] = {
@@ -33,6 +60,19 @@ _SECTOR_ALIASES: dict[str, str] = {
     "drug manufacturers": "pharmaceuticals",
     "aerospace & defense": "industrials",
     "medical devices": "health care equipment & supplies",
+    # IB-specific sector name mappings
+    "retail": "retailing",
+    "software": "software & services",
+    "internet": "communication services",
+    "entertainment": "media & entertainment",
+    "aerospace/defense": "industrials",
+    "commercial services": "industrials",
+    "diversified finan serv": "financial services",
+    "investment companies": "capital markets",
+    "machinery-constr&mining": "industrials",
+    "mining": "metals & mining",
+    "oil&gas services": "energy equipment & services",
+    "healthcare": "health care",
 }
 
 
@@ -157,11 +197,21 @@ class CeoManager:
                     sector, sector_etf.get("etf"),
                     extra={"ticker": ticker},
                 )
+            _pre_mkt_vol = _parse_numeric(entity_dict.get("pre_market_volume"))
+            _float_pct = _parse_numeric(entity_dict.get("float_pct"))
+            _shares_out = _parse_numeric(entity_dict.get("shares_outstanding"))
+            float_turnover_ratio: float | None = None
+            if _pre_mkt_vol and _float_pct and _shares_out:
+                float_shares = (_float_pct / 100) * _shares_out
+                if float_shares > 0:
+                    float_turnover_ratio = round(_pre_mkt_vol / float_shares, 4)
+
             entity = CeoInput(
                 symbol=ticker,
                 agents=agents,
                 macro_analysis=macro_analysis,
                 sector_etf=sector_etf,
+                float_turnover_ratio=float_turnover_ratio,
             )
             for mc in self._model_configs:
                 tasks.append(asyncio.create_task(self._run_one(entity, mc)))

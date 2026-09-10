@@ -38,6 +38,19 @@ def trigger_stock_agents_run(
         stocks: list[dict] = data.get("stocks", [])
         if not stocks:
             log.warning("stock_agents_trigger: output file has no stocks — skipping")
+            if run_id:
+                try:
+                    resp = requests.post(
+                        f"{backend_url}/runs/{run_id}/fail",
+                        json={"error": "No stocks passed the screener filters"},
+                        timeout=10,
+                    )
+                    if resp.ok:
+                        log.info("stock_agents_trigger: run %s marked as failed (empty screener output)", run_id)
+                    else:
+                        log.error("stock_agents_trigger: could not fail run %s — HTTP %d", run_id, resp.status_code)
+                except Exception:
+                    log.exception("stock_agents_trigger: error marking run %s as failed", run_id)
             return
 
         if model_ids:

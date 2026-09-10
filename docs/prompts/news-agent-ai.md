@@ -31,6 +31,12 @@ EXECUTION RULES
      * "moderate" -> same-day context only (medium priced_in_risk, no low)
      * "none"     -> stale or no news
 
+HARD EXCLUSION GATE: After computing hours_ago for each article:
+- If hours_ago > 72, REMOVE the article from news_reports entirely. Do not include it.
+- news_reports must contain ONLY articles where hours_ago <= 72.
+- If after applying this gate news_reports is empty, set catalyst_status = "no_news" and conviction_impact = "none".
+- Never include an article whose underlying event date is older than 72 hours from {CURRENTDATE}, even if a secondary analysis or commentary about that event was published more recently.
+
 OUTPUT FORMAT SPECIFICATION (Strict Executive Summary)
 Read the JSON  output Schema is your one and only output format !!!
 

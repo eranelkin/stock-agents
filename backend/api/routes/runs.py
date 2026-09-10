@@ -479,6 +479,36 @@ async def get_run(run_id: uuid.UUID, session: AsyncSession = Depends(get_session
     return run
 
 
+class FailRunBody(BaseModel):
+    error: str = "No stocks passed the screener filters"
+
+
+@router.post("/{run_id}/fail", response_model=RunResponse)
+async def fail_run(
+    run_id: uuid.UUID,
+    body: FailRunBody = FailRunBody(),
+    session: AsyncSession = Depends(get_session),
+) -> Run:
+    """Mark a run as failed. Used by the interactive-service when no stocks pass the screener."""
+    from datetime import datetime, timezone
+
+    run = await session.get(Run, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run.status not in ("fetching", "pending", "running"):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Run is already in terminal state: {run.status}",
+        )
+
+    run.status = "failed"
+    run.error = body.error
+    run.completed_at = datetime.now(timezone.utc)
+    await session.commit()
+    await session.refresh(run)
+    return run
+
+
 @router.post("/{run_id}/stop", response_model=RunResponse)
 async def stop_run(
     run_id: uuid.UUID, session: AsyncSession = Depends(get_session)

@@ -3,7 +3,7 @@ watchlist:
   # Exchange and currency default to SMART / USD if omitted.
   - symbol: "BE"
     sec_type: "STK"
-  - symbol: "GOOG"
-    sec_type: "STK"
-  - symbol: "ORCL"
-    sec_type: "STK"
+  # - symbol: "GOOG"
+  #   sec_type: "STK"
+  # - symbol: "ORCL"
+  #   sec_type: "STK"

@@ -52,7 +52,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     async with AsyncSessionLocal() as session:
         await session.execute(
             sql_update(Run)
-            .where(Run.status.in_(["pending", "running"]))
+            .where(Run.status.in_(["fetching", "pending", "running"]))
             .values(
                 status="failed",
                 completed_at=datetime.now(timezone.utc),

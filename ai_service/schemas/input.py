@@ -16,6 +16,7 @@ class CeoInput(BaseModel):
     agents: dict[str, Any]
     macro_analysis: dict[str, Any] | None = None
     sector_etf: dict[str, Any] | None = None
+    float_turnover_ratio: float | None = None
 
 
 class TickerInput(BaseModel):
