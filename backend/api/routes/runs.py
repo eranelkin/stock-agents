@@ -457,6 +457,18 @@ async def get_run(run_id: uuid.UUID, session: AsyncSession = Depends(get_session
     return run
 
 
+@router.patch("/{run_id}/favorite", response_model=RunResponse)
+async def toggle_favorite(run_id: uuid.UUID, session: AsyncSession = Depends(get_session)) -> Run:
+    """Toggle the is_favorite flag on a run."""
+    run = await session.get(Run, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    run.is_favorite = not run.is_favorite
+    await session.commit()
+    await session.refresh(run)
+    return run
+
+
 class FailRunBody(BaseModel):
     error: str = "No stocks passed the screener filters"
 

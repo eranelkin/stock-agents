@@ -138,6 +138,15 @@ export async function stopMarketData(sessionId: string): Promise<void> {
   }
 }
 
+export async function toggleFavorite(id: string): Promise<Run> {
+  const res = await fetch(`${BASE}/${id}/favorite`, { method: 'PATCH' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.detail ?? `Failed to toggle favorite: ${res.statusText}`)
+  }
+  return res.json()
+}
+
 export async function stopRun(id: string): Promise<Run> {
   const res = await fetch(`${BASE}/${id}/stop`, { method: 'POST' })
   if (!res.ok) {
