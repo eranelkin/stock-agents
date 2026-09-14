@@ -28,5 +28,6 @@ class RunResponse(BaseModel):
     model_names: list[str] | None = None
     ticker_count: int | None = None
     ibk_session_id: str | None = None
+    is_favorite: bool = False
 
     model_config = {"from_attributes": True}

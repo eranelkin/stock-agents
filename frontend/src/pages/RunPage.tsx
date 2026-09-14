@@ -35,7 +35,9 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CheckIcon from "@mui/icons-material/Check";
 import ArticleIcon from "@mui/icons-material/Article";
 import StorageIcon from "@mui/icons-material/Storage";
-import { createRun, deleteRun, deleteRuns, enrichPreview, pollScreenerDone, pollSessionDone, stopMarketData, stopRun, stopScreener, triggerMarketData, triggerScreener } from "../api/runs";
+import StarIcon from "@mui/icons-material/Star";
+import StarBorderIcon from "@mui/icons-material/StarBorder";
+import { createRun, deleteRun, deleteRuns, enrichPreview, pollScreenerDone, pollSessionDone, stopMarketData, stopRun, stopScreener, toggleFavorite, triggerMarketData, triggerScreener } from "../api/runs";
 import CeoResultsPage from "../components/CeoResultsPage";
 import type { Run } from "../types/run";
 
@@ -369,6 +371,15 @@ export default function RunPage({
     }
   };
 
+  const handleToggleFavorite = async (id: string) => {
+    try {
+      const updated = await toggleFavorite(id);
+      setRuns((prev) => prev.map((r) => r.id === id ? { ...r, is_favorite: updated.is_favorite } : r));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to toggle favorite");
+    }
+  };
+
   const handleToggleSelect = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -395,14 +406,12 @@ export default function RunPage({
 
   const todayRuns = runs.filter((r) => isToday(r.created_at));
   const historyRuns = runs.filter((r) => !isToday(r.created_at));
-  const sorted = (innerTab === 0 ? todayRuns : historyRuns)
-    .slice()
-    .sort((a, b) => {
-      const diff =
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      return sortOrder === "asc" ? diff : -diff;
-    });
-  const displayedRuns = sorted;
+  const favoriteRuns = runs.filter((r) => r.is_favorite);
+  const activePool = innerTab === 0 ? todayRuns : innerTab === 1 ? historyRuns : favoriteRuns;
+  const displayedRuns = activePool.slice().sort((a, b) => {
+    const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    return sortOrder === "asc" ? diff : -diff;
+  });
 
   const runInProgress = runs.some(
     (r) => r.status === "fetching" || r.status === "pending" || r.status === "running",
@@ -604,7 +613,7 @@ export default function RunPage({
           }}
           sx={{ minHeight: 40 }}
         >
-          {(["Today", "History"] as const).map((label) => (
+          {(["Today", "History", "Favorites"] as const).map((label) => (
             <Tab
               key={label}
               label={label}
@@ -655,7 +664,7 @@ export default function RunPage({
         ) : displayedRuns.length === 0 ? (
           <Box sx={{ display: "flex", justifyContent: "center", pt: 6 }}>
             <Typography variant="h6" color="text.secondary">
-              {innerTab === 0 ? "No runs today" : "No historical runs"}
+              {innerTab === 0 ? "No runs today" : innerTab === 1 ? "No historical runs" : "No favorites yet"}
             </Typography>
           </Box>
         ) : (
@@ -686,6 +695,9 @@ export default function RunPage({
                       }}
                     />
                   </TableCell>
+                  <TableCell
+                    sx={{ borderColor: "rgba(255,255,255,0.08)", width: 40 }}
+                  />
                   <TableCell
                     sx={{
                       color: "text.secondary",
@@ -765,6 +777,20 @@ export default function RunPage({
                           "&.Mui-checked": { color: "#1976d2" },
                         }}
                       />
+                    </TableCell>
+                    <TableCell
+                      sx={{ borderColor: "rgba(255,255,255,0.06)", width: 40, px: 0.5 }}
+                    >
+                      <Tooltip title={run.is_favorite ? "Remove from favorites" : "Add to favorites"}>
+                        <IconButton
+                          size="small"
+                          onClick={(e) => { e.stopPropagation(); handleToggleFavorite(run.id); }}
+                        >
+                          {run.is_favorite
+                            ? <StarIcon sx={{ color: "#FFD700", fontSize: "1.1rem" }} />
+                            : <StarBorderIcon sx={{ color: "rgba(255,255,255,0.3)", fontSize: "1.1rem" }} />}
+                        </IconButton>
+                      </Tooltip>
                     </TableCell>
                     <TableCell
                       sx={{

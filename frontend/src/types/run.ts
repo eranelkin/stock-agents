@@ -9,4 +9,5 @@ export interface Run {
   model_names: string[] | null
   ticker_count: number | null
   ibk_session_id: string | null
+  is_favorite: boolean
 }
