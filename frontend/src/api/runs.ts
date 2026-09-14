@@ -6,11 +6,12 @@ const BASE = `${BACKEND}/runs`
 export async function triggerScreener(
   mode: 'screener' | 'screener-only-pull' | 'merged',
   modelIds: string[] = [],
+  env: 'prod' | 'test' = 'prod',
 ): Promise<{ session_id: string }> {
   const res = await fetch(`${BACKEND}/screener/trigger`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mode, model_ids: modelIds }),
+    body: JSON.stringify({ mode, model_ids: modelIds, env }),
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))

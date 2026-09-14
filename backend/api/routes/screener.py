@@ -26,6 +26,7 @@ _SESSION_TTL = 3600  # seconds
 class TriggerRequest(BaseModel):
     mode: Literal["screener", "screener-only-pull", "merged"]
     model_ids: list[str] = []
+    env: Literal["prod", "test"] = "prod"
 
 
 def _prune_sessions() -> None:
@@ -82,6 +83,8 @@ async def trigger_screener(
         cmd = [python, "-u", main_py, "--mode", "screener", "--only-pull"]
     else:
         cmd = [python, "-u", main_py, "--mode", "merged"]
+
+    cmd += ["--env", body.env]
 
     if body.model_ids:
         cmd += ["--model-ids", ",".join(body.model_ids)]

@@ -30,10 +30,8 @@ type Row = Record<string, unknown> & { _ticker: string }
 const LONG_TEXT_COLS = new Set([
   'analysis_strategy',
   'conviction_detect',
-  'collapse_conviction',
   'collapse_trigger',
-  'catalyst_reason',
-  'volume',
+  'catalyst reason',
   'ai_suggestion',
   'notes',
 ])
@@ -169,9 +167,12 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
     es.onmessage = (ev) => {
       try {
         const { ticker, data } = JSON.parse(ev.data) as { ticker: string; data: Record<string, unknown> }
+        setColumns(existing => {
+          const newCols = Object.keys(data).filter(k => k !== 'symbol' && !existing.includes(k))
+          return newCols.length > 0 ? [...existing, ...newCols] : existing
+        })
         setRows(prev => {
           if (prev.some(r => r._ticker === ticker)) return prev
-          if (prev.length === 0) setColumns(Object.keys(data).filter(k => k !== 'symbol'))
           return [...prev, { _ticker: ticker, ...data }].sort((a, b) => a._ticker.localeCompare(b._ticker))
         })
       } catch { /* ignore */ }
