@@ -124,6 +124,13 @@ def _check_premarket_hours(tz_name: str) -> bool:
     default=None,
     help="Existing Run ID (UUID) to continue after IBK pull. When set, start-ai is called instead of creating a new run.",
 )
+@click.option(
+    "--env",
+    type=click.Choice(["prod", "test"], case_sensitive=False),
+    default="prod",
+    show_default=True,
+    help="Config environment: 'prod' loads screener.yaml/settings.yaml, 'test' loads screener_test.yaml/settings_test.yaml.",
+)
 def main(
     mode: str | None,
     use_scheduler: bool,
@@ -134,6 +141,7 @@ def main(
     only_pull: bool,
     model_ids: str | None,
     run_id: str | None,
+    env: str,
 ) -> None:
     log_mode = "scheduler" if use_scheduler else (mode or "run")
     _setup_logging(log_level.upper(), mode=log_mode)
@@ -142,9 +150,10 @@ def main(
     # Load all configs upfront (fail fast on bad YAML)
     from src.config.loader import load_screener, load_settings, load_watchlist
 
-    settings_path = config_dir / "settings.yaml"
-    screener_path = config_dir / "screener.yaml"
-    watchlist_path = config_dir / "watchlist.yaml"
+    _suffix = "_test" if env == "test" else ""
+    settings_path = config_dir / f"settings{_suffix}.yaml"
+    screener_path = config_dir / f"screener{_suffix}.yaml"
+    watchlist_path = config_dir / f"watchlist{_suffix}.yaml"
 
     if not settings_path.exists():
         click.echo(f"ERROR: settings.yaml not found at {settings_path}", err=True)

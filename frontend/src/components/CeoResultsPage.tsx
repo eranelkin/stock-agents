@@ -27,13 +27,52 @@ interface CeoResultsPageProps {
 
 type Row = Record<string, unknown> & { _ticker: string }
 
+const COLUMN_LABELS: Record<string, string> = {
+  volume_dollar: 'VOLUME $',
+  ratio_vol_market_cap: 'RATIO VOL - MARKET CAP',
+}
+
+const COLUMN_ORDER = [
+  'symbol',
+  'date',
+  'current price',
+  'ceo verdict',
+  'conviction score',
+  'confidence',
+  'success prob',
+  'entry range',
+  'entry time',
+  'sl range',
+  'tp range',
+  'short_ratio',
+  'short_float',
+  'institutional_holding',
+  'squeeze_risk',
+  'approximate_gain_pct',
+  'ratio_vol_market_cap',
+  'float_turnover_ratio',
+  'volume_dollar',
+  'conviction_detect',
+  'collapse_trigger',
+  'catalyst reason',
+  'required_volume',
+  'r-multiple',
+  'regime',
+  'rvol',
+  'poc node',
+  'absorption',
+  'bid/ask spread',
+  'sector sympathy',
+  'spx/qqq_corr',
+  'ai_suggestion',
+  'ai_model_name',
+]
+
 const LONG_TEXT_COLS = new Set([
   'analysis_strategy',
   'conviction_detect',
-  'collapse_conviction',
   'collapse_trigger',
-  'catalyst_reason',
-  'volume',
+  'catalyst reason',
   'ai_suggestion',
   'notes',
 ])
@@ -132,6 +171,12 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
     })
   }, [])
 
+  const orderedColumns = useMemo(() => {
+    const known = COLUMN_ORDER.filter(c => columns.includes(c))
+    const rest = columns.filter(c => !COLUMN_ORDER.includes(c))
+    return [...known, ...rest]
+  }, [columns])
+
   const sortedRows = useMemo(() => {
     if (!sortCol) return rows
     return [...rows].sort((a, b) => {
@@ -169,9 +214,12 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
     es.onmessage = (ev) => {
       try {
         const { ticker, data } = JSON.parse(ev.data) as { ticker: string; data: Record<string, unknown> }
+        setColumns(existing => {
+          const newCols = Object.keys(data).filter(k => k !== 'symbol' && !existing.includes(k))
+          return newCols.length > 0 ? [...existing, ...newCols] : existing
+        })
         setRows(prev => {
           if (prev.some(r => r._ticker === ticker)) return prev
-          if (prev.length === 0) setColumns(Object.keys(data).filter(k => k !== 'symbol'))
           return [...prev, { _ticker: ticker, ...data }].sort((a, b) => a._ticker.localeCompare(b._ticker))
         })
       } catch { /* ignore */ }
@@ -388,7 +436,7 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
               <TableHead>
                 <TableRow>
                   <TableCell
-                    sx={{ ...headerCellSx, cursor: 'pointer' }}
+                    sx={{ ...headerCellSx, cursor: 'pointer', position: 'sticky', left: 0, zIndex: 3 }}
                     onClick={() => handleSort('_ticker')}
                   >
                     <TableSortLabel
@@ -400,7 +448,7 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
                       Ticker
                     </TableSortLabel>
                   </TableCell>
-                  {columns.map((col, idx) => (
+                  {orderedColumns.map((col, idx) => (
                     <TableCell
                       key={col}
                       draggable
@@ -427,7 +475,7 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
                         onClick={() => handleSort(col)}
                         sx={sortLabelSx}
                       >
-                        {col.replace(/_/g, ' ').replace('approximately gain in %', 'gain %')}
+                        {COLUMN_LABELS[col] ?? col.replace(/_/g, ' ').replace('approximately gain in %', 'gain %')}
                       </TableSortLabel>
                     </TableCell>
                   ))}
@@ -452,12 +500,15 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
                       color: '#90caf9',
                       fontFamily: 'monospace',
                       fontSize: '0.9rem',
-                      background: 'linear-gradient(90deg, rgba(144,202,249,0.07) 0%, transparent 80%)',
+                      bgcolor: '#0f1117',
                       whiteSpace: 'nowrap',
+                      position: 'sticky',
+                      left: 0,
+                      zIndex: 1,
                     }}>
                       {row._ticker}
                     </TableCell>
-                    {columns.map(col => (
+                    {orderedColumns.map(col => (
                       <TableCell
                         key={col}
                         sx={{ ...dataCellSx, ...(isLongCol(col) && { whiteSpace: 'normal' }) }}

@@ -206,12 +206,25 @@ class CeoManager:
                 if float_shares > 0:
                     float_turnover_ratio = round(_pre_mkt_vol / float_shares, 4)
 
+            _pre_mkt_price = _parse_numeric(entity_dict.get("pre_market_price"))
+            _market_cap = _parse_numeric(entity_dict.get("market_cap"))
+
+            volume_dollar: float | None = None
+            if _pre_mkt_vol and _pre_mkt_price:
+                volume_dollar = round(_pre_mkt_vol * _pre_mkt_price, 2)
+
+            ratio_vol_market_cap: float | None = None
+            if volume_dollar and _market_cap and _market_cap > 0:
+                ratio_vol_market_cap = round(volume_dollar / _market_cap, 6)
+
             entity = CeoInput(
                 symbol=ticker,
                 agents=agents,
                 macro_analysis=macro_analysis,
                 sector_etf=sector_etf,
                 float_turnover_ratio=float_turnover_ratio,
+                volume_dollar=volume_dollar,
+                ratio_vol_market_cap=ratio_vol_market_cap,
             )
             for mc in self._model_configs:
                 tasks.append(asyncio.create_task(self._run_one(entity, mc)))

@@ -17,6 +17,8 @@ class CeoInput(BaseModel):
     macro_analysis: dict[str, Any] | None = None
     sector_etf: dict[str, Any] | None = None
     float_turnover_ratio: float | None = None
+    volume_dollar: float | None = None
+    ratio_vol_market_cap: float | None = None
 
 
 class TickerInput(BaseModel):

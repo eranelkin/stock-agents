@@ -45,7 +45,9 @@
         "spx/qqq_corr": { "type": "number", "description": "beta context and market correlation coefficient" },
         "ai_suggestion": { "type": "string", "description": "(mark with “v” if ceo-added beyond specialist list)" },
         "ai_model_name": { "type": "string", "description": "what is your AI model name?" },
-        "float_turnover_ratio": { "type": ["number", "null"], "description": "Pre-market volume divided by float shares. Measures float rotation intensity pre-market. Values >0.10 signal high participation; <0.01 is negligible." }
+        "float_turnover_ratio": { "type": ["number", "null"], "description": "Pre-market volume divided by float shares. Measures float rotation intensity pre-market. Values >0.10 signal high participation; <0.01 is negligible." },
+        "volume_dollar": { "type": ["number", "null"], "description": "Pre-market volume multiplied by pre-market price. Total pre-market dollar flow for this ticker." },
+        "ratio_vol_market_cap": { "type": ["number", "null"], "description": "volume_dollar divided by market_cap. Measures pre-market dollar flow as a fraction of the company's market cap. Values >0.10 indicate significant participation." }
       },
       "required": [
         "symbol",
@@ -78,7 +80,9 @@
         "spx/qqq_corr",
         "ai_suggestion",
         "ai_model_name",
-        "float_turnover_ratio"
+        "float_turnover_ratio",
+        "volume_dollar",
+        "ratio_vol_market_cap"
       ],
       "additionalProperties": false
     }

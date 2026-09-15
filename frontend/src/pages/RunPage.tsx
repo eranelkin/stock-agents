@@ -26,6 +26,8 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
 import DialogActions from "@mui/material/DialogActions";
 import MenuItem from "@mui/material/MenuItem";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import TableSortLabel from "@mui/material/TableSortLabel";
@@ -95,6 +97,7 @@ export default function RunPage({
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [pullStage, setPullStage] = useState<string | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [runEnv, setRunEnv] = useState<'prod' | 'test'>(() => (localStorage.getItem('runEnv') as 'prod' | 'test') ?? 'prod');
   const [stopping, setStopping] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const esRef = useRef<EventSource | null>(null);
@@ -265,7 +268,7 @@ export default function RunPage({
     const stageCount = mode === "screener-only-pull" ? 1 : 2;
     setPullStage(`Stage 1/${stageCount} — Pulling data from IBK...`);
     try {
-      const { session_id } = await triggerScreener(mode, selectedModelIds);
+      const { session_id } = await triggerScreener(mode, selectedModelIds, runEnv);
       setActiveSessionId(session_id);
       window.open(`${BACKEND_URL}/screener/log/${session_id}`, "_blank");
       if (stageCount === 2) {
@@ -493,6 +496,27 @@ export default function RunPage({
               {selectedFile ? selectedFile.name : "Choose file…"}
             </Typography>
           </Box>
+
+          <ToggleButtonGroup
+            value={runEnv}
+            exclusive
+            size="small"
+            onChange={(_, v) => { if (v) { setRunEnv(v); localStorage.setItem('runEnv', v); } }}
+            sx={{ height: 32 }}
+          >
+            <ToggleButton value="prod" sx={{ px: 1.5, textTransform: 'none', fontWeight: 600, fontSize: 12 }}>
+              Prod
+            </ToggleButton>
+            <ToggleButton
+              value="test"
+              sx={{
+                px: 1.5, textTransform: 'none', fontWeight: 600, fontSize: 12,
+                '&.Mui-selected': { color: '#fbbf24', borderColor: '#fbbf24', bgcolor: 'rgba(251,191,36,0.08)' },
+              }}
+            >
+              Test
+            </ToggleButton>
+          </ToggleButtonGroup>
 
           {(Boolean(pullStage) || runInProgress) && (
             <Button
