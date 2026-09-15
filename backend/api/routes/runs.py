@@ -878,7 +878,7 @@ def _parse_ceo_file(file_path: Path) -> dict | None:
             if not isinstance(agent_data, dict):
                 continue
             merged: dict = {}
-            _SKIP = {"stocks", "raw_output", "parse_error", "reasoning"}
+            _SKIP = {"stocks", "raw_output", "parse_error", "reasoning", "schema_error", "schema_errors"}
             # Old JSON pattern: stocks is a list of single-key dicts
             for item in agent_data.get("stocks") or []:
                 if isinstance(item, dict):
@@ -900,6 +900,26 @@ def _parse_ceo_file(file_path: Path) -> dict | None:
                 if parsed:
                     merged.update(parsed)
             if merged:
+                # Normalize snake_case keys that some LLMs output instead of the canonical
+                # space/slash/dash-separated names expected by the schema and frontend.
+                _CANONICAL_KEYS = {
+                    "current_price": "current price",
+                    "ceo_verdict": "ceo verdict",
+                    "conviction_score": "conviction score",
+                    "success_prob": "success prob",
+                    "entry_range": "entry range",
+                    "entry_time": "entry time",
+                    "sl_range": "sl range",
+                    "tp_range": "tp range",
+                    "poc_node": "poc node",
+                    "bid_ask_spread": "bid/ask spread",
+                    "bid/ask_spread": "bid/ask spread",
+                    "sector_sympathy": "sector sympathy",
+                    "spx_qqq_corr": "spx/qqq_corr",
+                    "r_multiple": "r-multiple",
+                    "catalyst_reason": "catalyst reason",
+                }
+                merged = {_CANONICAL_KEYS.get(k, k): v for k, v in merged.items()}
                 return merged
     except Exception:
         pass

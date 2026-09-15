@@ -18,7 +18,7 @@ ib_gateway:
   #   7496 = TWS live trading
   port: 7496
   client_id: 1
-  timeout: 30  # seconds to wait for connection
+  timeout: 30  # prod = 30 | test = 90 | seconds to wait for connection (reqExecutions handshake can be slow when TWS has large execution history)
 
 pacing:
   historical_delay_seconds: 1.2   # IB limit: max 60 historical requests/10 min (increased for stability)
