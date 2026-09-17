@@ -4,7 +4,7 @@ const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://127.0.0.1:4101'
 const BASE = `${BACKEND}/runs`
 
 export async function triggerScreener(
-  mode: 'screener' | 'screener-only-pull' | 'merged',
+  mode: 'screener' | 'screener-only-pull' | 'merged' | 'watchlist',
   modelIds: string[] = [],
   env: 'prod' | 'test' = 'prod',
 ): Promise<{ session_id: string }> {

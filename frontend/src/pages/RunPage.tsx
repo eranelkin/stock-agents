@@ -97,7 +97,7 @@ export default function RunPage({
   const [enrichmentEnabled, setEnrichmentEnabled] = useState(false);
   const [testingEnrich, setTestingEnrich] = useState(false);
   const [enrichResults, setEnrichResults] = useState<Record<string, unknown>[] | null>(null);
-  const [runMode, setRunMode] = useState<"run" | "pull-run" | "pull" | "watchlist" | "market-data">("run");
+  const [runMode, setRunMode] = useState<"run" | "pull-run" | "pull" | "watchlist" | "watchlist-only" | "market-data">("run");
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [pullStage, setPullStage] = useState<string | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -261,12 +261,13 @@ export default function RunPage({
     { mode: "pull-run" as const,    label: "Pull & Run",           desc: "Pull from IBK then run AI analysis" },
     { mode: "pull" as const,        label: "Pull",                 desc: "Pull from IBK only (no analysis)" },
     { mode: "watchlist" as const,   label: "Run-Pull - Watchlist", desc: "Screener + watchlist, then AI analysis" },
+    { mode: "watchlist-only" as const, label: "Watchlist",         desc: "Pull data from IBK for our watchlist stocks, then run AI analysis" },
     { mode: "market-data" as const, label: "Get market data",      desc: "Fetch ETF, S&P 500, VIX & sentiment via Alpha Vantage" },
   ] as const;
 
   const runModeLabel = RUN_MODE_OPTIONS.find((o) => o.mode === runMode)?.label ?? "Run";
 
-  const handlePullClick = async (mode: "screener" | "screener-only-pull" | "merged") => {
+  const handlePullClick = async (mode: "screener" | "screener-only-pull" | "merged" | "watchlist") => {
     setError(null);
     setStarting(true);
     const stageCount = mode === "screener-only-pull" ? 1 : 2;
@@ -309,6 +310,7 @@ export default function RunPage({
     if (runMode === "pull-run")     return handlePullClick("screener");
     if (runMode === "pull")         return handlePullClick("screener-only-pull");
     if (runMode === "watchlist")    return handlePullClick("merged");
+    if (runMode === "watchlist-only") return handlePullClick("watchlist");
     if (runMode === "market-data")  return handleMarketDataClick();
   };
 
@@ -435,7 +437,8 @@ export default function RunPage({
     Boolean(pullStage) ||
     (runMode === "run" && selectedModelIds.length === 0) ||
     (runMode === "pull-run" && selectedModelIds.length === 0) ||
-    (runMode === "watchlist" && selectedModelIds.length === 0)
+    (runMode === "watchlist" && selectedModelIds.length === 0) ||
+    (runMode === "watchlist-only" && selectedModelIds.length === 0)
     // market-data mode has no extra requirements
     // "run" mode no longer requires a file — macro/sector-only runs work without tickers
 
@@ -626,7 +629,7 @@ export default function RunPage({
           Select one or more models from the header dropdown.
         </Alert>
       )}
-      {selectedModelIds.length === 0 && ["pull-run", "watchlist"].includes(runMode) && (
+      {selectedModelIds.length === 0 && ["pull-run", "watchlist", "watchlist-only"].includes(runMode) && (
         <Alert severity="warning">
           &ldquo;{RUN_MODE_OPTIONS.find(o => o.mode === runMode)?.label}&rdquo; runs AI analysis after pulling — select one or more models from the header dropdown to enable the button.
         </Alert>
