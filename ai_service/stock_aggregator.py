@@ -55,7 +55,7 @@ class StockAggregator:
         self._output_format = output_format
         self._run_logger = run_logger
         self._ceo_manager = ceo_manager
-        self._contributions: dict[str, dict[str, Any]] = defaultdict(dict)
+        self._contributions: dict[tuple[str, str], dict[str, Any]] = defaultdict(dict)
         self._entity_dicts: dict[str, dict[str, Any]] = {}
         self._lock = asyncio.Lock()
 
@@ -64,29 +64,34 @@ class StockAggregator:
         ticker: str,
         pipeline_name: str,
         agents: dict[str, Any],
+        model_name: str,
         entity_dict: dict[str, Any] | None = None,
     ) -> None:
-        """Register one pipeline's agent data for a ticker.
+        """Register one pipeline's agent data for a ticker × model pair.
 
         Writes agg_{ticker}.yaml immediately when all expected pipeline
-        contributions have been received for this ticker.
+        contributions have been received for this (ticker, model) pair.
 
         Args:
             ticker: The stock ticker symbol.
             pipeline_name: Name of the contributing pipeline (e.g. "stocks").
             agents: The agents dict from the pipeline's PipelineOutput.
+            model_name: Name of the model that produced this contribution — keeps
+                concurrent models' agent outputs for the same ticker from
+                clobbering each other before the CEO stage consumes them.
             entity_dict: The raw input entity fields (stored on first call per ticker).
         """
         async with self._lock:
-            self._contributions[ticker][pipeline_name] = agents
+            key = (ticker, model_name)
+            self._contributions[key][pipeline_name] = agents
             if entity_dict and ticker not in self._entity_dicts:
                 self._entity_dicts[ticker] = entity_dict
-            if self._expected.issubset(self._contributions[ticker].keys()):
-                await self._write(ticker)
+            if self._expected.issubset(self._contributions[key].keys()):
+                await self._write(ticker, model_name)
 
-    async def _write(self, ticker: str) -> None:
+    async def _write(self, ticker: str, model_name: str) -> None:
         """Build the new agg_{ticker}.yaml structure and write it."""
-        contributions = self._contributions[ticker]
+        contributions = self._contributions[(ticker, model_name)]
         entity_dict = self._entity_dicts.get(ticker, {})
 
         # Build stock section: input fields + agent outputs from stocks pipeline
@@ -124,5 +129,5 @@ class StockAggregator:
         )
         if self._ceo_manager:
             await self._ceo_manager.on_ticker_ready(
-                ticker, merged_agents, stock
+                ticker, model_name, merged_agents, stock
             )

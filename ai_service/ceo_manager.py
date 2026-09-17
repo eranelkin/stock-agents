@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import yaml
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,12 @@ from ai_service.utils.output_writer import write_output
 from ai_service.utils.run_logger import RunLogger
 
 logger = get_logger(__name__)
+
+
+def _slugify(name: str) -> str:
+    """Filesystem-safe slug for a model display name, e.g. 'Gemini 2.5 Pro' -> 'gemini_2_5_pro'."""
+    slug = re.sub(r"[^a-z0-9]+", "_", name.strip().lower())
+    return slug.strip("_") or "model"
 
 
 def _parse_numeric(value: Any) -> float | None:
@@ -84,7 +91,9 @@ class CeoManager:
     start immediately — without waiting for other tickers to finish.
 
     One Pipeline is spawned per ticker × model_config pair, matching the same
-    fan-out pattern as the Layer 2 stocks pipeline.
+    fan-out pattern as the Layer 2 stocks pipeline — each model's CEO call is fed
+    only that same model's own News/Technical agent output, never another
+    model's, and never a merge across models.
     """
 
     def __init__(
@@ -97,14 +106,16 @@ class CeoManager:
         output_format: str,
         run_logger: RunLogger | None = None,
     ) -> None:
-        self._total = total_tickers
+        # StockAggregator notifies once per (ticker, model) pair, so the queue
+        # receives total_tickers * len(model_configs) items in total.
+        self._total = total_tickers * max(len(model_configs), 1)
         self._model_configs = model_configs
         self._prompts = prompts
         self._semaphore = semaphore
         self._run_dir = run_dir
         self._output_format = output_format
         self._run_logger = run_logger
-        self._queue: asyncio.Queue[tuple[str, dict[str, Any], dict[str, Any]]] = asyncio.Queue()
+        self._queue: asyncio.Queue[tuple[str, str, dict[str, Any], dict[str, Any]]] = asyncio.Queue()
         self._sector_etf_map: dict[str, dict[str, Any]] = self._build_sector_etf_map()
 
     def _build_sector_etf_map(self) -> dict[str, dict[str, Any]]:
@@ -172,12 +183,13 @@ class CeoManager:
     async def on_ticker_ready(
         self,
         ticker: str,
+        model_name: str,
         agents: dict[str, Any],
         entity_dict: dict[str, Any] | None = None,
     ) -> None:
-        """Called by StockAggregator when a ticker's aggregated data is ready."""
-        await self._queue.put((ticker, agents, entity_dict or {}))
-        logger.info("CEO ticker enqueued", extra={"ticker": ticker})
+        """Called by StockAggregator when one model's aggregated data for a ticker is ready."""
+        await self._queue.put((ticker, model_name, agents, entity_dict or {}))
+        logger.info("CEO ticker enqueued", extra={"ticker": ticker, "model": model_name})
 
     async def run(self) -> None:
         """Consume the queue and spawn CEO Pipeline tasks as tickers arrive."""
@@ -186,9 +198,11 @@ class CeoManager:
 
         macro_analysis = await self._load_macro_analysis()
 
+        model_by_name = {mc.name: mc for mc in self._model_configs}
+
         tasks: list[asyncio.Task[None]] = []
         for _ in range(self._total):
-            ticker, agents, entity_dict = await self._queue.get()
+            ticker, model_name, agents, entity_dict = await self._queue.get()
             sector = entity_dict.get("sector")
             sector_etf = self._lookup_sector_etf(sector)
             if sector_etf:
@@ -226,8 +240,14 @@ class CeoManager:
                 volume_dollar=volume_dollar,
                 ratio_vol_market_cap=ratio_vol_market_cap,
             )
-            for mc in self._model_configs:
-                tasks.append(asyncio.create_task(self._run_one(entity, mc)))
+            mc = model_by_name.get(model_name)
+            if mc is None:
+                logger.warning(
+                    "CEO: no ModelConfig found for model_name %s — skipping", model_name,
+                    extra={"ticker": ticker},
+                )
+                continue
+            tasks.append(asyncio.create_task(self._run_one(entity, mc)))
 
         if tasks:
             await asyncio.gather(*tasks)
@@ -249,9 +269,16 @@ class CeoManager:
             output_prefix="CEO_",
         )
         output = await pipeline.run()
+        # Only disambiguate the filename by model when multiple models are in play —
+        # single-model runs keep the exact legacy "CEO_{ticker}.yaml" filename.
+        output_name = (
+            f"{output.ticker}__{_slugify(mc.name)}"
+            if len(self._model_configs) > 1
+            else output.ticker
+        )
         await write_output(
             data=output.model_dump(),
-            entity_name=output.ticker,
+            entity_name=output_name,
             output_dir=self._run_dir,
             output_format=self._output_format,
             output_prefix="CEO_",
