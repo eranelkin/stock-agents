@@ -739,7 +739,11 @@ async def stream_run_log(
 async def stream_ceo_results(run_id: uuid.UUID) -> StreamingResponse:
     """SSE: streams CEO analysis rows as CEO_*.json files land on disk."""
     async def generator() -> AsyncGenerator[str, None]:
-        seen: set[str] = set()
+        # Each CEO_*.{ext} filename is unique per (ticker, model) by construction (the model
+        # slug is only omitted when a single model is selected, in which case there's only
+        # ever one file per ticker) — so tracking seen *files* is equivalent to tracking seen
+        # (ticker, model) pairs, and avoids re-parsing a file on every poll tick.
+        seen_files: set[str] = set()
 
         async with AsyncSessionLocal() as session:
             run = await session.get(Run, run_id)
@@ -750,11 +754,12 @@ async def stream_ceo_results(run_id: uuid.UUID) -> StreamingResponse:
         if run.output_dir:
             for ext in ("yaml", "json"):
                 for f in sorted(Path(run.output_dir).glob(f"CEO_*.{ext}")):
-                    ticker = f.stem[4:]
-                    data = _parse_ceo_file(f)
-                    if data:
-                        seen.add(ticker)
-                        yield f"data: {json.dumps({'ticker': ticker, 'data': data})}\n\n"
+                    ticker = f.stem[4:].split("__", 1)[0]
+                    parsed = _parse_ceo_file(f)
+                    if parsed:
+                        data, model_name = parsed
+                        seen_files.add(str(f))
+                        yield f"data: {json.dumps({'ticker': ticker, 'model': model_name, 'data': data})}\n\n"
 
         if run.status in ("completed", "failed", "cancelled"):
             yield "event: done\ndata: {}\n\n"
@@ -776,13 +781,15 @@ async def stream_ceo_results(run_id: uuid.UUID) -> StreamingResponse:
             if run.output_dir:
                 for ext in ("yaml", "json"):
                     for f in sorted(Path(run.output_dir).glob(f"CEO_*.{ext}")):
-                        ticker = f.stem[4:]
-                        if ticker not in seen:
-                            data = _parse_ceo_file(f)
-                            if data:
-                                seen.add(ticker)
-                                yield f"data: {json.dumps({'ticker': ticker, 'data': data})}\n\n"
-                                idle_ticks = 0
+                        if str(f) in seen_files:
+                            continue
+                        ticker = f.stem[4:].split("__", 1)[0]
+                        parsed = _parse_ceo_file(f)
+                        if parsed:
+                            data, model_name = parsed
+                            seen_files.add(str(f))
+                            yield f"data: {json.dumps({'ticker': ticker, 'model': model_name, 'data': data})}\n\n"
+                            idle_ticks = 0
 
             idle_ticks += 1
             if idle_ticks >= 15:
@@ -862,18 +869,21 @@ def _try_parse_raw_output(raw: str) -> dict | None:
     return None
 
 
-def _parse_ceo_file(file_path: Path) -> dict | None:
-    """Extract the stock analysis dict from a CEO_*.yaml or CEO_*.json output file.
+def _parse_ceo_file(file_path: Path) -> tuple[dict, str | None] | None:
+    """Extract the stock analysis dict (+ producing model name) from a CEO_*.yaml/json file.
 
     Handles three LLM output patterns:
     - Each analysis field as a separate list item under `stocks` (old JSON pattern)
     - Analysis fields nested under a key (e.g. "symbol") in agent_data (current YAML pattern)
     - parse_error: true with raw_output containing a JSON string (LLM returned invalid JSON)
-    All are merged into one flat dict.
+    All are merged into one flat dict. The model name comes from the file's own top-level
+    `model_name` field (always present — it's part of PipelineOutput), not from the filename
+    or any LLM self-reported value, so it's reliable even for pre-existing single-model runs.
     """
     try:
         with open(file_path) as f:
             doc = yaml.safe_load(f) if file_path.suffix == ".yaml" else json.load(f)
+        model_name = doc.get("model_name") if isinstance(doc, dict) else None
         for agent_data in doc.get("agents", {}).values():
             if not isinstance(agent_data, dict):
                 continue
@@ -920,7 +930,7 @@ def _parse_ceo_file(file_path: Path) -> dict | None:
                     "catalyst_reason": "catalyst reason",
                 }
                 merged = {_CANONICAL_KEYS.get(k, k): v for k, v in merged.items()}
-                return merged
+                return merged, model_name
     except Exception:
         pass
     return None

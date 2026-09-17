@@ -239,6 +239,7 @@ class Orchestrator:
                                 ticker=output.ticker,
                                 pipeline_name=cfg.name,
                                 agents=output.agents,
+                                model_name=p.model_name,
                                 entity_dict=p.entity.model_dump(),
                             )
                     return output
