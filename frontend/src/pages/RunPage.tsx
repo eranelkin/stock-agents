@@ -14,6 +14,7 @@ import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
+import TablePagination from "@mui/material/TablePagination";
 import Chip from "@mui/material/Chip";
 import Checkbox from "@mui/material/Checkbox";
 import IconButton from "@mui/material/IconButton";
@@ -60,6 +61,8 @@ const STATUS_COLOR: Record<
   cancelled: "default",
 };
 
+const ROWS_PER_PAGE = 30;
+
 const isToday = (dateStr: string) =>
   new Date(dateStr).toDateString() === new Date().toDateString();
 
@@ -86,6 +89,7 @@ export default function RunPage({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [resultsRun, setResultsRun] = useState<Run | null>(null);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [page, setPage] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
@@ -392,16 +396,16 @@ export default function RunPage({
   };
 
   const handleToggleAll = () => {
-    if (displayedRuns.every((r) => selectedIds.has(r.id))) {
+    if (pagedRuns.every((r) => selectedIds.has(r.id))) {
       setSelectedIds((prev) => {
         const next = new Set(prev);
-        displayedRuns.forEach((r) => next.delete(r.id));
+        pagedRuns.forEach((r) => next.delete(r.id));
         return next;
       });
     } else {
       setSelectedIds((prev) => {
         const next = new Set(prev);
-        displayedRuns.forEach((r) => next.add(r.id));
+        pagedRuns.forEach((r) => next.add(r.id));
         return next;
       });
     }
@@ -415,6 +419,12 @@ export default function RunPage({
     const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
     return sortOrder === "asc" ? diff : -diff;
   });
+  const pageCount = Math.max(1, Math.ceil(displayedRuns.length / ROWS_PER_PAGE));
+  const clampedPage = Math.min(page, pageCount - 1);
+  const pagedRuns = displayedRuns.slice(
+    clampedPage * ROWS_PER_PAGE,
+    clampedPage * ROWS_PER_PAGE + ROWS_PER_PAGE,
+  );
 
   const runInProgress = runs.some(
     (r) => r.status === "fetching" || r.status === "pending" || r.status === "running",
@@ -631,6 +641,7 @@ export default function RunPage({
           onChange={(_, v: number) => {
             setInnerTab(v);
             setSelectedIds(new Set());
+            setPage(0);
           }}
           TabIndicatorProps={{
             style: { backgroundColor: "#1976d2", height: 2 },
@@ -703,12 +714,12 @@ export default function RunPage({
                     <Checkbox
                       size="small"
                       indeterminate={
-                        displayedRuns.some((r) => selectedIds.has(r.id)) &&
-                        !displayedRuns.every((r) => selectedIds.has(r.id))
+                        pagedRuns.some((r) => selectedIds.has(r.id)) &&
+                        !pagedRuns.every((r) => selectedIds.has(r.id))
                       }
                       checked={
-                        displayedRuns.length > 0 &&
-                        displayedRuns.every((r) => selectedIds.has(r.id))
+                        pagedRuns.length > 0 &&
+                        pagedRuns.every((r) => selectedIds.has(r.id))
                       }
                       onChange={handleToggleAll}
                       sx={{
@@ -728,14 +739,26 @@ export default function RunPage({
                       fontSize: "0.8rem",
                       borderColor: "rgba(255,255,255,0.08)",
                       fontWeight: 600,
+                      width: 40,
+                    }}
+                  >
+                    #
+                  </TableCell>
+                  <TableCell
+                    sx={{
+                      color: "text.secondary",
+                      fontSize: "0.8rem",
+                      borderColor: "rgba(255,255,255,0.08)",
+                      fontWeight: 600,
                     }}
                   >
                     <TableSortLabel
                       active
                       direction={sortOrder}
-                      onClick={() =>
-                        setSortOrder((o) => (o === "asc" ? "desc" : "asc"))
-                      }
+                      onClick={() => {
+                        setSortOrder((o) => (o === "asc" ? "desc" : "asc"));
+                        setPage(0);
+                      }}
                       sx={{
                         color: "text.secondary !important",
                         "& .MuiTableSortLabel-icon": {
@@ -775,7 +798,7 @@ export default function RunPage({
                 </TableRow>
               </TableHead>
               <TableBody>
-                {displayedRuns.map((run) => (
+                {pagedRuns.map((run, idx) => (
                   <TableRow
                     key={run.id}
                     selected={selectedIds.has(run.id)}
@@ -801,6 +824,16 @@ export default function RunPage({
                           "&.Mui-checked": { color: "#1976d2" },
                         }}
                       />
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        color: "text.secondary",
+                        borderColor: "rgba(255,255,255,0.06)",
+                        fontSize: "0.8rem",
+                        width: 40,
+                      }}
+                    >
+                      {clampedPage * ROWS_PER_PAGE + idx + 1}
                     </TableCell>
                     <TableCell
                       sx={{ borderColor: "rgba(255,255,255,0.06)", width: 40, px: 0.5 }}
@@ -1117,6 +1150,17 @@ export default function RunPage({
           </TableContainer>
         )}
       </Box>
+      {!loading && displayedRuns.length > 0 && (
+        <TablePagination
+          component="div"
+          count={displayedRuns.length}
+          page={clampedPage}
+          onPageChange={(_, newPage) => setPage(newPage)}
+          rowsPerPage={ROWS_PER_PAGE}
+          rowsPerPageOptions={[ROWS_PER_PAGE]}
+          sx={{ color: "text.secondary", borderTop: "1px solid rgba(255,255,255,0.08)" }}
+        />
+      )}
       {resultsRun && (
         <CeoResultsPage
           open={Boolean(resultsRun)}
