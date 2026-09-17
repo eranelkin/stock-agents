@@ -24,7 +24,7 @@ _SESSION_TTL = 3600  # seconds
 
 
 class TriggerRequest(BaseModel):
-    mode: Literal["screener", "screener-only-pull", "merged"]
+    mode: Literal["screener", "screener-only-pull", "merged", "watchlist"]
     model_ids: list[str] = []
     env: Literal["prod", "test"] = "prod"
 
@@ -81,6 +81,8 @@ async def trigger_screener(
         cmd = [python, "-u", main_py, "--mode", "screener"]
     elif body.mode == "screener-only-pull":
         cmd = [python, "-u", main_py, "--mode", "screener", "--only-pull"]
+    elif body.mode == "watchlist":
+        cmd = [python, "-u", main_py, "--mode", "watchlist"]
     else:
         cmd = [python, "-u", main_py, "--mode", "merged"]
 
