@@ -131,6 +131,14 @@ def _check_premarket_hours(tz_name: str) -> bool:
     show_default=True,
     help="Config environment: 'prod' loads screener.yaml/settings.yaml, 'test' loads screener_test.yaml/settings_test.yaml.",
 )
+@click.option(
+    "--direction",
+    type=click.Choice(["long", "short"], case_sensitive=False),
+    default="long",
+    show_default=True,
+    help="Trade direction for the screener scan: 'long' hunts pre-market gainers, "
+         "'short' hunts pre-market losers. Ignored in watchlist mode.",
+)
 def main(
     mode: str | None,
     use_scheduler: bool,
@@ -142,6 +150,7 @@ def main(
     model_ids: str | None,
     run_id: str | None,
     env: str,
+    direction: str,
 ) -> None:
     log_mode = "scheduler" if use_scheduler else (mode or "run")
     _setup_logging(log_level.upper(), mode=log_mode)
@@ -190,6 +199,7 @@ def main(
 
     if mode == "screener":
         screener_config = load_screener(screener_path)
+        screener_config.direction = direction
         from src.pipeline.screener_pipeline import run_screener_pipeline
         path = asyncio.run(run_screener_pipeline(app_config, screener_config, dry_run=dry_run))
     elif mode == "watchlist":
@@ -198,6 +208,7 @@ def main(
         path = asyncio.run(run_watchlist_pipeline(app_config, watchlist, dry_run=dry_run))
     else:  # mode == "merged"
         screener_config = load_screener(screener_path)
+        screener_config.direction = direction
         watchlist = load_watchlist(watchlist_path)
         from src.pipeline.merged_pipeline import run_merged_pipeline
         path = asyncio.run(run_merged_pipeline(app_config, screener_config, watchlist, dry_run=dry_run))
@@ -218,6 +229,7 @@ def main(
                 model_ids=explicit_model_ids,
                 model_names=sa.model_names or None if not explicit_model_ids else None,
                 run_id=run_id,
+                direction=direction,
             )
 
 

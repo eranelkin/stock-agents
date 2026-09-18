@@ -28,7 +28,7 @@ from src.ib.volume_profile import fetch_volume_profile
 from src.output.writer import write_output, write_output_live
 from src.processing.atr import calculate_atr
 from src.processing.enrichment import StockRecord, _compute_beta, build_single_record
-from src.processing.filters import apply_screener_filters, reject_reason
+from src.processing.filters import apply_screener_filters, chg_pct_passes, reject_reason
 
 log = logging.getLogger(__name__)
 
@@ -139,10 +139,14 @@ def _apply_phase1_snapshot_filters(
             if chg is None:
                 surviving[sym] = info  # defer to Phase 2 yfinance check
                 log.debug("%s: pre_market_chg_pct unavailable from IB — deferred to Phase 2", sym)
-            elif chg >= threshold:
+            elif chg_pct_passes(chg, threshold, screener_config.direction):
                 surviving[sym] = info
             else:
-                drop_log[sym] = f"pre_market_chg_pct {chg:+.2f}% < min {threshold:+.2f}%"
+                side = "<= -" if screener_config.direction == "short" else ">= "
+                drop_log[sym] = (
+                    f"pre_market_chg_pct {chg:+.2f}% does not clear {side}{threshold:.2f}% "
+                    f"(direction={screener_config.direction})"
+                )
 
     log.info(
         "Phase 1 snapshot filter: %d candidates → %d passed (%d deferred to Phase 2, price_min=%s, chg_pct_min=%s)",
@@ -175,9 +179,9 @@ async def collect_screener_records(
     _log_data_sources(app_config)
 
     log.debug(
-        "Scanner config: scan_code=%s instrument=%s location_code=%s "
+        "Scanner config: direction=%s scan_code=%s instrument=%s location_code=%s "
         "number_of_rows=%s avg_volume_min=%s scan_batches=%s",
-        screener_config.scan_code, screener_config.instrument,
+        screener_config.direction, screener_config.scan_code, screener_config.instrument,
         screener_config.location_code, screener_config.number_of_rows,
         screener_config.avg_volume_min, screener_config.scan_batches,
     )
@@ -524,7 +528,11 @@ async def collect_screener_records(
                 continue
             records_all.append(rec)
             if _live_path and app_config:
-                write_output_live(records_all, _live_path, app_config, max_stocks=app_config.max_number_of_stocks)
+                write_output_live(
+                    records_all, _live_path, app_config,
+                    max_stocks=app_config.max_number_of_stocks,
+                    direction=screener_config.direction,
+                )
             log.info("%s: enrichment complete (%d record(s) so far)", rec.symbol, len(records_all))
 
         if benchmark_sym in bars_map and benchmark_sym not in _bench_bars_cache:
@@ -872,6 +880,7 @@ async def collect_screener_records(
             write_output_live(
                 all_records, _live_path, app_config,
                 max_stocks=app_config.max_number_of_stocks,
+                direction=screener_config.direction,
             )
             log.info("Live output updated: %d record(s) → %s", len(all_records), _live_path)
 
@@ -904,11 +913,15 @@ async def run_screener_pipeline(
 
     if not records:
         log.warning("No records passed all filters")
-        return write_output([], app_config)
+        return write_output([], app_config, direction=screener_config.direction)
 
     if dry_run:
         log.info("[dry-run] Would write %d records to %s",
                  len(records), app_config.output.directory)
         return Path(app_config.output.directory) / "dry_run.json"
 
-    return write_output(records, app_config, max_stocks=app_config.max_number_of_stocks)
+    return write_output(
+        records, app_config,
+        max_stocks=app_config.max_number_of_stocks,
+        direction=screener_config.direction,
+    )

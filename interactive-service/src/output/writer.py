@@ -259,8 +259,14 @@ def _record_to_dict(rec: StockRecord, app_cfg: AppConfig) -> dict:
     return data
 
 
-def _sort_key(rec: StockRecord) -> float:
-    return rec.pre_market_chg_pct if rec.pre_market_chg_pct is not None else float("-inf")
+def _sort_key(rec: StockRecord, direction: str = "long") -> float:
+    """Sort priority, always descending: biggest gainer first (long) or biggest loser
+    first (short, via negation). Missing chg% always sorts last, in either direction.
+    """
+    chg = rec.pre_market_chg_pct
+    if chg is None:
+        return float("-inf")
+    return chg if direction != "short" else -chg
 
 
 # ── Writer ─────────────────────────────────────────────────────────────────────
@@ -269,8 +275,13 @@ def write_output(
     records: List[StockRecord],
     app_config: AppConfig,
     max_stocks: Optional[int] = None,
+    direction: str = "long",
 ) -> Path:
-    """Sort records by pre-market change %, cap to top N, format fields, and write JSON file."""
+    """Sort records by pre-market change %, cap to top N, format fields, and write JSON file.
+
+    Long sorts biggest gainers first (descending); short sorts biggest losers first
+    (ascending — most negative change on top).
+    """
     output_dir = Path(app_config.output.directory)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -278,7 +289,7 @@ def write_output(
     filename = f"{app_config.output.filename_prefix}_{timestamp}.json"
     filepath = output_dir / filename
 
-    sorted_records = sorted(records, key=_sort_key, reverse=True)
+    sorted_records = sorted(records, key=lambda r: _sort_key(r, direction), reverse=True)
     if max_stocks is not None:
         sorted_records = sorted_records[:max_stocks]
 
@@ -298,13 +309,14 @@ def write_output_live(
     live_path: Path,
     app_config: AppConfig,
     max_stocks: Optional[int] = None,
+    direction: str = "long",
 ) -> None:
     """Rewrite the live output file atomically with the current passing records.
 
     Called after each symbol passes all filters during a streaming pipeline run.
     Uses a temp-file + rename so the file is always valid JSON at every point.
     """
-    sorted_records = sorted(records, key=_sort_key, reverse=True)
+    sorted_records = sorted(records, key=lambda r: _sort_key(r, direction), reverse=True)
     if max_stocks is not None:
         sorted_records = sorted_records[:max_stocks]
 

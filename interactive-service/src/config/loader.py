@@ -193,6 +193,13 @@ class ScreenerConfig:
     scan_batches: List[ScannerBatch] = field(default_factory=list)
     phase2_batch_limit: int = 27  # max Phase 1 survivors sent to Phase 2 per iteration (prevents IB rate limit)
 
+    # "long" | "short" — set by main.py from --direction, not read from yaml.
+    # Long keeps every field above exactly as configured (pre-market gainers).
+    # Short reuses pre_market_chg_pct_min as a magnitude threshold on the *downside*
+    # (chg <= -threshold) and inverts the scanner code / sort order accordingly, so
+    # only the sign of the comparison changes — no separate short config file needed.
+    direction: str = "long"
+
 
 @dataclass
 class WatchlistEntry:

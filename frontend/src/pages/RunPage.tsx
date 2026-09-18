@@ -102,6 +102,7 @@ export default function RunPage({
   const [pullStage, setPullStage] = useState<string | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [runEnv, setRunEnv] = useState<'prod' | 'test'>(() => (localStorage.getItem('runEnv') as 'prod' | 'test') ?? 'prod');
+  const [runDirection, setRunDirection] = useState<'long' | 'short'>(() => (localStorage.getItem('runDirection') as 'long' | 'short') ?? 'long');
   const [stopping, setStopping] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const esRef = useRef<EventSource | null>(null);
@@ -244,6 +245,7 @@ export default function RunPage({
         selectedModelIds,
         runName,
         tickers,
+        runDirection,
       );
       setRuns((prev) => [created, ...prev]);
       setInnerTab(0); // switch to Today tab so user sees the new run
@@ -273,7 +275,7 @@ export default function RunPage({
     const stageCount = mode === "screener-only-pull" ? 1 : 2;
     setPullStage(`Stage 1/${stageCount} — Pulling data from IBK...`);
     try {
-      const { session_id } = await triggerScreener(mode, selectedModelIds, runEnv);
+      const { session_id } = await triggerScreener(mode, selectedModelIds, runEnv, runDirection);
       setActiveSessionId(session_id);
       window.open(`${BACKEND_URL}/screener/log/${session_id}`, "_blank");
       if (stageCount === 2) {
@@ -510,26 +512,64 @@ export default function RunPage({
             </Typography>
           </Box>
 
-          <ToggleButtonGroup
-            value={runEnv}
-            exclusive
-            size="small"
-            onChange={(_, v) => { if (v) { setRunEnv(v); localStorage.setItem('runEnv', v); } }}
-            sx={{ height: 32 }}
-          >
-            <ToggleButton value="prod" sx={{ px: 1.5, textTransform: 'none', fontWeight: 600, fontSize: 12 }}>
-              Prod
-            </ToggleButton>
-            <ToggleButton
-              value="test"
-              sx={{
-                px: 1.5, textTransform: 'none', fontWeight: 600, fontSize: 12,
-                '&.Mui-selected': { color: '#fbbf24', borderColor: '#fbbf24', bgcolor: 'rgba(251,191,36,0.08)' },
-              }}
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+            <ToggleButtonGroup
+              value={runEnv}
+              exclusive
+              size="small"
+              onChange={(_, v) => { if (v) { setRunEnv(v); localStorage.setItem('runEnv', v); } }}
+              sx={{ height: 28 }}
             >
-              Test
-            </ToggleButton>
-          </ToggleButtonGroup>
+              <ToggleButton
+                value="prod"
+                sx={{
+                  width: 64, height: 28, textTransform: 'none', fontWeight: 600, fontSize: 12,
+                  color: '#f87171',
+                  '&.Mui-selected': { color: '#f87171', borderColor: '#f87171', bgcolor: 'rgba(248,113,113,0.08)' },
+                }}
+              >
+                Prod
+              </ToggleButton>
+              <ToggleButton
+                value="test"
+                sx={{
+                  width: 64, height: 28, textTransform: 'none', fontWeight: 600, fontSize: 12,
+                  '&.Mui-selected': { color: '#fbbf24', borderColor: '#fbbf24', bgcolor: 'rgba(251,191,36,0.08)' },
+                }}
+              >
+                Test
+              </ToggleButton>
+            </ToggleButtonGroup>
+
+            <ToggleButtonGroup
+              value={runDirection}
+              exclusive
+              size="small"
+              onChange={(_, v) => { if (v) { setRunDirection(v); localStorage.setItem('runDirection', v); } }}
+              sx={{ height: 28 }}
+            >
+              <ToggleButton
+                value="long"
+                sx={{
+                  width: 64, height: 28, textTransform: 'none', fontWeight: 600, fontSize: 12,
+                  color: '#34d399',
+                  '&.Mui-selected': { color: '#34d399', borderColor: '#34d399', bgcolor: 'rgba(52,211,153,0.08)' },
+                }}
+              >
+                Long
+              </ToggleButton>
+              <ToggleButton
+                value="short"
+                sx={{
+                  width: 64, height: 28, textTransform: 'none', fontWeight: 600, fontSize: 12,
+                  color: '#f87171',
+                  '&.Mui-selected': { color: '#f87171', borderColor: '#f87171', bgcolor: 'rgba(248,113,113,0.08)' },
+                }}
+              >
+                Short
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
 
           {(Boolean(pullStage) || runInProgress) && (
             <Button
@@ -1026,16 +1066,32 @@ export default function RunPage({
                       })()}
                     </TableCell>
                     <TableCell sx={{ borderColor: "rgba(255,255,255,0.06)" }}>
-                      <Chip
-                        label={run.status === "fetching" ? "FETCHING DATA" : run.status.toUpperCase()}
-                        color={STATUS_COLOR[run.status] ?? "default"}
-                        size="small"
-                        sx={{
-                          fontWeight: 700,
-                          letterSpacing: 0.5,
-                          fontSize: "0.7rem",
-                        }}
-                      />
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                        <Chip
+                          label={run.status === "fetching" ? "FETCHING DATA" : run.status.toUpperCase()}
+                          color={STATUS_COLOR[run.status] ?? "default"}
+                          size="small"
+                          sx={{
+                            fontWeight: 700,
+                            letterSpacing: 0.5,
+                            fontSize: "0.7rem",
+                          }}
+                        />
+                        {run.direction === "short" && (
+                          <Chip
+                            label="SHORT"
+                            size="small"
+                            sx={{
+                              bgcolor: "rgba(248,113,113,0.15)",
+                              color: "#f87171",
+                              border: "1px solid rgba(248,113,113,0.3)",
+                              fontWeight: 700,
+                              letterSpacing: 0.5,
+                              fontSize: "0.65rem",
+                            }}
+                          />
+                        )}
+                      </Box>
                     </TableCell>
                     <TableCell
                       align="right"

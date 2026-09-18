@@ -45,6 +45,7 @@ const EMPTY = {
   input_schema: "",
   thinking_budget_tokens: "",
   search_depth: "",
+  direction: "",
 };
 
 const inputSx = {
@@ -209,6 +210,7 @@ export default function PromptDialog({
           ? String(editPrompt.thinking_budget_tokens)
           : "",
         search_depth: editPrompt.search_depth ?? "",
+        direction: editPrompt.direction ?? "",
       });
     } else {
       setForm(EMPTY);
@@ -559,6 +561,7 @@ export default function PromptDialog({
         ? parseInt(form.thinking_budget_tokens, 10) || null
         : null;
       const searchDepth = form.search_depth || null;
+      const direction = (isAgents || isCeo) ? (form.direction || null) : null;
       if (isEdit && editPrompt) {
         await updatePrompt(editPrompt.id, {
           title: form.title,
@@ -568,6 +571,7 @@ export default function PromptDialog({
           input_schema: parsedInputSchema,
           thinking_budget_tokens: thinkingBudget,
           search_depth: searchDepth,
+          direction,
           ...searchPayload,
         });
       } else {
@@ -579,6 +583,7 @@ export default function PromptDialog({
           input_schema: parsedInputSchema,
           thinking_budget_tokens: thinkingBudget,
           search_depth: searchDepth,
+          direction,
           ...searchPayload,
         });
       }
@@ -664,6 +669,61 @@ export default function PromptDialog({
             sx={regularInputSx}
           />
         </Field>
+
+        {(isAgents || isCeo) && (
+          <Field
+            label="Direction"
+            tooltip={
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                <Typography sx={{ color: "#e2e8f0", fontWeight: 600, fontSize: "0.82rem" }}>
+                  Direction
+                </Typography>
+                <Typography sx={{ color: "#94a3b8", fontSize: "0.78rem", lineHeight: 1.6 }}>
+                  Ties this prompt to the Long/Short toggle on the Run page. Leave it on
+                  "Both" for prompts that don't change meaning by direction. To support
+                  shorts, duplicate this prompt, keep the same Title, tag one copy "Long"
+                  and the other "Short", and edit only the short copy's wording.
+                </Typography>
+              </Box>
+            }
+          >
+            <ToggleButtonGroup
+              value={form.direction}
+              exclusive
+              onChange={(_e, val) => {
+                if (val !== null) setForm((f) => ({ ...f, direction: val }));
+              }}
+              size="small"
+              sx={{ gap: 1 }}
+            >
+              {([
+                { val: "", label: "Both" },
+                { val: "long", label: "Long only" },
+                { val: "short", label: "Short only" },
+              ] as const).map(({ val, label }) => (
+                <ToggleButton
+                  key={val}
+                  value={val}
+                  sx={{
+                    color: "rgba(255,255,255,0.5)",
+                    borderColor: "rgba(255,255,255,0.14)",
+                    textTransform: "none",
+                    fontSize: "0.82rem",
+                    px: 2,
+                    "&.Mui-selected": {
+                      color: "#fff",
+                      bgcolor: "rgba(52,211,153,0.2)",
+                      borderColor: "#34d399",
+                    },
+                    "&.Mui-selected:hover": { bgcolor: "rgba(52,211,153,0.3)" },
+                  }}
+                >
+                  {label}
+                </ToggleButton>
+              ))}
+            </ToggleButtonGroup>
+          </Field>
+        )}
 
         <Field label="Search Mode" tooltip={searchModeTooltip}>
           <Select

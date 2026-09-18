@@ -11,6 +11,7 @@ class RunCreate(BaseModel):
     model_ids: list[uuid.UUID]
     name: str
     tickers: list[dict[str, Any]]
+    direction: str = "long"  # "long" | "short"
 
 
 class BulkDeleteRequest(BaseModel):
@@ -29,5 +30,6 @@ class RunResponse(BaseModel):
     ticker_count: int | None = None
     ibk_session_id: str | None = None
     is_favorite: bool = False
+    direction: str = "long"
 
     model_config = {"from_attributes": True}

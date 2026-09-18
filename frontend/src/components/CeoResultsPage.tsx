@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
+import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Dialog from '@mui/material/Dialog'
 import Divider from '@mui/material/Divider'
@@ -430,12 +431,45 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
           px: 3, pt: 2.5, pb: 1.5,
         }}>
           <Box>
-            <Typography sx={{
-              fontSize: '1.75rem', fontWeight: 800, letterSpacing: '0.06em',
-              textTransform: 'uppercase', color: 'text.primary', lineHeight: 1,
-            }}>
-              CEO Analysis
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography sx={{
+                fontSize: '1.75rem', fontWeight: 800, letterSpacing: '0.06em',
+                textTransform: 'uppercase', color: 'text.primary', lineHeight: 1,
+              }}>
+                CEO Analysis
+              </Typography>
+              {run.direction === 'short' ? (
+                <Chip
+                  label="SHORT"
+                  sx={{
+                    bgcolor: 'rgba(248,113,113,0.15)',
+                    color: '#f87171',
+                    border: '1px solid rgba(248,113,113,0.5)',
+                    fontWeight: 700,
+                    letterSpacing: 1,
+                    fontSize: '1.4rem',
+                    height: 48,
+                    px: 1,
+                    animation: 'directionGlowRed 1.8s ease-in-out infinite',
+                  }}
+                />
+              ) : (
+                <Chip
+                  label="LONG"
+                  sx={{
+                    bgcolor: 'rgba(52,211,153,0.15)',
+                    color: '#34d399',
+                    border: '1px solid rgba(52,211,153,0.5)',
+                    fontWeight: 700,
+                    letterSpacing: 1,
+                    fontSize: '1.4rem',
+                    height: 48,
+                    px: 1,
+                    animation: 'directionGlowGreen 1.8s ease-in-out infinite',
+                  }}
+                />
+              )}
+            </Box>
             {/* Run ID row */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.75 }}>
               <Typography sx={{
@@ -800,6 +834,14 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
         @keyframes ceoPulse {
           0%, 100% { opacity: 1; transform: scale(1); }
           50% { opacity: 0.35; transform: scale(0.85); }
+        }
+        @keyframes directionGlowRed {
+          0%, 100% { box-shadow: 0 0 6px 0 rgba(248,113,113,0.4); }
+          50% { box-shadow: 0 0 18px 4px rgba(248,113,113,0.9); }
+        }
+        @keyframes directionGlowGreen {
+          0%, 100% { box-shadow: 0 0 6px 0 rgba(52,211,153,0.4); }
+          50% { box-shadow: 0 0 18px 4px rgba(52,211,153,0.9); }
         }
       `}</style>
     </Dialog>

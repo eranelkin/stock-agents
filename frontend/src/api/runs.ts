@@ -7,11 +7,12 @@ export async function triggerScreener(
   mode: 'screener' | 'screener-only-pull' | 'merged' | 'watchlist',
   modelIds: string[] = [],
   env: 'prod' | 'test' = 'prod',
+  direction: 'long' | 'short' = 'long',
 ): Promise<{ session_id: string }> {
   const res = await fetch(`${BACKEND}/screener/trigger`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mode, model_ids: modelIds, env }),
+    body: JSON.stringify({ mode, model_ids: modelIds, env, direction }),
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
@@ -63,6 +64,7 @@ export async function createRun(
   modelIds: string[],
   name: string,
   tickers: Record<string, unknown>[],
+  direction: 'long' | 'short' = 'long',
 ): Promise<Run> {
   const res = await fetch(BASE, {
     method: 'POST',
@@ -71,6 +73,7 @@ export async function createRun(
       model_ids: modelIds,
       name,
       tickers,
+      direction,
     }),
   })
   if (!res.ok) {

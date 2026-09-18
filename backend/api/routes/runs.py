@@ -27,6 +27,24 @@ from backend.schemas.run import BulkDeleteRequest, RunCreate, RunResponse
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
+
+async def _fetch_prompts(session: AsyncSession, category: str, direction: str) -> list[Prompt]:
+    """Active prompts in a category, filtered to this run's direction.
+
+    A prompt with direction=NULL always runs (News, Sectors, Macro — direction-agnostic).
+    A prompt with direction="long"/"short" only runs when it matches the run's direction
+    (Technical, CEO — the prompts a user duplicates per direction).
+    """
+    result = await session.execute(
+        select(Prompt).where(
+            Prompt.category == category,
+            Prompt.is_active == True,  # noqa: E712
+            (Prompt.direction.is_(None)) | (Prompt.direction == direction),
+        )
+    )
+    return list(result.scalars().all())
+
+
 def _load_schema(filename: str) -> dict | None:
     path = Path(__file__).resolve().parent.parent.parent / filename
     try:
@@ -106,20 +124,10 @@ async def create_run(
             detail="No active models found for the provided IDs. Enable models in the Models tab first.",
         )
 
-    prompt_result = await session.execute(
-        select(Prompt).where(Prompt.category == "agents", Prompt.is_active == True)  # noqa: E712
-    )
-    agent_prompts = prompt_result.scalars().all()
-
-    sector_prompt_result = await session.execute(
-        select(Prompt).where(Prompt.category == "sectors", Prompt.is_active == True)  # noqa: E712
-    )
-    sector_prompts = sector_prompt_result.scalars().all()
-
-    macro_prompt_result = await session.execute(
-        select(Prompt).where(Prompt.category == "macro", Prompt.is_active == True)  # noqa: E712
-    )
-    macro_prompts = macro_prompt_result.scalars().all()
+    direction = body.direction or "long"
+    agent_prompts = await _fetch_prompts(session, "agents", direction)
+    sector_prompts = await _fetch_prompts(session, "sectors", direction)
+    macro_prompts = await _fetch_prompts(session, "macro", direction)
 
     # At least one pipeline must have something to do.
     if not body.tickers and not macro_prompts and not sector_prompts:
@@ -128,10 +136,7 @@ async def create_run(
             detail="Nothing to run: provide tickers or enable Macro/Sector prompts.",
         )
 
-    ceo_prompt_result = await session.execute(
-        select(Prompt).where(Prompt.category == "ceo", Prompt.is_active == True)  # noqa: E712
-    )
-    ceo_prompts = ceo_prompt_result.scalars().all()
+    ceo_prompts = await _fetch_prompts(session, "ceo", direction)
 
     model_configs = [
         {
@@ -145,7 +150,12 @@ async def create_run(
         for m in ai_models
     ]
 
-    run = Run(name=body.name, model_names=[m.name for m in ai_models], ticker_count=len(body.tickers))
+    run = Run(
+        name=body.name,
+        model_names=[m.name for m in ai_models],
+        ticker_count=len(body.tickers),
+        direction=direction,
+    )
     session.add(run)
     await session.commit()
     await session.refresh(run)
@@ -273,25 +283,13 @@ async def start_ai_for_run(
             detail="No active models found for the provided IDs.",
         )
 
-    prompt_result = await session.execute(
-        select(Prompt).where(Prompt.category == "agents", Prompt.is_active == True)  # noqa: E712
-    )
-    agent_prompts = prompt_result.scalars().all()
-
-    sector_prompt_result = await session.execute(
-        select(Prompt).where(Prompt.category == "sectors", Prompt.is_active == True)  # noqa: E712
-    )
-    sector_prompts = sector_prompt_result.scalars().all()
-
-    macro_prompt_result = await session.execute(
-        select(Prompt).where(Prompt.category == "macro", Prompt.is_active == True)  # noqa: E712
-    )
-    macro_prompts = macro_prompt_result.scalars().all()
-
-    ceo_prompt_result = await session.execute(
-        select(Prompt).where(Prompt.category == "ceo", Prompt.is_active == True)  # noqa: E712
-    )
-    ceo_prompts = ceo_prompt_result.scalars().all()
+    # run.direction was fixed when the 'fetching' Run was created (screener trigger) —
+    # continuing the run here must not silently change which prompts it uses.
+    direction = run.direction or "long"
+    agent_prompts = await _fetch_prompts(session, "agents", direction)
+    sector_prompts = await _fetch_prompts(session, "sectors", direction)
+    macro_prompts = await _fetch_prompts(session, "macro", direction)
+    ceo_prompts = await _fetch_prompts(session, "ceo", direction)
 
     run.model_names = [m.name for m in ai_models]
     run.ticker_count = len(body.tickers)
@@ -840,6 +838,19 @@ def _try_parse_raw_output(raw: str) -> dict | None:
     # 1. Try as-is (valid complete JSON)
     try:
         result = json.loads(raw)
+        if isinstance(result, dict):
+            return _extract(result)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # 1b. The model sometimes emits a complete, valid JSON object followed by
+    # stray trailing characters (e.g. an extra "}" and blank lines). json.loads
+    # rejects that as "Extra data" even though the object itself is fine, and
+    # the brace-balance repair below only handles *missing* closes, not *extra*
+    # ones (it bails when opens_brace goes negative). raw_decode() parses just
+    # the first complete JSON value and ignores whatever comes after it.
+    try:
+        result, _ = json.JSONDecoder().raw_decode(raw.strip())
         if isinstance(result, dict):
             return _extract(result)
     except (json.JSONDecodeError, ValueError):

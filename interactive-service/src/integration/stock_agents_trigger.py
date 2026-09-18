@@ -20,11 +20,14 @@ def trigger_stock_agents_run(
     model_ids: list[str] | None = None,
     model_names: list[str] | None = None,
     run_id: str | None = None,
+    direction: str = "long",
 ) -> None:
     """Read the interactive-service output file and submit a run to stock-agents backend.
 
     If run_id is provided, calls POST /runs/{run_id}/start-ai to continue an existing
-    'fetching' run (created when the screener was triggered). Otherwise creates a new run
+    'fetching' run (created when the screener was triggered). That run's direction was
+    already fixed at creation time (see backend/api/routes/screener.py), so `direction`
+    is only sent here on the "create a new run" path below. Otherwise creates a new run
     via POST /runs.
 
     If model_ids is provided, uses them directly (UI selection takes priority).
@@ -113,6 +116,7 @@ def trigger_stock_agents_run(
                 "tickers": stocks,
                 "candle_frequency": candle_frequency,
                 "enrichment_enabled": enrichment_enabled,
+                "direction": direction,
             }
             resp = requests.post(f"{backend_url}/runs", json=payload, timeout=30)
             if not resp.ok:

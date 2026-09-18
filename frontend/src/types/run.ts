@@ -10,4 +10,5 @@ export interface Run {
   ticker_count: number | null
   ibk_session_id: string | null
   is_favorite: boolean
+  direction: 'long' | 'short'
 }
