@@ -15,7 +15,7 @@ build/
 .venv/
 venv/
 logs/
-
+backups/
 # ── App output ───────────────────────────────────────
 outputs/
 
