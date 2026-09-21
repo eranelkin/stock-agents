@@ -145,7 +145,7 @@ class StockRecord:
     short_ratio: Optional[float] = None
     institutional_holding_pct: Optional[float] = None
 
-    # ── Short-mechanics fields from IB market data (tick 236 / tick 49) ────────
+    # ── Short-mechanics fields from IB market data (tick 236; halted currently unavailable) ────────
     shortable_shares: Optional[float] = None
     shortability: Optional[str] = None
     halted: Optional[bool] = None

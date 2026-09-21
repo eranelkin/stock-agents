@@ -108,7 +108,7 @@ ib_data:
   output_bid_ask: true           # Bid and ask prices
   output_shortable_shares: "ibk" # IB-only — exact shares available to short (tick 236)
   output_shortability: "ibk"     # IB-only — borrow difficulty bucket (tick 236)
-  output_halted: "ibk"           # IB-only — trading halt status (tick 49)
+  output_halted: "ibk"           # IB-only — trading halt status (currently always unavailable; no valid IB request code found yet)
   
   # Volume Data (from various sources)
   output_avg_daily_volume_20d: "yfinance"

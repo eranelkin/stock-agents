@@ -112,7 +112,6 @@ def main(
     # Import here so logging is configured first
     from config import settings  # noqa: PLC0415
     from fetcher import fetch_all  # noqa: PLC0415
-    from borrow_fee_fetcher import fetch_borrow_fees  # noqa: PLC0415
 
     log.info("=" * 60)
     log.info("Market Data Service — starting run %s", run_ts)
@@ -167,12 +166,16 @@ def main(
     )
     elapsed = time.monotonic() - start
 
-    # Borrow fee rates — separate bulk-file source (IB stock-loan feed), unrelated
-    # to the Alpha Vantage/yfinance quote fetch above. Best-effort: never blocks
-    # or fails the run if the feed is unreachable.
-    log.info("Fetching borrow fee rates...")
-    borrow_fees = fetch_borrow_fees()
-    log.info("Borrow fee rates fetched for %d symbols", len(borrow_fees))
+    # Borrow fee rates — disabled for now. IB has no public, unauthenticated bulk
+    # file for this (confirmed: the previously-assumed endpoint 404s, and IBKR's
+    # own docs confirm this data only lives behind an authenticated Client Portal
+    # login — see borrow_fee_fetcher.py's module docstring). Left as an empty dict
+    # so downstream consumers (ceo_manager.py's borrow-fee lookup, CeoInput,
+    # CEO output schema/prompt) keep working correctly with a null value until a
+    # real source (authenticated Client Portal integration, or a paid vendor like
+    # Ortex/S3 Partners/Fintel) is chosen. fetch_borrow_fees() in
+    # borrow_fee_fetcher.py is kept, unused, for that future integration.
+    borrow_fees: dict = {}
 
     # Build output
     successful = sum(1 for v in results.values() if "error" not in v.get("quote", {}))
