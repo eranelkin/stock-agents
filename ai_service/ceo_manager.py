@@ -20,6 +20,23 @@ from ai_service.utils.run_logger import RunLogger
 logger = get_logger(__name__)
 
 
+def _parse_str(value: Any) -> str | None:
+    """Return a plain string field, or None for missing/"Not available..." placeholders."""
+    if not isinstance(value, str):
+        return None
+    s = value.strip()
+    if not s or s.upper().startswith("N"):  # catches "N/A", "Not available..."
+        return None
+    return s
+
+
+def _parse_bool(value: Any) -> bool | None:
+    """Return a plain bool field, or None for missing/"Not available..." placeholders."""
+    if isinstance(value, bool):
+        return value
+    return None
+
+
 def _slugify(name: str) -> str:
     """Filesystem-safe slug for a model display name, e.g. 'Gemini 2.5 Pro' -> 'gemini_2_5_pro'."""
     slug = re.sub(r"[^a-z0-9]+", "_", name.strip().lower())
@@ -117,6 +134,7 @@ class CeoManager:
         self._run_logger = run_logger
         self._queue: asyncio.Queue[tuple[str, str, dict[str, Any], dict[str, Any]]] = asyncio.Queue()
         self._sector_etf_map: dict[str, dict[str, Any]] = self._build_sector_etf_map()
+        self._borrow_fee_map: dict[str, float] = self._build_borrow_fee_map()
 
     def _build_sector_etf_map(self) -> dict[str, dict[str, Any]]:
         """Build lowercase sector-name → ETF-data dict from the latest market-data file."""
@@ -137,6 +155,33 @@ class CeoManager:
             if sector and etf_data.get("type") == "sector_etf":
                 mapping[sector.lower()] = etf_data
         logger.info("Sector ETF map built: %d entries from %s", len(mapping), files[0].name)
+        return mapping
+
+    def _build_borrow_fee_map(self) -> dict[str, float]:
+        """Build symbol → borrow-fee-rate dict from the latest market-data file.
+
+        Borrow fee is fetched as part of the "Get Market Data" run (market-data/
+        service), not the interactive-service screener/watchlist pull — same file,
+        same glob-latest pattern as _build_sector_etf_map, just a different top-level
+        key ("borrow_fees" instead of "symbols").
+        """
+        d = Path(settings.market_data_output_dir)
+        if not d.exists():
+            return {}
+        files = sorted(d.glob("market_*.json"), reverse=True)
+        if not files:
+            return {}
+        try:
+            borrow_fees = json.loads(files[0].read_text()).get("borrow_fees", {})
+        except Exception as exc:
+            logger.warning("Failed to load market-data for borrow fee map: %s", exc)
+            return {}
+        mapping: dict[str, float] = {}
+        for symbol, fee_data in borrow_fees.items():
+            rate = fee_data.get("rate") if isinstance(fee_data, dict) else fee_data
+            if isinstance(rate, (int, float)):
+                mapping[symbol.upper()] = float(rate)
+        logger.info("Borrow fee map built: %d entries from %s", len(mapping), files[0].name)
         return mapping
 
     def _lookup_sector_etf(self, sector: str | None) -> dict[str, Any] | None:
@@ -231,12 +276,21 @@ class CeoManager:
             if volume_dollar and _market_cap and _market_cap > 0:
                 ratio_vol_market_cap = round(volume_dollar / _market_cap, 6)
 
+            shortable_shares = _parse_numeric(entity_dict.get("shortable_shares"))
+            shortability = _parse_str(entity_dict.get("shortability"))
+            halted = _parse_bool(entity_dict.get("halted"))
+            borrow_fee_rate = self._borrow_fee_map.get(ticker.upper())
+
             entity = CeoInput(
                 symbol=ticker,
                 agents=agents,
                 macro_analysis=macro_analysis,
                 sector_etf=sector_etf,
                 float_turnover_ratio=float_turnover_ratio,
+                shortable_shares=shortable_shares,
+                shortability=shortability,
+                halted=halted,
+                borrow_fee_rate=borrow_fee_rate,
                 volume_dollar=volume_dollar,
                 ratio_vol_market_cap=ratio_vol_market_cap,
             )

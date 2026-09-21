@@ -100,6 +100,17 @@ def _build_ceo_input_schema(agent_prompts: list[Prompt]) -> dict:
                     "Use this to assess whether the stock is moving with or against its sector."
                 ),
             },
+            "borrow_fee_rate": {
+                "type": "number",
+                "nullable": True,
+                "description": (
+                    "Annualized cost to borrow this stock's shares (%), sourced from IB's stock-loan "
+                    "data via the most recent 'Get Market Data' run. Only provided to the CEO agent, "
+                    "not to Technical Analysis — largely irrelevant for a long (longs don't pay "
+                    "borrow fees), but a key cost/viability input for a short trade. Null when no "
+                    "recent market-data run has fetched it yet."
+                ),
+            },
         },
         "required": ["name", "agents"],
     }

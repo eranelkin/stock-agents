@@ -112,6 +112,7 @@ def main(
     # Import here so logging is configured first
     from config import settings  # noqa: PLC0415
     from fetcher import fetch_all  # noqa: PLC0415
+    from borrow_fee_fetcher import fetch_borrow_fees  # noqa: PLC0415
 
     log.info("=" * 60)
     log.info("Market Data Service — starting run %s", run_ts)
@@ -166,6 +167,13 @@ def main(
     )
     elapsed = time.monotonic() - start
 
+    # Borrow fee rates — separate bulk-file source (IB stock-loan feed), unrelated
+    # to the Alpha Vantage/yfinance quote fetch above. Best-effort: never blocks
+    # or fails the run if the feed is unreachable.
+    log.info("Fetching borrow fee rates...")
+    borrow_fees = fetch_borrow_fees()
+    log.info("Borrow fee rates fetched for %d symbols", len(borrow_fees))
+
     # Build output
     successful = sum(1 for v in results.values() if "error" not in v.get("quote", {}))
     failed = len(results) - successful
@@ -174,6 +182,7 @@ def main(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source": "alpha_vantage",
         "symbols": results,
+        "borrow_fees": borrow_fees,
         "metadata": {
             "total_symbols": len(deduped),
             "successful_quotes": successful,
@@ -191,6 +200,7 @@ def main(
     log.info("=" * 60)
     log.info("Run complete in %.1fs", elapsed)
     log.info("Symbols fetched: %d/%d (failed: %d)", successful, len(deduped), failed)
+    log.info("Borrow fee rates: %d symbols", len(borrow_fees))
     log.info("Output written: %s", output_path)
     log.info("=" * 60)
 

@@ -14,9 +14,12 @@ log = logging.getLogger(__name__)
 
 # Tick types requested:
 #   233 = RTVolume (real-time volume, last price, last size)
-#   236 = Shortable shares
+#   236 = Shortable — delivers BOTH tick 46 (ticker.shortable, IB's own difficulty
+#         score) and tick 89 (ticker.shortableShares, exact share count) from a
+#         single request; no separate request needed for each.
 #   258 = Fundamental Ratios (market cap, PE, etc.)
-_GENERIC_TICKS = "165,233,236,258"
+#   49  = Halted (ticker.halted: 0=not halted, 1=general halt, 2=volatility halt)
+_GENERIC_TICKS = "165,233,236,258,49"
 
 # Seconds to wait after opening subscriptions before reading ticks.
 # Using snapshot=False (streaming) so IB pushes all ticks continuously.
@@ -38,6 +41,9 @@ class MarketSnapshot:
     fifty_two_week_low: Optional[float]  # TickType LOW_52_WEEKS  (tick 19, genericTick=165)
     shares_outstanding: Optional[float]  # fundamentalRatios.TTMSHOUT × 1M (tick 258)
     beta: Optional[float]                # fundamentalRatios.BETA (tick 258)
+    shortable_shares: Optional[float]    # ticker.shortableShares, exact count (tick 89, genericTick=236)
+    shortability: Optional[str]          # derived from ticker.shortable difficulty score (tick 46, genericTick=236)
+    halted: Optional[bool]               # ticker.halted != 0 (tick 49, genericTick=49)
 
 
 def _safe(val: float) -> Optional[float]:
@@ -54,6 +60,25 @@ def _calc_chg_pct(price: Optional[float], close: Optional[float]) -> Optional[fl
     if price is None or close is None or close == 0:
         return None
     return (price - close) / close * 100
+
+
+# ticker.shortable (tick 46) is IB's own difficulty score, not a share count:
+#   0        = not available to short
+#   0 - 1.5  = shortable, but hard to borrow / may carry a high borrow fee
+#   1.5 - 2.5 = shortable, moderately available
+#   > 2.5    = easily shortable, large quantity available
+# Bucketed here into a human/LLM-readable label. Verify these breakpoints against
+# current IB API docs if shortability output looks off in practice.
+def _shortability_label(shortable_score: Optional[float]) -> Optional[str]:
+    if shortable_score is None:
+        return None
+    if shortable_score <= 0:
+        return "Not Shortable"
+    if shortable_score <= 1.5:
+        return "Hard"
+    if shortable_score <= 2.5:
+        return "Medium"
+    return "Easy"
 
 
 async def fetch_market_snapshots(
@@ -228,6 +253,13 @@ def _extract_snapshot(symbol: str, ticker) -> MarketSnapshot:
 
     volume = _safe(ticker.volume)
 
+    # Shortable shares + difficulty — both delivered via genericTick=236 (tick 89 /
+    # tick 46 respectively); halted — delivered via genericTick=49.
+    shortable_shares = _safe(getattr(ticker, "shortableShares", None))
+    shortability = _shortability_label(_safe(getattr(ticker, "shortable", None)))
+    halted_raw = _safe(getattr(ticker, "halted", None))
+    halted = None if halted_raw is None else halted_raw != 0
+
     return MarketSnapshot(
         symbol=symbol,
         pre_market_price=pre_market_price,
@@ -239,4 +271,7 @@ def _extract_snapshot(symbol: str, ticker) -> MarketSnapshot:
         fifty_two_week_low=fifty_two_week_low,
         shares_outstanding=shares_outstanding,
         beta=beta,
+        shortable_shares=shortable_shares,
+        shortability=shortability,
+        halted=halted,
     )

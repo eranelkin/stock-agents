@@ -99,6 +99,11 @@ class IBDataConfig:
     output_fifty_two_week_high: Optional[str] = "ibk"
     output_fifty_two_week_low: Optional[str] = "ibk"
     output_bid_ask: Optional[bool] = True # This one can remain Optional[bool] as it's not a source choice
+
+    # Short-mechanics data (IB-only — no yfinance/finnhub equivalent exists)
+    output_shortable_shares: Optional[str] = "ibk"
+    output_shortability: Optional[str] = "ibk"
+    output_halted: Optional[str] = "ibk"
     
     # Volume Data (from various sources)
     # IMPORTANT: "yfinance" uses info.preMarketVolume (consolidated SIP tape = TradingView).
@@ -231,6 +236,12 @@ def load_settings(path: Path) -> AppConfig:
             raise ValueError(
                 f"Invalid settings.yaml: {f} cannot be 'yfinance' — "
                 "volume profile data is only available from IB (set to 'ibk' or null)"
+            )
+    for f in ("output_shortable_shares", "output_shortability", "output_halted"):
+        if getattr(cfg.ib_data, f, None) == "yfinance":
+            raise ValueError(
+                f"Invalid settings.yaml: {f} cannot be 'yfinance' — "
+                "shortability/halted data is only available from IB (set to 'ibk' or null)"
             )
 
     # Warn when the wrong pre-market volume source is configured.

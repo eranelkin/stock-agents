@@ -19,6 +19,10 @@ class CeoInput(BaseModel):
     float_turnover_ratio: float | None = None
     volume_dollar: float | None = None
     ratio_vol_market_cap: float | None = None
+    shortable_shares: float | None = None
+    shortability: str | None = None
+    halted: bool | None = None
+    borrow_fee_rate: float | None = None  # CEO-only; never sent to the Technical agent
 
 
 class TickerInput(BaseModel):

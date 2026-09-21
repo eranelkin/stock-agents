@@ -137,6 +137,15 @@ def _record_to_dict(rec: StockRecord, app_cfg: AppConfig) -> dict:
             data["fifty_two_week_low"] = _fmt_price(rec.fifty_two_week_low)
         else:
             data["fifty_two_week_low"] = f"Not available from source ({ib_cfg.output_fifty_two_week_low})"
+    if ib_cfg.output_shortable_shares:
+        if rec.shortable_shares is not None:
+            data["shortable_shares"] = _fmt_volume(rec.shortable_shares)
+        else:
+            data["shortable_shares"] = f"Not available from source ({ib_cfg.output_shortable_shares})"
+    if ib_cfg.output_shortability:
+        data["shortability"] = rec.shortability or f"Not available from source ({ib_cfg.output_shortability})"
+    if ib_cfg.output_halted:
+        data["halted"] = rec.halted if rec.halted is not None else f"Not available from source ({ib_cfg.output_halted})"
 
     # ── External: yfinance data ──────────────────────────────────────────────
     if ext_cfg.output_float_pct:

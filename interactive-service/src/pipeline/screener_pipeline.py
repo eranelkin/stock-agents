@@ -103,6 +103,7 @@ def _apply_phase1_snapshot_filters(
                 market_cap_usd=None, pre_market_chg_pct=None,
                 fifty_two_week_high=None, fifty_two_week_low=None,
                 shares_outstanding=None, beta=None,
+                shortable_shares=None, shortability=None, halted=None,
             )
             deferred_count += 1
             log.debug("%s: no IB price snapshot — deferred to Phase 2 (yfinance fallback)", sym)
