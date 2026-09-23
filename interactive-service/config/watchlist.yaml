@@ -33,12 +33,12 @@ watchlist:
   sec_type: STK
   exchange: SMART
   currency: USD
-  active: true
+  active: false
 - symbol: IREN
   sec_type: STK
   exchange: SMART
   currency: USD
-  active: false
+  active: true
 - symbol: ACN
   sec_type: STK
   exchange: SMART
@@ -54,3 +54,13 @@ watchlist:
   exchange: SMART
   currency: USD
   active: false
+- symbol: GRAB
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: true
+- symbol: IBM
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: true

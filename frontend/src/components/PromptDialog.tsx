@@ -548,12 +548,16 @@ export default function PromptDialog({
     setSchemaError(null);
     setInputSchemaError(null);
     try {
+      // search_enabled/search_query_template only make sense for prefetch mode.
+      // Blank search_mode means "use the global default" (prefetch, per
+      // ai_service/config.py), so it must be treated the same as explicitly
+      // selecting "prefetch" here — only "tool_call" actually disallows them.
+      const searchEnabledAllowed = resolvedSearchMode !== "tool_call";
       const searchPayload = {
         search_mode: resolvedSearchMode,
-        search_enabled:
-          resolvedSearchMode === "prefetch" ? form.search_enabled : false,
+        search_enabled: searchEnabledAllowed ? form.search_enabled : false,
         search_query_template:
-          resolvedSearchMode === "prefetch" && form.search_enabled
+          searchEnabledAllowed && form.search_enabled
             ? form.search_query_template.trim() || null
             : null,
       };
@@ -770,7 +774,7 @@ export default function PromptDialog({
           </Select>
         </Field>
 
-        {searchModeValue === "prefetch" && (
+        {resolvedSearchMode !== "tool_call" && (
           <>
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
               <FormControlLabel
