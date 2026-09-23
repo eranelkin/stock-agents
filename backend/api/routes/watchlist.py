@@ -61,6 +61,7 @@ async def add_watchlist_entry(
         sec_type=body.sec_type,
         exchange=body.exchange,
         currency=body.currency,
+        active=body.active,
     )
     entries.append(entry)
     _write_entries(path, entries)
@@ -89,6 +90,7 @@ async def update_watchlist_entry(
         sec_type=body.sec_type if body.sec_type is not None else current.sec_type,
         exchange=body.exchange if body.exchange is not None else current.exchange,
         currency=body.currency if body.currency is not None else current.currency,
+        active=body.active if body.active is not None else current.active,
     )
     entries[idx] = updated
     _write_entries(path, entries)

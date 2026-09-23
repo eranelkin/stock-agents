@@ -8,6 +8,7 @@ class WatchlistEntry(BaseModel):
     sec_type: str = "STK"
     exchange: str = "SMART"
     currency: str = "USD"
+    active: bool = True
 
 
 class WatchlistEntryCreate(BaseModel):
@@ -15,6 +16,7 @@ class WatchlistEntryCreate(BaseModel):
     sec_type: str = "STK"
     exchange: str = "SMART"
     currency: str = "USD"
+    active: bool = True
 
 
 class WatchlistEntryUpdate(BaseModel):
@@ -22,3 +24,4 @@ class WatchlistEntryUpdate(BaseModel):
     sec_type: str | None = None
     exchange: str | None = None
     currency: str | None = None
+    active: bool | None = None

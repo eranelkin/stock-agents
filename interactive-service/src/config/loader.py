@@ -213,6 +213,7 @@ class WatchlistEntry:
     sec_type: str = "STK"
     exchange: str = "SMART"
     currency: str = "USD"
+    active: bool = True
 
 
 # ── Loaders ───────────────────────────────────────────────────────────────────
@@ -275,6 +276,11 @@ def load_screener(path: Path) -> ScreenerConfig:
 
 
 def load_watchlist(path: Path) -> List[WatchlistEntry]:
+    """Load watchlist entries and return only the ones toggled active.
+
+    Inactive entries stay in the file (managed via the Watchlist tab) but are
+    excluded here so they're never pulled/analyzed until re-activated.
+    """
     raw = _read_yaml(path)
     entries_raw = raw.get("watchlist", [])
     result = []
@@ -285,4 +291,16 @@ def load_watchlist(path: Path) -> List[WatchlistEntry]:
             log.warning("Skipping invalid watchlist entry %s: %s", item, e)
     if not result:
         raise ValueError("watchlist.yaml contains no valid entries")
-    return result
+    active = [e for e in result if e.active]
+    if not active:
+        raise ValueError(
+            f"watchlist.yaml has {len(result)} entries but none are active — "
+            "toggle at least one on in the Watchlist tab before running."
+        )
+    if len(active) < len(result):
+        log.info(
+            "Watchlist: %d/%d entries active — skipping inactive: %s",
+            len(active), len(result),
+            sorted(e.symbol for e in result if not e.active),
+        )
+    return active

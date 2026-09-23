@@ -3,6 +3,7 @@ export interface WatchlistEntry {
   sec_type: string;
   exchange: string;
   currency: string;
+  active: boolean;
 }
 
 export interface WatchlistEntryPayload {
@@ -10,4 +11,5 @@ export interface WatchlistEntryPayload {
   sec_type?: string;
   exchange?: string;
   currency?: string;
+  active?: boolean;
 }

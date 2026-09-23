@@ -3,7 +3,54 @@ watchlist:
   sec_type: STK
   exchange: SMART
   currency: USD
+  active: false
 - symbol: NBIS
   sec_type: STK
   exchange: SMART
   currency: USD
+  active: false
+- symbol: MAGS
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: false
+- symbol: MRVL
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: false
+- symbol: LLY
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: false
+- symbol: QCOM
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: false
+- symbol: HPE
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: true
+- symbol: IREN
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: false
+- symbol: ACN
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: false
+- symbol: ULTA
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: false
+- symbol: HOOD
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: false
