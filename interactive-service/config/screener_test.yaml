@@ -72,6 +72,9 @@ screener:
   atr_min: 4.0                   # minimum ATR as a percentage (e.g., 4.0 = 4%)
                                  # Note: ATR period is configured in settings.yaml under ib_data.atr_period
   pre_market_vol_min: 1       # default = 10000 | minimum pre-market shares traded 1000 (uses accurate TRADES bar sum)
+  rvol_premarket_min: null        # disabled in test — test runs happen early pre-market before volume is
+                                   # meaningful, so a relative-volume floor would reject everything. Prod-only
+                                   # (see screener.yaml).
   exclude_sectors:
     - "Health Care"
     # Uncomment to add more sector exclusions:

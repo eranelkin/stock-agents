@@ -41,8 +41,15 @@ import StorageIcon from "@mui/icons-material/Storage";
 import StarIcon from "@mui/icons-material/Star";
 import StarBorderIcon from "@mui/icons-material/StarBorder";
 import { createRun, deleteRun, deleteRuns, enrichPreview, pollScreenerDone, pollSessionDone, stopMarketData, stopRun, stopScreener, toggleFavorite, triggerMarketData, triggerScreener } from "../api/runs";
+import { fetchModels } from "../api/models";
 import CeoResultsPage from "../components/CeoResultsPage";
 import type { Run } from "../types/run";
+import type { Model } from "../types/model";
+
+// Prod runs are expensive/production-facing — models outside this set trigger a
+// confirmation dialog rather than running silently, to avoid an accidental
+// wrong-model prod run.
+const PROD_APPROVED_MODEL_NAMES = new Set(["Gemini 2.5 Pro", "Gemini 3.5 Flash"]);
 
 interface RunPageProps {
   selectedModelIds: string[];
@@ -104,9 +111,17 @@ export default function RunPage({
   const [runEnv, setRunEnv] = useState<'prod' | 'test'>(() => (localStorage.getItem('runEnv') as 'prod' | 'test') ?? 'prod');
   const [runDirection, setRunDirection] = useState<'long' | 'short'>(() => (localStorage.getItem('runDirection') as 'long' | 'short') ?? 'long');
   const [stopping, setStopping] = useState(false);
+  const [models, setModels] = useState<Model[]>([]);
+  const [confirmProdModel, setConfirmProdModel] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const esRef = useRef<EventSource | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Load models once so we can resolve selectedModelIds -> display names for the
+  // prod-model confirmation check below.
+  useEffect(() => {
+    fetchModels().then(setModels).catch(() => setModels([]));
+  }, []);
 
   // Open SSE connection once on mount; first message delivers current run list
   useEffect(() => {
@@ -307,13 +322,37 @@ export default function RunPage({
     }
   };
 
-  const handleRunClick = async () => {
+  const executeRun = async () => {
     if (runMode === "run")          return handleRun();
     if (runMode === "pull-run")     return handlePullClick("screener");
     if (runMode === "pull")         return handlePullClick("screener-only-pull");
     if (runMode === "watchlist")    return handlePullClick("merged");
     if (runMode === "watchlist-only") return handlePullClick("watchlist");
     if (runMode === "market-data")  return handleMarketDataClick();
+  };
+
+  // Modes that actually trigger AI analysis with the selected model(s) — "pull" and
+  // "market-data" don't use models, so the prod-model confirmation doesn't apply to them.
+  const MODEL_DRIVEN_RUN_MODES = new Set(["run", "pull-run", "watchlist", "watchlist-only"]);
+
+  const handleRunClick = async () => {
+    if (
+      runEnv === "prod" &&
+      MODEL_DRIVEN_RUN_MODES.has(runMode) &&
+      selectedModelIds.some((id) => {
+        const name = models.find((m) => m.id === id)?.name;
+        return !name || !PROD_APPROVED_MODEL_NAMES.has(name);
+      })
+    ) {
+      setConfirmProdModel(true);
+      return;
+    }
+    return executeRun();
+  };
+
+  const handleConfirmProdModel = () => {
+    setConfirmProdModel(false);
+    executeRun();
   };
 
   const handleStopAll = async () => {
@@ -1269,6 +1308,54 @@ export default function RunPage({
             sx={{ textTransform: "none", fontWeight: 600 }}
           >
             Delete {selectedIds.size > 1 ? `all ${selectedIds.size}` : ""}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={confirmProdModel}
+        onClose={() => setConfirmProdModel(false)}
+        PaperProps={{
+          sx: {
+            bgcolor: "#1a1d27",
+            border: "1px solid rgba(255,255,255,0.12)",
+            borderRadius: 2,
+          },
+        }}
+      >
+        <DialogTitle sx={{ color: "text.primary", fontWeight: 700 }}>
+          Run in Prod with a non-standard model?
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ color: "text.secondary" }}>
+            You're running in <strong style={{ color: "#f87171" }}>Prod</strong> mode with{" "}
+            <strong style={{ color: "#fbbf24" }}>
+              {selectedModelIds
+                .map((id) => models.find((m) => m.id === id)?.name ?? id)
+                .filter((name) => !PROD_APPROVED_MODEL_NAMES.has(name))
+                .join(", ")}
+            </strong>{" "}
+            — the approved prod models are Gemini 2.5 Pro and Gemini 3.5 Flash. Continue anyway?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button
+            variant="outlined"
+            onClick={() => setConfirmProdModel(false)}
+            sx={{
+              textTransform: "none",
+              borderColor: "rgba(255,255,255,0.2)",
+              color: "text.secondary",
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirmProdModel}
+            sx={{ textTransform: "none", fontWeight: 600 }}
+          >
+            Confirm
           </Button>
         </DialogActions>
       </Dialog>

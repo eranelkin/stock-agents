@@ -61,6 +61,7 @@ const COLUMN_ORDER = [
   'collapse_trigger',
   'catalyst reason',
   'ai_suggestion',
+  'suggested_strategy',
   'required_volume',
   'r-multiple',
   'regime',
@@ -82,11 +83,25 @@ const RED_THRESHOLDS: Record<string, number> = {
   short_float: 12,
 }
 
+// One-sided rules in the opposite direction — red when BELOW threshold, green when ABOVE.
+const RED_BELOW_THRESHOLDS: Record<string, number> = {
+  'success prob': 30,
+}
+const GREEN_ABOVE_THRESHOLDS: Record<string, number> = {
+  'success prob': 70,
+}
+
+// Rows are dropped entirely (not just styled) when a column's value is below this.
+const REMOVE_BELOW_THRESHOLDS: Record<string, number> = {
+  'success prob': 20,
+}
+
 const HEADER_TOOLTIPS: Record<string, string> = {
   institutional_holding: 'Shown in red when > 83%',
   squeeze_risk: 'Shown in red when > 4',
   short_ratio: 'Shown in red when > 8',
   short_float: 'Shown in red when > 12%',
+  'success prob': 'Rows below 20% are hidden. Shown in red when < 30%, green when > 70%.',
 }
 
 function parseNumeric(value: unknown): number | null {
@@ -103,12 +118,27 @@ function isOverThreshold(col: string, value: unknown): boolean {
   return n !== null && n > threshold
 }
 
+function isUnderThreshold(col: string, value: unknown): boolean {
+  const threshold = RED_BELOW_THRESHOLDS[col]
+  if (threshold === undefined) return false
+  const n = parseNumeric(value)
+  return n !== null && n < threshold
+}
+
+function isGreenAboveThreshold(col: string, value: unknown): boolean {
+  const threshold = GREEN_ABOVE_THRESHOLDS[col]
+  if (threshold === undefined) return false
+  const n = parseNumeric(value)
+  return n !== null && n > threshold
+}
+
 const LONG_TEXT_COLS = new Set([
   'analysis_strategy',
   'conviction_detect',
   'collapse_trigger',
   'catalyst reason',
   'ai_suggestion',
+  'suggested_strategy',
   'notes',
 ])
 
@@ -136,7 +166,12 @@ function cellText(value: unknown): string {
 
 function CellValue({ col, value }: { col: string; value: unknown }) {
   const text = cellText(value)
-  const alertSx = isOverThreshold(col, value) ? { color: '#f44336', fontWeight: 700 } : undefined
+  const alertSx =
+    isOverThreshold(col, value) || isUnderThreshold(col, value)
+      ? { color: '#f44336', fontWeight: 700 }
+      : isGreenAboveThreshold(col, value)
+        ? { color: '#4caf50', fontWeight: 700 }
+        : undefined
   if (isLongCol(col)) {
     return (
       <Tooltip
@@ -265,13 +300,16 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
 
   const filteredRows = useMemo(() => {
     const active = Object.entries(filters).filter(([, v]) => v.trim() !== '')
-    if (active.length === 0) return rows
-    return rows.filter(row =>
-      active.every(([col, needle]) => {
+    return rows.filter(row => {
+      for (const [col, threshold] of Object.entries(REMOVE_BELOW_THRESHOLDS)) {
+        const n = parseNumeric(row[col])
+        if (n !== null && n < threshold) return false
+      }
+      return active.every(([col, needle]) => {
         const raw = col === '_ticker' ? row._ticker : row[col]
         return cellText(raw).toLowerCase().includes(needle.trim().toLowerCase())
       })
-    )
+    })
   }, [rows, filters])
 
   const sortedRows = useMemo(() => {

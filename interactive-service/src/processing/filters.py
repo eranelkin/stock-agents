@@ -77,6 +77,13 @@ def reject_reason(rec: StockRecord, cfg: ScreenerConfig) -> str:
         if avg_vol < cfg.avg_volume_min:
             return f"avg_daily_volume {avg_vol:.0f} < min {cfg.avg_volume_min:.0f}"
 
+    if cfg.rvol_premarket_min is not None:
+        rvol = rec.rvol_pre_market
+        if rvol is None:
+            return f"rvol_pre_market unavailable (min required: {cfg.rvol_premarket_min:.2f})"
+        if rvol < cfg.rvol_premarket_min:
+            return f"rvol_pre_market {rvol:.2f} < min {cfg.rvol_premarket_min:.2f}"
+
     return ""
 
 

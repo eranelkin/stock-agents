@@ -71,6 +71,11 @@ screener:
   atr_min: 4.0                   # minimum ATR as a percentage (e.g., 4.0 = 4%)
                                  # Note: ATR period is configured in settings.yaml under ib_data.atr_period
   pre_market_vol_min: 10000       # default = 10000 | minimum pre-market shares traded 1000 (uses accurate TRADES bar sum)
+  rvol_premarket_min: 2.5         # minimum pre-market relative volume (today's pre-market volume vs normal).
+                                   # Rejects "quiet movers" — stocks down/up on the chg% threshold but with
+                                   # unremarkable volume behind them, which consistently score low in CEO/
+                                   # Technical analysis (no real participation/catalyst behind the move).
+                                   # Set to null to disable.
   exclude_sectors:
     - "Health Care"
     # Uncomment to add more sector exclusions:
