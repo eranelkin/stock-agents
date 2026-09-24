@@ -250,7 +250,12 @@ export default function PromptsPage({ onRunPrompt }: PromptsPageProps) {
                     <TableCell
                       sx={{
                         ...cellBorder,
-                        color: "text.primary",
+                        color:
+                          prompt.direction === "short"
+                            ? "#f87171"
+                            : prompt.direction === "long"
+                            ? "#34d399"
+                            : "text.primary",
                         fontWeight: 500,
                         whiteSpace: "nowrap",
                         maxWidth: 200,
@@ -272,6 +277,19 @@ export default function PromptsPage({ onRunPrompt }: PromptsPageProps) {
                     </TableCell>
                     <TableCell sx={{ ...cellBorder, whiteSpace: "nowrap" }}>
                       <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap" }}>
+                        {prompt.direction && (
+                          <Chip
+                            label={prompt.direction === "short" ? "Short" : "Long"}
+                            size="small"
+                            sx={{
+                              bgcolor: prompt.direction === "short" ? "rgba(248,113,113,0.15)" : "rgba(52,211,153,0.15)",
+                              color: prompt.direction === "short" ? "#f87171" : "#34d399",
+                              border: prompt.direction === "short" ? "1px solid rgba(248,113,113,0.3)" : "1px solid rgba(52,211,153,0.3)",
+                              fontSize: "0.72rem",
+                              height: 20,
+                            }}
+                          />
+                        )}
                         {prompt.thinking_budget_tokens != null && (
                           <Chip
                             label={`Thinking: ${prompt.thinking_budget_tokens.toLocaleString()}`}

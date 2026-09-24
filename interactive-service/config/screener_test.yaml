@@ -64,13 +64,17 @@ screener:
   # the streaming tick undercounts by 40–50% and would incorrectly drop valid stocks.
   exclude_etfs: true             # drop ETFs/ETNs from results (stockType check via IB ContractDetails)
   price_min: 2.0                 # defualt= 2 | minimum stock price (filters penny stocks)
-  pre_market_chg_pct_min: -4  # defualt= 2% | minimum pre-market change % — drops flat/down stocks before expensive fetches
+  pre_market_chg_pct_min: 4  # defualt= 2% | minimum pre-market change % magnitude — drops flat stocks before expensive fetches.
+                                 # Always a positive magnitude: long keeps chg >= +threshold, short keeps chg <= -threshold (filters.py chg_pct_passes()).
                                  # Set to null to disable
 
   # ── Phase 2 filters (applied after historical bars and pre-market bars are fetched) ──
   atr_min: 4.0                   # minimum ATR as a percentage (e.g., 4.0 = 4%)
                                  # Note: ATR period is configured in settings.yaml under ib_data.atr_period
   pre_market_vol_min: 1       # default = 10000 | minimum pre-market shares traded 1000 (uses accurate TRADES bar sum)
+  rvol_premarket_min: null        # disabled in test — test runs happen early pre-market before volume is
+                                   # meaningful, so a relative-volume floor would reject everything. Prod-only
+                                   # (see screener.yaml).
   exclude_sectors:
     - "Health Care"
     # Uncomment to add more sector exclusions:

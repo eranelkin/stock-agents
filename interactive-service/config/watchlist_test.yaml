@@ -3,3 +3,7 @@ watchlist:
   sec_type: STK
   exchange: SMART
   currency: USD
+- symbol: AMAT
+  sec_type: STK
+  exchange: SMART
+  currency: USD

@@ -1,9 +1,66 @@
 watchlist:
-  # All securities (stocks and ETFs) use sec_type: "STK" on IB's SMART routing.
-  # Exchange and currency default to SMART / USD if omitted.
-  # - symbol: "BE"
-  #   sec_type: "STK"
-  # - symbol: "GOOG"
-  #   sec_type: "STK"
-  # - symbol: "ORCL"
-  #   sec_type: "STK"
+- symbol: AMAT
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: false
+- symbol: NBIS
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: false
+- symbol: MAGS
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: false
+- symbol: MRVL
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: false
+- symbol: LLY
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: false
+- symbol: QCOM
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: false
+- symbol: HPE
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: false
+- symbol: IREN
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: true
+- symbol: ACN
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: false
+- symbol: ULTA
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: false
+- symbol: HOOD
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: false
+- symbol: GRAB
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: true
+- symbol: IBM
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: true

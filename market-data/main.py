@@ -166,6 +166,17 @@ def main(
     )
     elapsed = time.monotonic() - start
 
+    # Borrow fee rates — disabled for now. IB has no public, unauthenticated bulk
+    # file for this (confirmed: the previously-assumed endpoint 404s, and IBKR's
+    # own docs confirm this data only lives behind an authenticated Client Portal
+    # login — see borrow_fee_fetcher.py's module docstring). Left as an empty dict
+    # so downstream consumers (ceo_manager.py's borrow-fee lookup, CeoInput,
+    # CEO output schema/prompt) keep working correctly with a null value until a
+    # real source (authenticated Client Portal integration, or a paid vendor like
+    # Ortex/S3 Partners/Fintel) is chosen. fetch_borrow_fees() in
+    # borrow_fee_fetcher.py is kept, unused, for that future integration.
+    borrow_fees: dict = {}
+
     # Build output
     successful = sum(1 for v in results.values() if "error" not in v.get("quote", {}))
     failed = len(results) - successful
@@ -174,6 +185,7 @@ def main(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source": "alpha_vantage",
         "symbols": results,
+        "borrow_fees": borrow_fees,
         "metadata": {
             "total_symbols": len(deduped),
             "successful_quotes": successful,
@@ -191,6 +203,7 @@ def main(
     log.info("=" * 60)
     log.info("Run complete in %.1fs", elapsed)
     log.info("Symbols fetched: %d/%d (failed: %d)", successful, len(deduped), failed)
+    log.info("Borrow fee rates: %d symbols", len(borrow_fees))
     log.info("Output written: %s", output_path)
     log.info("=" * 60)
 

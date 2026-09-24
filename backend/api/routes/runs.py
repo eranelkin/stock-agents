@@ -23,9 +23,27 @@ from backend.db.models import AIModel, Prompt, Run, TickerResult
 from backend.db.session import AsyncSessionLocal, get_session
 from pydantic import BaseModel
 
-from backend.schemas.run import BulkDeleteRequest, RunCreate, RunResponse
+from backend.schemas.run import BulkDeleteRequest, RunAlertRequest, RunCreate, RunResponse
 
 router = APIRouter(prefix="/runs", tags=["runs"])
+
+
+async def _fetch_prompts(session: AsyncSession, category: str, direction: str) -> list[Prompt]:
+    """Active prompts in a category, filtered to this run's direction.
+
+    A prompt with direction=NULL always runs (News, Sectors, Macro — direction-agnostic).
+    A prompt with direction="long"/"short" only runs when it matches the run's direction
+    (Technical, CEO — the prompts a user duplicates per direction).
+    """
+    result = await session.execute(
+        select(Prompt).where(
+            Prompt.category == category,
+            Prompt.is_active == True,  # noqa: E712
+            (Prompt.direction.is_(None)) | (Prompt.direction == direction),
+        )
+    )
+    return list(result.scalars().all())
+
 
 def _load_schema(filename: str) -> dict | None:
     path = Path(__file__).resolve().parent.parent.parent / filename
@@ -82,6 +100,17 @@ def _build_ceo_input_schema(agent_prompts: list[Prompt]) -> dict:
                     "Use this to assess whether the stock is moving with or against its sector."
                 ),
             },
+            "borrow_fee_rate": {
+                "type": "number",
+                "nullable": True,
+                "description": (
+                    "Annualized cost to borrow this stock's shares (%), sourced from IB's stock-loan "
+                    "data via the most recent 'Get Market Data' run. Only provided to the CEO agent, "
+                    "not to Technical Analysis — largely irrelevant for a long (longs don't pay "
+                    "borrow fees), but a key cost/viability input for a short trade. Null when no "
+                    "recent market-data run has fetched it yet."
+                ),
+            },
         },
         "required": ["name", "agents"],
     }
@@ -106,20 +135,10 @@ async def create_run(
             detail="No active models found for the provided IDs. Enable models in the Models tab first.",
         )
 
-    prompt_result = await session.execute(
-        select(Prompt).where(Prompt.category == "agents", Prompt.is_active == True)  # noqa: E712
-    )
-    agent_prompts = prompt_result.scalars().all()
-
-    sector_prompt_result = await session.execute(
-        select(Prompt).where(Prompt.category == "sectors", Prompt.is_active == True)  # noqa: E712
-    )
-    sector_prompts = sector_prompt_result.scalars().all()
-
-    macro_prompt_result = await session.execute(
-        select(Prompt).where(Prompt.category == "macro", Prompt.is_active == True)  # noqa: E712
-    )
-    macro_prompts = macro_prompt_result.scalars().all()
+    direction = body.direction or "long"
+    agent_prompts = await _fetch_prompts(session, "agents", direction)
+    sector_prompts = await _fetch_prompts(session, "sectors", direction)
+    macro_prompts = await _fetch_prompts(session, "macro", direction)
 
     # At least one pipeline must have something to do.
     if not body.tickers and not macro_prompts and not sector_prompts:
@@ -128,10 +147,7 @@ async def create_run(
             detail="Nothing to run: provide tickers or enable Macro/Sector prompts.",
         )
 
-    ceo_prompt_result = await session.execute(
-        select(Prompt).where(Prompt.category == "ceo", Prompt.is_active == True)  # noqa: E712
-    )
-    ceo_prompts = ceo_prompt_result.scalars().all()
+    ceo_prompts = await _fetch_prompts(session, "ceo", direction)
 
     model_configs = [
         {
@@ -145,7 +161,13 @@ async def create_run(
         for m in ai_models
     ]
 
-    run = Run(name=body.name, model_names=[m.name for m in ai_models], ticker_count=len(body.tickers))
+    run = Run(
+        name=body.name,
+        model_names=[m.name for m in ai_models],
+        ticker_count=len(body.tickers),
+        direction=direction,
+        env=body.env,
+    )
     session.add(run)
     await session.commit()
     await session.refresh(run)
@@ -158,6 +180,7 @@ async def create_run(
                 f"{settings.ai_service_url}/run",
                 json={
                     "run_id": str(run.id),
+                    "env": body.env,
                     "models": model_configs,
                     "tickers": body.tickers,
                     "prompts": [
@@ -237,6 +260,7 @@ class StartAiBody(BaseModel):
     tickers: list[dict[str, Any]]
     candle_frequency: str = "1d"
     enrichment_enabled: bool = True
+    env: str = "test"  # "prod" | "test" — not yet sent by interactive-service; defaults preserve today's behavior
 
 
 @router.post("/{run_id}/start-ai", response_model=RunResponse)
@@ -273,29 +297,18 @@ async def start_ai_for_run(
             detail="No active models found for the provided IDs.",
         )
 
-    prompt_result = await session.execute(
-        select(Prompt).where(Prompt.category == "agents", Prompt.is_active == True)  # noqa: E712
-    )
-    agent_prompts = prompt_result.scalars().all()
-
-    sector_prompt_result = await session.execute(
-        select(Prompt).where(Prompt.category == "sectors", Prompt.is_active == True)  # noqa: E712
-    )
-    sector_prompts = sector_prompt_result.scalars().all()
-
-    macro_prompt_result = await session.execute(
-        select(Prompt).where(Prompt.category == "macro", Prompt.is_active == True)  # noqa: E712
-    )
-    macro_prompts = macro_prompt_result.scalars().all()
-
-    ceo_prompt_result = await session.execute(
-        select(Prompt).where(Prompt.category == "ceo", Prompt.is_active == True)  # noqa: E712
-    )
-    ceo_prompts = ceo_prompt_result.scalars().all()
+    # run.direction was fixed when the 'fetching' Run was created (screener trigger) —
+    # continuing the run here must not silently change which prompts it uses.
+    direction = run.direction or "long"
+    agent_prompts = await _fetch_prompts(session, "agents", direction)
+    sector_prompts = await _fetch_prompts(session, "sectors", direction)
+    macro_prompts = await _fetch_prompts(session, "macro", direction)
+    ceo_prompts = await _fetch_prompts(session, "ceo", direction)
 
     run.model_names = [m.name for m in ai_models]
     run.ticker_count = len(body.tickers)
     run.status = "pending"
+    run.env = body.env
     await session.commit()
     await session.refresh(run)
 
@@ -319,6 +332,7 @@ async def start_ai_for_run(
                 f"{settings.ai_service_url}/run",
                 json={
                     "run_id": str(run.id),
+                    "env": body.env,
                     "models": model_configs,
                     "tickers": body.tickers,
                     "candle_frequency": body.candle_frequency,
@@ -494,6 +508,27 @@ async def fail_run(
     run.status = "failed"
     run.error = body.error
     run.completed_at = datetime.now(timezone.utc)
+    await session.commit()
+    await session.refresh(run)
+    return run
+
+
+@router.post("/{run_id}/alert", response_model=RunResponse)
+async def set_run_alert(
+    run_id: uuid.UUID,
+    body: RunAlertRequest,
+    session: AsyncSession = Depends(get_session),
+) -> Run:
+    """Set a non-fatal alert message on a run (e.g. Tavily quota exceeded).
+
+    Unlike `error`, this does not change run status — the run keeps going,
+    this just surfaces a notice in the UI via the existing /runs/stream feed.
+    """
+    run = await session.get(Run, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    run.alert = body.message
     await session.commit()
     await session.refresh(run)
     return run
@@ -840,6 +875,19 @@ def _try_parse_raw_output(raw: str) -> dict | None:
     # 1. Try as-is (valid complete JSON)
     try:
         result = json.loads(raw)
+        if isinstance(result, dict):
+            return _extract(result)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # 1b. The model sometimes emits a complete, valid JSON object followed by
+    # stray trailing characters (e.g. an extra "}" and blank lines). json.loads
+    # rejects that as "Extra data" even though the object itself is fine, and
+    # the brace-balance repair below only handles *missing* closes, not *extra*
+    # ones (it bails when opens_brace goes negative). raw_decode() parses just
+    # the first complete JSON value and ignores whatever comes after it.
+    try:
+        result, _ = json.JSONDecoder().raw_decode(raw.strip())
         if isinstance(result, dict):
             return _extract(result)
     except (json.JSONDecodeError, ValueError):

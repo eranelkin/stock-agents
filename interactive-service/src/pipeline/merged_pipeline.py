@@ -58,4 +58,8 @@ async def run_merged_pipeline(
         log.info("[dry-run] Would write %d records to %s", len(combined), app_config.output.directory)
         return Path(app_config.output.directory) / "dry_run.yaml"
 
-    return write_output(combined, app_config, max_stocks=app_config.max_number_of_stocks)
+    return write_output(
+        combined, app_config,
+        max_stocks=app_config.max_number_of_stocks,
+        direction=screener_config.direction,
+    )

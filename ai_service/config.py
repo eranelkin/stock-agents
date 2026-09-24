@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     search_max_tool_rounds: int = 10  # max LLM↔tool cycles before forcing final answer
     search_days: int = 3              # Tavily `days` param — hard cutoff (3 = last 72h)
 
+    # Gemini Google Search grounding — replaces Tavily for prod runs on Gemini models
+    search_grounding_enabled_prod: bool = True  # False = prod always uses Tavily too (rollback switch)
+
     # Pre-market data
     finnhub_api_key: str = ""
     premarket_enabled: bool = True
@@ -56,6 +59,7 @@ class Settings(BaseSettings):
 
     # Service
     ai_service_port: int = 4102
+    backend_url: str = "http://localhost:4101"  # used only for the run-alert callback (Tavily quota notice)
 
     @property
     def database_url(self) -> str:

@@ -5,9 +5,12 @@ export interface Run {
   created_at: string
   completed_at: string | null
   error: string | null
+  alert: string | null
   output_dir: string | null
   model_names: string[] | null
   ticker_count: number | null
   ibk_session_id: string | null
   is_favorite: boolean
+  direction: 'long' | 'short'
+  env: 'prod' | 'test'
 }

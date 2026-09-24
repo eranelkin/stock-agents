@@ -9,6 +9,16 @@ from src.processing.enrichment import StockRecord
 log = logging.getLogger(__name__)
 
 
+def chg_pct_passes(chg: float, threshold: float, direction: str) -> bool:
+    """True if chg% clears the pre_market_chg_pct_min magnitude threshold for this direction.
+
+    pre_market_chg_pct_min is always a positive magnitude (e.g. 2.0 = "2%"). Long keeps
+    gainers at or above +threshold; short keeps losers at or below -threshold — same
+    magnitude, opposite sign, so one config value drives both directions.
+    """
+    return chg >= threshold if direction != "short" else chg <= -threshold
+
+
 def apply_screener_filters(records: List[StockRecord], config: ScreenerConfig) -> List[StockRecord]:
     """
     Apply client-side filters to records after IB data has been fetched.
@@ -33,8 +43,12 @@ def reject_reason(rec: StockRecord, cfg: ScreenerConfig) -> str:
     # rec.pre_market_chg_pct was filled by yfinance fallback during Phase 2 enrichment).
     if cfg.pre_market_chg_pct_min is not None:
         chg = rec.pre_market_chg_pct
-        if chg is not None and chg < cfg.pre_market_chg_pct_min:
-            return f"pre_market_chg_pct {chg:+.2f}% < min {cfg.pre_market_chg_pct_min:+.2f}%"
+        if chg is not None and not chg_pct_passes(chg, cfg.pre_market_chg_pct_min, cfg.direction):
+            side = "<= -" if cfg.direction == "short" else ">= "
+            return (
+                f"pre_market_chg_pct {chg:+.2f}% does not clear {side}{cfg.pre_market_chg_pct_min:.2f}% "
+                f"(direction={cfg.direction})"
+            )
 
     if cfg.atr_min is not None:
         if rec.atr is None:
@@ -62,6 +76,13 @@ def reject_reason(rec: StockRecord, cfg: ScreenerConfig) -> str:
             return f"avg_daily_volume unavailable (min required: {cfg.avg_volume_min:.0f})"
         if avg_vol < cfg.avg_volume_min:
             return f"avg_daily_volume {avg_vol:.0f} < min {cfg.avg_volume_min:.0f}"
+
+    if cfg.rvol_premarket_min is not None:
+        rvol = rec.rvol_pre_market
+        if rvol is None:
+            return f"rvol_pre_market unavailable (min required: {cfg.rvol_premarket_min:.2f})"
+        if rvol < cfg.rvol_premarket_min:
+            return f"rvol_pre_market {rvol:.2f} < min {cfg.rvol_premarket_min:.2f}"
 
     return ""
 

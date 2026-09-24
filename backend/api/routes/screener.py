@@ -27,6 +27,7 @@ class TriggerRequest(BaseModel):
     mode: Literal["screener", "screener-only-pull", "merged", "watchlist"]
     model_ids: list[str] = []
     env: Literal["prod", "test"] = "prod"
+    direction: Literal["long", "short"] = "long"
 
 
 def _prune_sessions() -> None:
@@ -86,7 +87,7 @@ async def trigger_screener(
     else:
         cmd = [python, "-u", main_py, "--mode", "merged"]
 
-    cmd += ["--env", body.env]
+    cmd += ["--env", body.env, "--direction", body.direction]
 
     if body.model_ids:
         cmd += ["--model-ids", ",".join(body.model_ids)]
@@ -102,6 +103,8 @@ async def trigger_screener(
             status="fetching",
             name=f"IBK Pull — {ts}",
             ibk_session_id=session_id,
+            direction=body.direction,
+            env=body.env,
         )
         session.add(run)
         await session.commit()

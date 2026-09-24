@@ -66,10 +66,12 @@ class Orchestrator:
         sector_prompts: list[PromptConfig],
         macro_prompts: list[PromptConfig] | None = None,
         ceo_prompts: list[PromptConfig] | None = None,
+        env: str = "test",
     ) -> None:
         self.run_id = run_id
         self.model_configs = model_configs
         self.tickers = tickers
+        self.env = env
         self.prompts_by_category: dict[str, list[PromptConfig]] = {
             "agents": prompts,
             "sectors": sector_prompts,
@@ -214,6 +216,7 @@ class Orchestrator:
                         pipeline_type=cfg.name,
                         run_dir=run_dir,
                         output_prefix=cfg.output_prefix,
+                        env=self.env,
                     )
                     for mc in models_to_use
                     for entity in entities

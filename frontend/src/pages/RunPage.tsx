@@ -41,8 +41,15 @@ import StorageIcon from "@mui/icons-material/Storage";
 import StarIcon from "@mui/icons-material/Star";
 import StarBorderIcon from "@mui/icons-material/StarBorder";
 import { createRun, deleteRun, deleteRuns, enrichPreview, pollScreenerDone, pollSessionDone, stopMarketData, stopRun, stopScreener, toggleFavorite, triggerMarketData, triggerScreener } from "../api/runs";
+import { fetchModels } from "../api/models";
 import CeoResultsPage from "../components/CeoResultsPage";
 import type { Run } from "../types/run";
+import type { Model } from "../types/model";
+
+// Prod runs are expensive/production-facing — models outside this set trigger a
+// confirmation dialog rather than running silently, to avoid an accidental
+// wrong-model prod run.
+const PROD_APPROVED_MODEL_NAMES = new Set(["Gemini 2.5 Pro", "Gemini 3.5 Flash"]);
 
 interface RunPageProps {
   selectedModelIds: string[];
@@ -102,10 +109,33 @@ export default function RunPage({
   const [pullStage, setPullStage] = useState<string | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [runEnv, setRunEnv] = useState<'prod' | 'test'>(() => (localStorage.getItem('runEnv') as 'prod' | 'test') ?? 'prod');
+  const [runDirection, setRunDirection] = useState<'long' | 'short'>(() => (localStorage.getItem('runDirection') as 'long' | 'short') ?? 'long');
   const [stopping, setStopping] = useState(false);
+  const [models, setModels] = useState<Model[]>([]);
+  const [confirmProdModel, setConfirmProdModel] = useState(false);
+  const [activeAlert, setActiveAlert] = useState<{ runId: string; message: string } | null>(null);
+  const seenAlertsRef = useRef<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const esRef = useRef<EventSource | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Load models once so we can resolve selectedModelIds -> display names for the
+  // prod-model confirmation check below.
+  useEffect(() => {
+    fetchModels().then(setModels).catch(() => setModels([]));
+  }, []);
+
+  // Pop a Dialog the first time any run reports a new (unacknowledged) alert
+  // (e.g. Tavily quota exceeded) — doesn't affect run status, just a heads-up.
+  useEffect(() => {
+    for (const run of runs) {
+      if (run.alert && !seenAlertsRef.current.has(run.id + run.alert)) {
+        seenAlertsRef.current.add(run.id + run.alert);
+        setActiveAlert({ runId: run.id, message: run.alert });
+        break;
+      }
+    }
+  }, [runs]);
 
   // Open SSE connection once on mount; first message delivers current run list
   useEffect(() => {
@@ -244,6 +274,8 @@ export default function RunPage({
         selectedModelIds,
         runName,
         tickers,
+        runDirection,
+        runEnv,
       );
       setRuns((prev) => [created, ...prev]);
       setInnerTab(0); // switch to Today tab so user sees the new run
@@ -273,7 +305,7 @@ export default function RunPage({
     const stageCount = mode === "screener-only-pull" ? 1 : 2;
     setPullStage(`Stage 1/${stageCount} — Pulling data from IBK...`);
     try {
-      const { session_id } = await triggerScreener(mode, selectedModelIds, runEnv);
+      const { session_id } = await triggerScreener(mode, selectedModelIds, runEnv, runDirection);
       setActiveSessionId(session_id);
       window.open(`${BACKEND_URL}/screener/log/${session_id}`, "_blank");
       if (stageCount === 2) {
@@ -305,13 +337,37 @@ export default function RunPage({
     }
   };
 
-  const handleRunClick = async () => {
+  const executeRun = async () => {
     if (runMode === "run")          return handleRun();
     if (runMode === "pull-run")     return handlePullClick("screener");
     if (runMode === "pull")         return handlePullClick("screener-only-pull");
     if (runMode === "watchlist")    return handlePullClick("merged");
     if (runMode === "watchlist-only") return handlePullClick("watchlist");
     if (runMode === "market-data")  return handleMarketDataClick();
+  };
+
+  // Modes that actually trigger AI analysis with the selected model(s) — "pull" and
+  // "market-data" don't use models, so the prod-model confirmation doesn't apply to them.
+  const MODEL_DRIVEN_RUN_MODES = new Set(["run", "pull-run", "watchlist", "watchlist-only"]);
+
+  const handleRunClick = async () => {
+    if (
+      runEnv === "prod" &&
+      MODEL_DRIVEN_RUN_MODES.has(runMode) &&
+      selectedModelIds.some((id) => {
+        const name = models.find((m) => m.id === id)?.name;
+        return !name || !PROD_APPROVED_MODEL_NAMES.has(name);
+      })
+    ) {
+      setConfirmProdModel(true);
+      return;
+    }
+    return executeRun();
+  };
+
+  const handleConfirmProdModel = () => {
+    setConfirmProdModel(false);
+    executeRun();
   };
 
   const handleStopAll = async () => {
@@ -510,26 +566,64 @@ export default function RunPage({
             </Typography>
           </Box>
 
-          <ToggleButtonGroup
-            value={runEnv}
-            exclusive
-            size="small"
-            onChange={(_, v) => { if (v) { setRunEnv(v); localStorage.setItem('runEnv', v); } }}
-            sx={{ height: 32 }}
-          >
-            <ToggleButton value="prod" sx={{ px: 1.5, textTransform: 'none', fontWeight: 600, fontSize: 12 }}>
-              Prod
-            </ToggleButton>
-            <ToggleButton
-              value="test"
-              sx={{
-                px: 1.5, textTransform: 'none', fontWeight: 600, fontSize: 12,
-                '&.Mui-selected': { color: '#fbbf24', borderColor: '#fbbf24', bgcolor: 'rgba(251,191,36,0.08)' },
-              }}
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+            <ToggleButtonGroup
+              value={runEnv}
+              exclusive
+              size="small"
+              onChange={(_, v) => { if (v) { setRunEnv(v); localStorage.setItem('runEnv', v); } }}
+              sx={{ height: 28 }}
             >
-              Test
-            </ToggleButton>
-          </ToggleButtonGroup>
+              <ToggleButton
+                value="prod"
+                sx={{
+                  width: 64, height: 28, textTransform: 'none', fontWeight: 600, fontSize: 12,
+                  color: '#f87171',
+                  '&.Mui-selected': { color: '#f87171', borderColor: '#f87171', bgcolor: 'rgba(248,113,113,0.08)' },
+                }}
+              >
+                Prod
+              </ToggleButton>
+              <ToggleButton
+                value="test"
+                sx={{
+                  width: 64, height: 28, textTransform: 'none', fontWeight: 600, fontSize: 12,
+                  '&.Mui-selected': { color: '#fbbf24', borderColor: '#fbbf24', bgcolor: 'rgba(251,191,36,0.08)' },
+                }}
+              >
+                Test
+              </ToggleButton>
+            </ToggleButtonGroup>
+
+            <ToggleButtonGroup
+              value={runDirection}
+              exclusive
+              size="small"
+              onChange={(_, v) => { if (v) { setRunDirection(v); localStorage.setItem('runDirection', v); } }}
+              sx={{ height: 28 }}
+            >
+              <ToggleButton
+                value="long"
+                sx={{
+                  width: 64, height: 28, textTransform: 'none', fontWeight: 600, fontSize: 12,
+                  color: '#34d399',
+                  '&.Mui-selected': { color: '#34d399', borderColor: '#34d399', bgcolor: 'rgba(52,211,153,0.08)' },
+                }}
+              >
+                Long
+              </ToggleButton>
+              <ToggleButton
+                value="short"
+                sx={{
+                  width: 64, height: 28, textTransform: 'none', fontWeight: 600, fontSize: 12,
+                  color: '#f87171',
+                  '&.Mui-selected': { color: '#f87171', borderColor: '#f87171', bgcolor: 'rgba(248,113,113,0.08)' },
+                }}
+              >
+                Short
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
 
           {(Boolean(pullStage) || runInProgress) && (
             <Button
@@ -1026,16 +1120,69 @@ export default function RunPage({
                       })()}
                     </TableCell>
                     <TableCell sx={{ borderColor: "rgba(255,255,255,0.06)" }}>
-                      <Chip
-                        label={run.status === "fetching" ? "FETCHING DATA" : run.status.toUpperCase()}
-                        color={STATUS_COLOR[run.status] ?? "default"}
-                        size="small"
-                        sx={{
-                          fontWeight: 700,
-                          letterSpacing: 0.5,
-                          fontSize: "0.7rem",
-                        }}
-                      />
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                        <Chip
+                          label={run.status === "fetching" ? "FETCHING DATA" : run.status.toUpperCase()}
+                          color={STATUS_COLOR[run.status] ?? "default"}
+                          size="small"
+                          sx={{
+                            fontWeight: 700,
+                            letterSpacing: 0.5,
+                            fontSize: "0.7rem",
+                          }}
+                        />
+                        {run.direction === "short" && (
+                          <Chip
+                            label="SHORT"
+                            size="small"
+                            sx={{
+                              bgcolor: "rgba(248,113,113,0.15)",
+                              color: "#f87171",
+                              border: "1px solid rgba(248,113,113,0.3)",
+                              fontWeight: 700,
+                              letterSpacing: 0.5,
+                              fontSize: "0.65rem",
+                            }}
+                          />
+                        )}
+                        {run.direction === "long" && (
+                          <Chip
+                            label="LONG"
+                            size="small"
+                            sx={{
+                              bgcolor: "rgba(52,211,153,0.15)",
+                              color: "#34d399",
+                              border: "1px solid rgba(52,211,153,0.3)",
+                              fontWeight: 700,
+                              letterSpacing: 0.5,
+                              fontSize: "0.65rem",
+                            }}
+                          />
+                        )}
+                        <Chip
+                          label={run.env === "prod" ? "PROD" : "TEST"}
+                          size="small"
+                          sx={
+                            run.env === "prod"
+                              ? {
+                                  bgcolor: "rgba(248,113,113,0.15)",
+                                  color: "#f87171",
+                                  border: "1px solid rgba(248,113,113,0.3)",
+                                  fontWeight: 700,
+                                  letterSpacing: 0.5,
+                                  fontSize: "0.65rem",
+                                }
+                              : {
+                                  bgcolor: "rgba(251,191,36,0.15)",
+                                  color: "#fbbf24",
+                                  border: "1px solid rgba(251,191,36,0.3)",
+                                  fontWeight: 700,
+                                  letterSpacing: 0.5,
+                                  fontSize: "0.65rem",
+                                }
+                          }
+                        />
+                      </Box>
                     </TableCell>
                     <TableCell
                       align="right"
@@ -1213,6 +1360,84 @@ export default function RunPage({
             sx={{ textTransform: "none", fontWeight: 600 }}
           >
             Delete {selectedIds.size > 1 ? `all ${selectedIds.size}` : ""}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={confirmProdModel}
+        onClose={() => setConfirmProdModel(false)}
+        PaperProps={{
+          sx: {
+            bgcolor: "#1a1d27",
+            border: "1px solid rgba(255,255,255,0.12)",
+            borderRadius: 2,
+          },
+        }}
+      >
+        <DialogTitle sx={{ color: "text.primary", fontWeight: 700 }}>
+          Run in Prod with a non-standard model?
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ color: "text.secondary" }}>
+            You're running in <strong style={{ color: "#f87171" }}>Prod</strong> mode with{" "}
+            <strong style={{ color: "#fbbf24" }}>
+              {selectedModelIds
+                .map((id) => models.find((m) => m.id === id)?.name ?? id)
+                .filter((name) => !PROD_APPROVED_MODEL_NAMES.has(name))
+                .join(", ")}
+            </strong>{" "}
+            — the approved prod models are Gemini 2.5 Pro and Gemini 3.5 Flash. Continue anyway?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button
+            variant="outlined"
+            onClick={() => setConfirmProdModel(false)}
+            sx={{
+              textTransform: "none",
+              borderColor: "rgba(255,255,255,0.2)",
+              color: "text.secondary",
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirmProdModel}
+            sx={{ textTransform: "none", fontWeight: 600 }}
+          >
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={activeAlert !== null}
+        onClose={() => setActiveAlert(null)}
+        PaperProps={{
+          sx: {
+            bgcolor: "#1a1d27",
+            border: "1px solid rgba(255,255,255,0.12)",
+            borderRadius: 2,
+          },
+        }}
+      >
+        <DialogTitle sx={{ color: "text.primary", fontWeight: 700 }}>
+          Run notice
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ color: "text.secondary" }}>
+            {activeAlert?.message}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button
+            variant="contained"
+            onClick={() => setActiveAlert(null)}
+            sx={{ textTransform: "none", fontWeight: 600 }}
+          >
+            Dismiss
           </Button>
         </DialogActions>
       </Dialog>

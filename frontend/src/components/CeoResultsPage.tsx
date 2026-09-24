@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
+import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Dialog from '@mui/material/Dialog'
 import Divider from '@mui/material/Divider'
@@ -60,6 +61,7 @@ const COLUMN_ORDER = [
   'collapse_trigger',
   'catalyst reason',
   'ai_suggestion',
+  'suggested_strategy',
   'required_volume',
   'r-multiple',
   'regime',
@@ -81,11 +83,25 @@ const RED_THRESHOLDS: Record<string, number> = {
   short_float: 12,
 }
 
+// One-sided rules in the opposite direction — red when BELOW threshold, green when ABOVE.
+const RED_BELOW_THRESHOLDS: Record<string, number> = {
+  'success prob': 30,
+}
+const GREEN_ABOVE_THRESHOLDS: Record<string, number> = {
+  'success prob': 70,
+}
+
+// Rows are dropped entirely (not just styled) when a column's value is below this.
+const REMOVE_BELOW_THRESHOLDS: Record<string, number> = {
+  'success prob': 20,
+}
+
 const HEADER_TOOLTIPS: Record<string, string> = {
   institutional_holding: 'Shown in red when > 83%',
   squeeze_risk: 'Shown in red when > 4',
   short_ratio: 'Shown in red when > 8',
   short_float: 'Shown in red when > 12%',
+  'success prob': 'Rows below 20% are hidden. Shown in red when < 30%, green when > 70%.',
 }
 
 function parseNumeric(value: unknown): number | null {
@@ -102,12 +118,27 @@ function isOverThreshold(col: string, value: unknown): boolean {
   return n !== null && n > threshold
 }
 
+function isUnderThreshold(col: string, value: unknown): boolean {
+  const threshold = RED_BELOW_THRESHOLDS[col]
+  if (threshold === undefined) return false
+  const n = parseNumeric(value)
+  return n !== null && n < threshold
+}
+
+function isGreenAboveThreshold(col: string, value: unknown): boolean {
+  const threshold = GREEN_ABOVE_THRESHOLDS[col]
+  if (threshold === undefined) return false
+  const n = parseNumeric(value)
+  return n !== null && n > threshold
+}
+
 const LONG_TEXT_COLS = new Set([
   'analysis_strategy',
   'conviction_detect',
   'collapse_trigger',
   'catalyst reason',
   'ai_suggestion',
+  'suggested_strategy',
   'notes',
 ])
 
@@ -135,7 +166,12 @@ function cellText(value: unknown): string {
 
 function CellValue({ col, value }: { col: string; value: unknown }) {
   const text = cellText(value)
-  const alertSx = isOverThreshold(col, value) ? { color: '#f44336', fontWeight: 700 } : undefined
+  const alertSx =
+    isOverThreshold(col, value) || isUnderThreshold(col, value)
+      ? { color: '#f44336', fontWeight: 700 }
+      : isGreenAboveThreshold(col, value)
+        ? { color: '#4caf50', fontWeight: 700 }
+        : undefined
   if (isLongCol(col)) {
     return (
       <Tooltip
@@ -264,13 +300,16 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
 
   const filteredRows = useMemo(() => {
     const active = Object.entries(filters).filter(([, v]) => v.trim() !== '')
-    if (active.length === 0) return rows
-    return rows.filter(row =>
-      active.every(([col, needle]) => {
+    return rows.filter(row => {
+      for (const [col, threshold] of Object.entries(REMOVE_BELOW_THRESHOLDS)) {
+        const n = parseNumeric(row[col])
+        if (n !== null && n < threshold) return false
+      }
+      return active.every(([col, needle]) => {
         const raw = col === '_ticker' ? row._ticker : row[col]
         return cellText(raw).toLowerCase().includes(needle.trim().toLowerCase())
       })
-    )
+    })
   }, [rows, filters])
 
   const sortedRows = useMemo(() => {
@@ -430,12 +469,45 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
           px: 3, pt: 2.5, pb: 1.5,
         }}>
           <Box>
-            <Typography sx={{
-              fontSize: '1.75rem', fontWeight: 800, letterSpacing: '0.06em',
-              textTransform: 'uppercase', color: 'text.primary', lineHeight: 1,
-            }}>
-              CEO Analysis
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography sx={{
+                fontSize: '1.75rem', fontWeight: 800, letterSpacing: '0.06em',
+                textTransform: 'uppercase', color: 'text.primary', lineHeight: 1,
+              }}>
+                CEO Analysis
+              </Typography>
+              {run.direction === 'short' ? (
+                <Chip
+                  label="SHORT"
+                  sx={{
+                    bgcolor: 'rgba(248,113,113,0.15)',
+                    color: '#f87171',
+                    border: '1px solid rgba(248,113,113,0.5)',
+                    fontWeight: 700,
+                    letterSpacing: 1,
+                    fontSize: '1.4rem',
+                    height: 48,
+                    px: 1,
+                    animation: 'directionGlowRed 1.8s ease-in-out infinite',
+                  }}
+                />
+              ) : (
+                <Chip
+                  label="LONG"
+                  sx={{
+                    bgcolor: 'rgba(52,211,153,0.15)',
+                    color: '#34d399',
+                    border: '1px solid rgba(52,211,153,0.5)',
+                    fontWeight: 700,
+                    letterSpacing: 1,
+                    fontSize: '1.4rem',
+                    height: 48,
+                    px: 1,
+                    animation: 'directionGlowGreen 1.8s ease-in-out infinite',
+                  }}
+                />
+              )}
+            </Box>
             {/* Run ID row */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.75 }}>
               <Typography sx={{
@@ -800,6 +872,14 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
         @keyframes ceoPulse {
           0%, 100% { opacity: 1; transform: scale(1); }
           50% { opacity: 0.35; transform: scale(0.85); }
+        }
+        @keyframes directionGlowRed {
+          0%, 100% { box-shadow: 0 0 6px 0 rgba(248,113,113,0.4); }
+          50% { box-shadow: 0 0 18px 4px rgba(248,113,113,0.9); }
+        }
+        @keyframes directionGlowGreen {
+          0%, 100% { box-shadow: 0 0 6px 0 rgba(52,211,153,0.4); }
+          50% { box-shadow: 0 0 18px 4px rgba(52,211,153,0.9); }
         }
       `}</style>
     </Dialog>

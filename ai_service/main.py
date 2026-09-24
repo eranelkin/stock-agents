@@ -90,6 +90,7 @@ app = FastAPI(title="Stock-Agents AI Service", lifespan=lifespan)
 
 class RunRequest(BaseModel):
     run_id: str
+    env: str = "test"  # "prod" | "test" — selected on the Run page; drives search-provider selection
     models: list[ModelConfig]
     tickers: list[dict[str, Any]]
     prompts: list[PromptConfig]
@@ -110,6 +111,7 @@ async def trigger_run(request: RunRequest) -> dict[str, str]:
             request.sector_prompts,
             request.macro_prompts,
             request.ceo_prompts,
+            request.env,
         ),
         name=f"run-{request.run_id}",
     )
@@ -149,6 +151,7 @@ async def _run_orchestrator(
     sector_prompts: list[PromptConfig],
     macro_prompts: list[PromptConfig],
     ceo_prompts: list[PromptConfig] | None = None,
+    env: str = "test",
 ) -> None:
     try:
         await Orchestrator(
@@ -159,6 +162,7 @@ async def _run_orchestrator(
             sector_prompts=sector_prompts,
             macro_prompts=macro_prompts,
             ceo_prompts=ceo_prompts or [],
+            env=env,
         ).run()
     finally:
         _active_tasks.pop(run_id, None)

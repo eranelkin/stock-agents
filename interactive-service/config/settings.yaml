@@ -3,7 +3,8 @@
 # final max number of stocks in the file 
 # even if more pass all filters. 
 #Set to null to disable limit.
-max_number_of_stocks: 15
+
+max_number_of_stocks: 15 #15
 
 #To reduce or eliminate the 442s pause, the options are:                                                                                                                            
  # 1. Disable volume profile — set fetch_volume_profile: false in settings.yaml → cuts from 6 to 3 calls/symbol, 10 symbols = 30 calls (well under limit)  
@@ -106,6 +107,9 @@ ib_data:
   output_fifty_two_week_high: "yfinance"
   output_fifty_two_week_low: "yfinance"
   output_bid_ask: true           # Bid and ask prices
+  output_shortable_shares: "ibk" # IB-only — exact shares available to short (tick 236)
+  output_shortability: "ibk"     # IB-only — borrow difficulty bucket (tick 236)
+  output_halted: "ibk"           # IB-only — trading halt status (currently always unavailable; no valid IB request code found yet)
   
   # Volume Data (from various sources)
   output_avg_daily_volume_20d: "yfinance"
@@ -179,7 +183,8 @@ external_apis:
   #   - next_earnings_date: upcoming earnings announcement date
   
   # Output Toggles for External Data
-  output_news_catalysts: null
+  output_news_catalysts: null      # null | "yfinance" (FMP, requires fmp_api_key) | "ibk" (IB native news, requires
+                                    # account news entitlements; server-side filtered to last 72h, headline-only)
   output_float_pct: "yfinance"
   output_next_earnings_date: "yfinance"
   output_short_float_pct: "yfinance"

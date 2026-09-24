@@ -13,12 +13,13 @@ import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import CircularProgress from "@mui/material/CircularProgress";
 import Alert from "@mui/material/Alert";
+import Switch from "@mui/material/Switch";
 import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
-import { deleteWatchlistEntry, fetchWatchlist } from "../api/watchlist";
+import { deleteWatchlistEntry, fetchWatchlist, updateWatchlistEntry } from "../api/watchlist";
 import type { WatchlistEntry } from "../types/watchlist";
 import WatchlistDialog from "../components/WatchlistDialog";
 
@@ -55,6 +56,18 @@ export default function WatchlistPage() {
       setEntries((prev) => prev.filter((e) => e.symbol !== symbol));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete symbol");
+    }
+  };
+
+  const handleToggleActive = async (entry: WatchlistEntry) => {
+    const nextActive = !entry.active;
+    // Optimistic update — revert on failure.
+    setEntries((prev) => prev.map((e) => (e.symbol === entry.symbol ? { ...e, active: nextActive } : e)));
+    try {
+      await updateWatchlistEntry(entry.symbol, { symbol: entry.symbol, active: nextActive }, env);
+    } catch (err) {
+      setEntries((prev) => prev.map((e) => (e.symbol === entry.symbol ? { ...e, active: entry.active } : e)));
+      setError(err instanceof Error ? err.message : "Failed to update symbol");
     }
   };
 
@@ -142,7 +155,27 @@ export default function WatchlistPage() {
             <Table size="small" sx={{ width: "100%" }}>
               <TableHead>
                 <TableRow>
-                  {["Symbol", "Sec Type", "Exchange", "Currency"].map((h) => (
+                  <TableCell
+                    sx={{
+                      color: "text.secondary",
+                      fontSize: "0.8rem",
+                      borderColor: "rgba(255,255,255,0.08)",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Symbol
+                  </TableCell>
+                  <TableCell
+                    sx={{
+                      color: "text.secondary",
+                      fontSize: "0.8rem",
+                      borderColor: "rgba(255,255,255,0.08)",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Active
+                  </TableCell>
+                  {["Sec Type", "Exchange", "Currency"].map((h) => (
                     <TableCell
                       key={h}
                       sx={{
@@ -172,10 +205,22 @@ export default function WatchlistPage() {
                 {entries.map((entry) => (
                   <TableRow
                     key={entry.symbol}
-                    sx={{ "&:hover": { bgcolor: "rgba(255,255,255,0.03)" } }}
+                    sx={{
+                      "&:hover": { bgcolor: "rgba(255,255,255,0.03)" },
+                      opacity: entry.active ? 1 : 0.5,
+                    }}
                   >
                     <TableCell sx={{ borderColor: "rgba(255,255,255,0.06)", color: "#fff", fontFamily: "monospace", fontWeight: 600 }}>
                       {entry.symbol}
+                    </TableCell>
+                    <TableCell sx={{ borderColor: "rgba(255,255,255,0.06)", py: 0 }}>
+                      <Tooltip title={entry.active ? "Included in Watchlist runs — click to exclude" : "Excluded from Watchlist runs — click to include"}>
+                        <Switch
+                          size="small"
+                          checked={entry.active}
+                          onChange={() => handleToggleActive(entry)}
+                        />
+                      </Tooltip>
                     </TableCell>
                     <TableCell sx={{ borderColor: "rgba(255,255,255,0.06)", color: "text.secondary", fontSize: "0.8rem" }}>
                       {entry.sec_type}

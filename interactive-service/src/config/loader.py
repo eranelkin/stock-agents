@@ -99,6 +99,11 @@ class IBDataConfig:
     output_fifty_two_week_high: Optional[str] = "ibk"
     output_fifty_two_week_low: Optional[str] = "ibk"
     output_bid_ask: Optional[bool] = True # This one can remain Optional[bool] as it's not a source choice
+
+    # Short-mechanics data (IB-only — no yfinance/finnhub equivalent exists)
+    output_shortable_shares: Optional[str] = "ibk"
+    output_shortability: Optional[str] = "ibk"
+    output_halted: Optional[str] = "ibk"
     
     # Volume Data (from various sources)
     # IMPORTANT: "yfinance" uses info.preMarketVolume (consolidated SIP tape = TradingView).
@@ -189,9 +194,17 @@ class ScreenerConfig:
     price_min: Optional[float] = None
     pre_market_vol_min: Optional[float] = None
     pre_market_chg_pct_min: Optional[float] = None  # Phase 1 fast filter on snapshot chg%
+    rvol_premarket_min: Optional[float] = None  # Phase 2 filter: reject low-relative-volume "quiet movers"
     exclude_sectors: List[str] = field(default_factory=list)
     scan_batches: List[ScannerBatch] = field(default_factory=list)
     phase2_batch_limit: int = 27  # max Phase 1 survivors sent to Phase 2 per iteration (prevents IB rate limit)
+
+    # "long" | "short" — set by main.py from --direction, not read from yaml.
+    # Long keeps every field above exactly as configured (pre-market gainers).
+    # Short reuses pre_market_chg_pct_min as a magnitude threshold on the *downside*
+    # (chg <= -threshold) and inverts the scanner code / sort order accordingly, so
+    # only the sign of the comparison changes — no separate short config file needed.
+    direction: str = "long"
 
 
 @dataclass
@@ -200,6 +213,7 @@ class WatchlistEntry:
     sec_type: str = "STK"
     exchange: str = "SMART"
     currency: str = "USD"
+    active: bool = True
 
 
 # ── Loaders ───────────────────────────────────────────────────────────────────
@@ -224,6 +238,12 @@ def load_settings(path: Path) -> AppConfig:
             raise ValueError(
                 f"Invalid settings.yaml: {f} cannot be 'yfinance' — "
                 "volume profile data is only available from IB (set to 'ibk' or null)"
+            )
+    for f in ("output_shortable_shares", "output_shortability", "output_halted"):
+        if getattr(cfg.ib_data, f, None) == "yfinance":
+            raise ValueError(
+                f"Invalid settings.yaml: {f} cannot be 'yfinance' — "
+                "shortability/halted data is only available from IB (set to 'ibk' or null)"
             )
 
     # Warn when the wrong pre-market volume source is configured.
@@ -256,6 +276,11 @@ def load_screener(path: Path) -> ScreenerConfig:
 
 
 def load_watchlist(path: Path) -> List[WatchlistEntry]:
+    """Load watchlist entries and return only the ones toggled active.
+
+    Inactive entries stay in the file (managed via the Watchlist tab) but are
+    excluded here so they're never pulled/analyzed until re-activated.
+    """
     raw = _read_yaml(path)
     entries_raw = raw.get("watchlist", [])
     result = []
@@ -266,4 +291,16 @@ def load_watchlist(path: Path) -> List[WatchlistEntry]:
             log.warning("Skipping invalid watchlist entry %s: %s", item, e)
     if not result:
         raise ValueError("watchlist.yaml contains no valid entries")
-    return result
+    active = [e for e in result if e.active]
+    if not active:
+        raise ValueError(
+            f"watchlist.yaml has {len(result)} entries but none are active — "
+            "toggle at least one on in the Watchlist tab before running."
+        )
+    if len(active) < len(result):
+        log.info(
+            "Watchlist: %d/%d entries active — skipping inactive: %s",
+            len(active), len(result),
+            sorted(e.symbol for e in result if not e.active),
+        )
+    return active
