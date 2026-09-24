@@ -31,12 +31,12 @@ screener:
 #   - screener_pipeline.py: Before calling _phase2_enrich, the survivors list is capped at 27 (27 × 2 requests = 54, safely under IB's 59/10-min
 #   limit)   
   # IB scanner parameters best is 24
-  number_of_rows: 24  ####  Max symbols per IB scanner call (hard cap = 50) ###
+  number_of_rows: 24  ####  default = 24 Max symbols per IB scanner call (hard cap = 50) ###
 
   # Max Phase 1 survivors sent to Phase 2 per iteration.
   # IB allows 59 historical requests per 10 min. With 2 req/stock (daily bars + pre-market bars):
   # 27 × 2 = 54 requests → safely under limit. Prevents the ~8 min rate-limit pause.
-  phase2_batch_limit: 27
+  phase2_batch_limit: 27 #default =27
   scan_code: "TOP_PERC_GAIN"     # Rank by pre-market % gainers
   instrument: "STK"
   stockTypeFilter : "STOCK"     # Filter out ETFs/ETNs (stockType check via IB ContractDetails)
@@ -71,7 +71,7 @@ screener:
   atr_min: 4.0                   # minimum ATR as a percentage (e.g., 4.0 = 4%)
                                  # Note: ATR period is configured in settings.yaml under ib_data.atr_period
   pre_market_vol_min: 10000       # default = 10000 | minimum pre-market shares traded 1000 (uses accurate TRADES bar sum)
-  rvol_premarket_min: 2.5         # minimum pre-market relative volume (today's pre-market volume vs normal).
+  rvol_premarket_min: -0.3 #default = 1.75        # minimum pre-market relative volume (today's pre-market volume vs normal).
                                    # Rejects "quiet movers" — stocks down/up on the chg% threshold but with
                                    # unremarkable volume behind them, which consistently score low in CEO/
                                    # Technical analysis (no real participation/catalyst behind the move).

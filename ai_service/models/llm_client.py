@@ -37,6 +37,11 @@ class LLMClient:
         self._run_logger = run_logger
         self._json_mode = self._detect_json_mode_support()
 
+    @property
+    def model_id(self) -> str:
+        """The litellm model identifier this client is configured for (e.g. 'gemini/gemini-2.5-pro')."""
+        return self._model
+
     def _detect_json_mode_support(self) -> bool:
         """Auto-detect whether this model supports response_format JSON mode.
 
@@ -58,8 +63,15 @@ class LLMClient:
         user_message: str,
         log_context: dict[str, Any] | None = None,
         thinking_budget_tokens: int | None = None,
+        tools: list[dict] | None = None,
     ) -> str:
-        """Send a chat completion and return the response text."""
+        """Send a chat completion and return the response text.
+
+        `tools` is a passthrough to litellm (e.g. Gemini's native grounding tool) —
+        unlike `complete_with_tools()`, this does not run a client-side tool-call
+        loop; it's for tools the provider executes server-side and returns
+        grounded text for directly.
+        """
         ctx = log_context or {}
         agent_id = ctx.get("agent_id", "")
         prompt_title = ctx.get("prompt_title", "")
@@ -86,7 +98,10 @@ class LLMClient:
 
         start = time.monotonic()
         try:
-            response = await self._call_llm(messages, thinking_budget_tokens=thinking_budget_tokens)
+            call_kwargs: dict[str, Any] = {"tools": tools} if tools else {}
+            response = await self._call_llm(
+                messages, thinking_budget_tokens=thinking_budget_tokens, **call_kwargs
+            )
             duration_ms = int((time.monotonic() - start) * 1000)
             text = response.choices[0].message.content or ""
 

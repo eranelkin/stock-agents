@@ -65,6 +65,7 @@ export async function createRun(
   name: string,
   tickers: Record<string, unknown>[],
   direction: 'long' | 'short' = 'long',
+  env: 'prod' | 'test' = 'test',
 ): Promise<Run> {
   const res = await fetch(BASE, {
     method: 'POST',
@@ -74,6 +75,7 @@ export async function createRun(
       name,
       tickers,
       direction,
+      env,
     }),
   })
   if (!res.ok) {

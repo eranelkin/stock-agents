@@ -12,6 +12,7 @@ from ib_async import IB
 
 from src.config.loader import AppConfig, PacingConfig, ScreenerConfig
 from src.external.news_data import fetch_news_catalysts
+from src.ib.news import fetch_ib_news_for_all, fetch_news_providers
 from src.external.yfinance_data import fetch_yfinance_benchmark_data, fetch_yfinance_data
 from src.ib.client import IBClient
 from src.ib.contract_details import fetch_all_contract_details, fetch_contract_details
@@ -569,6 +570,16 @@ async def collect_screener_records(
         if fmp_key and max_headlines > 0 and _should_output_external_data("output_news_catalysts", source="yfinance"):
             log.info("Fetching news catalysts via FMP for %d symbols...", len(surviving_syms))
             news_data = await fetch_news_catalysts(surviving_syms, fmp_key, max_headlines)
+        elif max_headlines > 0 and _should_output_external_data("output_news_catalysts", source="ibk"):
+            log.info("Fetching news catalysts via IB for %d symbols...", len(surviving_syms))
+            provider_codes = await fetch_news_providers(ib)
+            if provider_codes:
+                con_ids = {
+                    sym: contract_infos[sym].contract.conId
+                    for sym in surviving_syms
+                    if sym in contract_infos and contract_infos[sym].contract.conId
+                }
+                news_data = await fetch_ib_news_for_all(ib, con_ids, provider_codes, pacing, max_results=max_headlines)
         else:
             log.info("Skipping news fetch (API key/flag not set or output disabled)")
 
@@ -746,7 +757,8 @@ async def collect_screener_records(
                     if ib_data_cfg.output_beta == "yfinance":
                         rec.beta = None
 
-            if _should_output_external_data("output_news_catalysts", source="yfinance"):
+            if _should_output_external_data("output_news_catalysts", source="yfinance") or \
+               _should_output_external_data("output_news_catalysts", source="ibk"):
                 rec.news_catalysts = news_data.get(rec.symbol, [])
             else:
                 rec.news_catalysts = []

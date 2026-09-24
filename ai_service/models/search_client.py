@@ -9,6 +9,7 @@ from tavily import AsyncTavilyClient
 
 from ai_service.config import settings
 from ai_service.schemas.search import SearchResponse, SearchResultItem
+from ai_service.utils.backend_client import notify_run_alert
 from ai_service.utils.logger import get_logger
 from ai_service.utils.run_logger import RunLogger
 
@@ -69,6 +70,12 @@ class SearchClient:
                 search_depth=search_depth or settings.search_depth,
                 max_results=settings.search_max_results,
                 days=settings.search_days,
+                # "news" topic: (a) makes Tavily's `days` cutoff actually apply
+                # server-side (per Tavily's docs, `days` is only honored for the
+                # news topic, not "general"), and (b) makes published_date far
+                # more reliably populated, since Tavily's news pipeline tracks
+                # publish dates explicitly.
+                topic="news",
             )
             duration_ms = int((time.monotonic() - start) * 1000)
             items = [
@@ -105,10 +112,27 @@ class SearchClient:
 
             return _format_context(response)
         except Exception as exc:
-            logger.warning(
-                "Tavily search failed — continuing without search context",
-                extra={**extra, "error": str(exc)},
-            )
+            if "plan's set usage limit" in str(exc):
+                logger.error("Tavily plan usage limit reached", extra={**extra, "error": str(exc)})
+                if self._run_logger:
+                    await self._run_logger.search_error(
+                        agent_id=agent_id,
+                        prompt_title=prompt_title,
+                        error=str(exc),
+                        pipeline_id=pipeline_id,
+                        pipeline_type=pipeline_type,
+                        entity=ticker,
+                    )
+                    await notify_run_alert(
+                        self._run_logger.run_id,
+                        f"Tavily search quota exceeded — News/Macro agents are running without live "
+                        f"search context until this is resolved. ({exc})",
+                    )
+            else:
+                logger.warning(
+                    "Tavily search failed — continuing without search context",
+                    extra={**extra, "error": str(exc)},
+                )
             return ""
 
 

@@ -104,6 +104,7 @@ async def trigger_screener(
             name=f"IBK Pull — {ts}",
             ibk_session_id=session_id,
             direction=body.direction,
+            env=body.env,
         )
         session.add(run)
         await session.commit()

@@ -179,7 +179,7 @@ def main(
         screener_config = load_screener(screener_path)
         watchlist = load_watchlist(watchlist_path)
         from src.scheduler.runner import start_scheduler
-        start_scheduler(app_config, screener_config, watchlist)
+        start_scheduler(app_config, screener_config, watchlist, env=env)
         return
 
     if not mode and not use_scheduler:
@@ -230,6 +230,7 @@ def main(
                 model_names=sa.model_names or None if not explicit_model_ids else None,
                 run_id=run_id,
                 direction=direction,
+                env=env,
             )
 
 

@@ -23,7 +23,7 @@ from backend.db.models import AIModel, Prompt, Run, TickerResult
 from backend.db.session import AsyncSessionLocal, get_session
 from pydantic import BaseModel
 
-from backend.schemas.run import BulkDeleteRequest, RunCreate, RunResponse
+from backend.schemas.run import BulkDeleteRequest, RunAlertRequest, RunCreate, RunResponse
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -166,6 +166,7 @@ async def create_run(
         model_names=[m.name for m in ai_models],
         ticker_count=len(body.tickers),
         direction=direction,
+        env=body.env,
     )
     session.add(run)
     await session.commit()
@@ -179,6 +180,7 @@ async def create_run(
                 f"{settings.ai_service_url}/run",
                 json={
                     "run_id": str(run.id),
+                    "env": body.env,
                     "models": model_configs,
                     "tickers": body.tickers,
                     "prompts": [
@@ -258,6 +260,7 @@ class StartAiBody(BaseModel):
     tickers: list[dict[str, Any]]
     candle_frequency: str = "1d"
     enrichment_enabled: bool = True
+    env: str = "test"  # "prod" | "test" — not yet sent by interactive-service; defaults preserve today's behavior
 
 
 @router.post("/{run_id}/start-ai", response_model=RunResponse)
@@ -305,6 +308,7 @@ async def start_ai_for_run(
     run.model_names = [m.name for m in ai_models]
     run.ticker_count = len(body.tickers)
     run.status = "pending"
+    run.env = body.env
     await session.commit()
     await session.refresh(run)
 
@@ -328,6 +332,7 @@ async def start_ai_for_run(
                 f"{settings.ai_service_url}/run",
                 json={
                     "run_id": str(run.id),
+                    "env": body.env,
                     "models": model_configs,
                     "tickers": body.tickers,
                     "candle_frequency": body.candle_frequency,
@@ -503,6 +508,27 @@ async def fail_run(
     run.status = "failed"
     run.error = body.error
     run.completed_at = datetime.now(timezone.utc)
+    await session.commit()
+    await session.refresh(run)
+    return run
+
+
+@router.post("/{run_id}/alert", response_model=RunResponse)
+async def set_run_alert(
+    run_id: uuid.UUID,
+    body: RunAlertRequest,
+    session: AsyncSession = Depends(get_session),
+) -> Run:
+    """Set a non-fatal alert message on a run (e.g. Tavily quota exceeded).
+
+    Unlike `error`, this does not change run status — the run keeps going,
+    this just surfaces a notice in the UI via the existing /runs/stream feed.
+    """
+    run = await session.get(Run, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    run.alert = body.message
     await session.commit()
     await session.refresh(run)
     return run

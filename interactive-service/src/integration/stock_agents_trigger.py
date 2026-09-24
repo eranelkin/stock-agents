@@ -21,8 +21,14 @@ def trigger_stock_agents_run(
     model_names: list[str] | None = None,
     run_id: str | None = None,
     direction: str = "long",
+    env: str = "test",
 ) -> None:
     """Read the interactive-service output file and submit a run to stock-agents backend.
+
+    `env` ("prod" | "test") is the same selection the caller used to pick which
+    settings.yaml/settings_test.yaml to pull data with — forwarded here so the
+    AI-agent run (search-provider selection: Tavily vs Gemini grounding) respects
+    the same choice, not just direct Run-page-triggered runs.
 
     If run_id is provided, calls POST /runs/{run_id}/start-ai to continue an existing
     'fetching' run (created when the screener was triggered). That run's direction was
@@ -91,6 +97,7 @@ def trigger_stock_agents_run(
                 "tickers": stocks,
                 "candle_frequency": candle_frequency,
                 "enrichment_enabled": enrichment_enabled,
+                "env": env,
             }
             resp = requests.post(f"{backend_url}/runs/{run_id}/start-ai", json=payload, timeout=30)
             if not resp.ok:
@@ -117,6 +124,7 @@ def trigger_stock_agents_run(
                 "candle_frequency": candle_frequency,
                 "enrichment_enabled": enrichment_enabled,
                 "direction": direction,
+                "env": env,
             }
             resp = requests.post(f"{backend_url}/runs", json=payload, timeout=30)
             if not resp.ok:

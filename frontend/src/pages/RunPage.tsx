@@ -113,6 +113,8 @@ export default function RunPage({
   const [stopping, setStopping] = useState(false);
   const [models, setModels] = useState<Model[]>([]);
   const [confirmProdModel, setConfirmProdModel] = useState(false);
+  const [activeAlert, setActiveAlert] = useState<{ runId: string; message: string } | null>(null);
+  const seenAlertsRef = useRef<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const esRef = useRef<EventSource | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -122,6 +124,18 @@ export default function RunPage({
   useEffect(() => {
     fetchModels().then(setModels).catch(() => setModels([]));
   }, []);
+
+  // Pop a Dialog the first time any run reports a new (unacknowledged) alert
+  // (e.g. Tavily quota exceeded) — doesn't affect run status, just a heads-up.
+  useEffect(() => {
+    for (const run of runs) {
+      if (run.alert && !seenAlertsRef.current.has(run.id + run.alert)) {
+        seenAlertsRef.current.add(run.id + run.alert);
+        setActiveAlert({ runId: run.id, message: run.alert });
+        break;
+      }
+    }
+  }, [runs]);
 
   // Open SSE connection once on mount; first message delivers current run list
   useEffect(() => {
@@ -261,6 +275,7 @@ export default function RunPage({
         runName,
         tickers,
         runDirection,
+        runEnv,
       );
       setRuns((prev) => [created, ...prev]);
       setInnerTab(0); // switch to Today tab so user sees the new run
@@ -1130,6 +1145,43 @@ export default function RunPage({
                             }}
                           />
                         )}
+                        {run.direction === "long" && (
+                          <Chip
+                            label="LONG"
+                            size="small"
+                            sx={{
+                              bgcolor: "rgba(52,211,153,0.15)",
+                              color: "#34d399",
+                              border: "1px solid rgba(52,211,153,0.3)",
+                              fontWeight: 700,
+                              letterSpacing: 0.5,
+                              fontSize: "0.65rem",
+                            }}
+                          />
+                        )}
+                        <Chip
+                          label={run.env === "prod" ? "PROD" : "TEST"}
+                          size="small"
+                          sx={
+                            run.env === "prod"
+                              ? {
+                                  bgcolor: "rgba(248,113,113,0.15)",
+                                  color: "#f87171",
+                                  border: "1px solid rgba(248,113,113,0.3)",
+                                  fontWeight: 700,
+                                  letterSpacing: 0.5,
+                                  fontSize: "0.65rem",
+                                }
+                              : {
+                                  bgcolor: "rgba(251,191,36,0.15)",
+                                  color: "#fbbf24",
+                                  border: "1px solid rgba(251,191,36,0.3)",
+                                  fontWeight: 700,
+                                  letterSpacing: 0.5,
+                                  fontSize: "0.65rem",
+                                }
+                          }
+                        />
                       </Box>
                     </TableCell>
                     <TableCell
@@ -1356,6 +1408,36 @@ export default function RunPage({
             sx={{ textTransform: "none", fontWeight: 600 }}
           >
             Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={activeAlert !== null}
+        onClose={() => setActiveAlert(null)}
+        PaperProps={{
+          sx: {
+            bgcolor: "#1a1d27",
+            border: "1px solid rgba(255,255,255,0.12)",
+            borderRadius: 2,
+          },
+        }}
+      >
+        <DialogTitle sx={{ color: "text.primary", fontWeight: 700 }}>
+          Run notice
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ color: "text.secondary" }}>
+            {activeAlert?.message}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button
+            variant="contained"
+            onClick={() => setActiveAlert(null)}
+            sx={{ textTransform: "none", fontWeight: 600 }}
+          >
+            Dismiss
           </Button>
         </DialogActions>
       </Dialog>

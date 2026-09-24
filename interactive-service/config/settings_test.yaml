@@ -182,7 +182,8 @@ external_apis:
   #   - next_earnings_date: upcoming earnings announcement date
   
   # Output Toggles for External Data
-  output_news_catalysts: null
+  output_news_catalysts: null      # null | "yfinance" (FMP, requires fmp_api_key) | "ibk" (IB native news, requires
+                                    # account news entitlements; server-side filtered to last 72h, headline-only)
   output_float_pct: "yfinance"
   output_next_earnings_date: "yfinance"
   output_short_float_pct: "yfinance"
