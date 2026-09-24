@@ -31,10 +31,34 @@ interface CeoResultsPageProps {
 
 type Row = Record<string, unknown> & { _ticker: string; _model: string }
 
+interface Annotation {
+  successSetup: boolean
+  comments: string
+  maxGain: string
+}
+
+const EMPTY_ANNOTATION: Annotation = { successSetup: false, comments: '', maxGain: '' }
+
+function rowAnnotationKey(row: Row): string {
+  return `${row._ticker}::${row._model}`
+}
+
 const COLUMN_LABELS: Record<string, string> = {
   volume_dollar: 'VOLUME $',
   ratio_vol_market_cap: 'RATIO VOL - MARKET CAP',
   ai_model_name: 'Model',
+  max_gain_pct: 'Max Gain %',
+  success_setup: 'Success Setup',
+  comments: 'Comments',
+}
+
+// Manual review columns — not part of the streamed agent output. Their values are
+// entered by the user and persisted locally per run (see ANNOTATION_COLUMNS below).
+const ANNOTATION_COLUMNS = ['max_gain_pct', 'success_setup', 'comments'] as const
+type AnnotationColumn = typeof ANNOTATION_COLUMNS[number]
+
+function isAnnotationColumn(col: string): col is AnnotationColumn {
+  return (ANNOTATION_COLUMNS as readonly string[]).includes(col)
 }
 
 const COLUMN_ORDER = [
@@ -62,6 +86,10 @@ const COLUMN_ORDER = [
   'catalyst reason',
   'ai_suggestion',
   'suggested_strategy',
+  'sector sympathy',
+  'max_gain_pct',
+  'success_setup',
+  'comments',
   'required_volume',
   'r-multiple',
   'regime',
@@ -69,7 +97,6 @@ const COLUMN_ORDER = [
   'poc node',
   'absorption',
   'bid/ask spread',
-  'sector sympathy',
   'spx/qqq_corr',
   'date',
 ]
@@ -102,6 +129,32 @@ const HEADER_TOOLTIPS: Record<string, string> = {
   short_ratio: 'Shown in red when > 8',
   short_float: 'Shown in red when > 12%',
   'success prob': 'Rows below 20% are hidden. Shown in red when < 30%, green when > 70%.',
+  max_gain_pct: 'Manual entry — your reviewed max gain, range -20.00 to +30.00.',
+}
+
+// Filters like ">2.3", "<=10", "=5" numerically compare against the column value
+// instead of doing a text search. Only meaningful on numeric/percentage columns —
+// on text columns the cell simply won't parse as a number and the row is excluded.
+const FILTER_OP_RE = /^(>=|<=|>|<|=)\s*(-?\d+(?:\.\d+)?)$/
+
+function matchesFilter(raw: unknown, needle: string): boolean {
+  const trimmed = needle.trim()
+  const opMatch = trimmed.match(FILTER_OP_RE)
+  if (opMatch) {
+    const [, op, numStr] = opMatch
+    const threshold = parseFloat(numStr)
+    const cellNum = parseNumeric(raw)
+    if (cellNum === null) return false
+    switch (op) {
+      case '>': return cellNum > threshold
+      case '<': return cellNum < threshold
+      case '>=': return cellNum >= threshold
+      case '<=': return cellNum <= threshold
+      case '=': return cellNum === threshold
+      default: return true
+    }
+  }
+  return cellText(raw).toLowerCase().includes(trimmed.toLowerCase())
 }
 
 function parseNumeric(value: unknown): number | null {
@@ -198,6 +251,75 @@ function CellValue({ col, value }: { col: string; value: unknown }) {
   return <span style={alertSx}>{text}</span>
 }
 
+const MAX_GAIN_MIN = -20
+const MAX_GAIN_MAX = 30
+
+function AnnotationCell({
+  col, row, annotation, onChange,
+}: {
+  col: AnnotationColumn
+  row: Row
+  annotation: Annotation | undefined
+  onChange: (row: Row, patch: Partial<Annotation>) => void
+}) {
+  const value = annotation ?? EMPTY_ANNOTATION
+
+  if (col === 'success_setup') {
+    return (
+      <input
+        type="checkbox"
+        checked={value.successSetup}
+        onChange={e => onChange(row, { successSetup: e.target.checked })}
+        style={{ width: 16, height: 16, cursor: 'pointer' }}
+      />
+    )
+  }
+
+  if (col === 'max_gain_pct') {
+    return (
+      <input
+        type="number"
+        min={MAX_GAIN_MIN}
+        max={MAX_GAIN_MAX}
+        step={0.01}
+        value={value.maxGain}
+        placeholder="00.00"
+        onChange={e => onChange(row, { maxGain: e.target.value })}
+        onBlur={e => {
+          const n = parseFloat(e.target.value)
+          if (isNaN(n)) return
+          const clamped = Math.min(MAX_GAIN_MAX, Math.max(MAX_GAIN_MIN, n))
+          onChange(row, { maxGain: clamped.toFixed(2) })
+        }}
+        style={annotationInputSx}
+      />
+    )
+  }
+
+  // comments
+  return (
+    <input
+      type="text"
+      value={value.comments}
+      placeholder="Notes…"
+      onChange={e => onChange(row, { comments: e.target.value })}
+      style={{ ...annotationInputSx, width: 180 }}
+    />
+  )
+}
+
+const annotationInputSx: React.CSSProperties = {
+  width: 80,
+  boxSizing: 'border-box',
+  padding: '2px 6px',
+  fontSize: '0.8rem',
+  color: '#e8eaed',
+  background: 'rgba(255,255,255,0.06)',
+  border: '1px solid rgba(255,255,255,0.14)',
+  borderRadius: 4,
+  outline: 'none',
+}
+
 function StatItem({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25, minWidth: 0 }}>
@@ -263,7 +385,42 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
   const [filters, setFilters] = useState<Record<string, string>>({})
   const [groupBy, setGroupBy] = useState<'none' | 'ticker' | 'model'>('none')
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const [annotations, setAnnotations] = useState<Record<string, Annotation>>({})
   const esRef = useRef<EventSource | null>(null)
+
+  // Success/comments/max-gain are manual review notes, not agent output — persisted
+  // per run in localStorage rather than sent to the backend.
+  const annotationsStorageKey = `ceo-annotations-${run.id}`
+
+  useEffect(() => {
+    if (!open) return
+    try {
+      const raw = localStorage.getItem(annotationsStorageKey)
+      setAnnotations(raw ? (JSON.parse(raw) as Record<string, Annotation>) : {})
+    } catch {
+      setAnnotations({})
+    }
+  }, [open, annotationsStorageKey])
+
+  const updateAnnotation = useCallback((row: Row, patch: Partial<Annotation>) => {
+    const key = rowAnnotationKey(row)
+    setAnnotations(prev => {
+      const next = { ...prev, [key]: { ...EMPTY_ANNOTATION, ...prev[key], ...patch } }
+      try {
+        localStorage.setItem(annotationsStorageKey, JSON.stringify(next))
+      } catch {
+        // storage full or unavailable — annotation still updates in memory
+      }
+      return next
+    })
+  }, [annotationsStorageKey])
+
+  const getCellValue = useCallback((row: Row, col: string): unknown => {
+    if (col === 'max_gain_pct') return annotations[rowAnnotationKey(row)]?.maxGain ?? ''
+    if (col === 'success_setup') return annotations[rowAnnotationKey(row)]?.successSetup ? 'Yes' : 'No'
+    if (col === 'comments') return annotations[rowAnnotationKey(row)]?.comments ?? ''
+    return row[col]
+  }, [annotations])
 
   const handleGroupByChange = useCallback((next: 'none' | 'ticker' | 'model') => {
     setGroupBy(next)
@@ -293,7 +450,7 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
   }, [])
 
   const orderedColumns = useMemo(() => {
-    const known = COLUMN_ORDER.filter(c => columns.includes(c))
+    const known = COLUMN_ORDER.filter(c => columns.includes(c) || isAnnotationColumn(c))
     const rest = columns.filter(c => !COLUMN_ORDER.includes(c))
     return [...known, ...rest]
   }, [columns])
@@ -306,23 +463,23 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
         if (n !== null && n < threshold) return false
       }
       return active.every(([col, needle]) => {
-        const raw = col === '_ticker' ? row._ticker : row[col]
-        return cellText(raw).toLowerCase().includes(needle.trim().toLowerCase())
+        const raw = col === '_ticker' ? row._ticker : getCellValue(row, col)
+        return matchesFilter(raw, needle)
       })
     })
-  }, [rows, filters])
+  }, [rows, filters, getCellValue])
 
   const sortedRows = useMemo(() => {
     if (!sortCol) return filteredRows
     return [...filteredRows].sort((a, b) => {
-      const av = sortKey(sortCol === '_ticker' ? a._ticker : a[sortCol])
-      const bv = sortKey(sortCol === '_ticker' ? b._ticker : b[sortCol])
+      const av = sortKey(sortCol === '_ticker' ? a._ticker : getCellValue(a, sortCol))
+      const bv = sortKey(sortCol === '_ticker' ? b._ticker : getCellValue(b, sortCol))
       const cmp = typeof av === 'number' && typeof bv === 'number'
         ? av - bv
         : String(av).localeCompare(String(bv))
       return sortDir === 'asc' ? cmp : -cmp
     })
-  }, [filteredRows, sortCol, sortDir])
+  }, [filteredRows, sortCol, sortDir, getCellValue])
 
   // Grouping clusters rows by ticker or model, inserting a section header between
   // groups. It re-sorts by the group key as the primary key, but Array.sort is
@@ -856,7 +1013,9 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
                         key={col}
                         sx={{ ...dataCellSx, ...(isLongCol(col) && { whiteSpace: 'normal' }) }}
                       >
-                        <CellValue col={col} value={item.row[col]} />
+                        {isAnnotationColumn(col)
+                          ? <AnnotationCell col={col} row={item.row} annotation={annotations[rowAnnotationKey(item.row)]} onChange={updateAnnotation} />
+                          : <CellValue col={col} value={item.row[col]} />}
                       </TableCell>
                     ))}
                   </TableRow>

@@ -38,7 +38,7 @@ watchlist:
   sec_type: STK
   exchange: SMART
   currency: USD
-  active: true
+  active: false
 - symbol: ACN
   sec_type: STK
   exchange: SMART
@@ -58,8 +58,18 @@ watchlist:
   sec_type: STK
   exchange: SMART
   currency: USD
-  active: true
+  active: false
 - symbol: IBM
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: false
+- symbol: CRWV
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: false
+- symbol: P
   sec_type: STK
   exchange: SMART
   currency: USD
