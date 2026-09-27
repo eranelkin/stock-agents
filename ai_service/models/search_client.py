@@ -12,6 +12,7 @@ from ai_service.schemas.search import SearchResponse, SearchResultItem
 from ai_service.utils.backend_client import notify_run_alert
 from ai_service.utils.logger import get_logger
 from ai_service.utils.run_logger import RunLogger
+from ai_service.utils.tavily_key_pool import get_tavily_key_pool
 
 logger = get_logger(__name__)
 
@@ -30,8 +31,10 @@ class SearchClient:
     def __init__(self, run_logger: RunLogger | None = None) -> None:
         self._client: AsyncTavilyClient | None = None
         self._run_logger = run_logger
-        if settings.search_enabled and settings.tavily_api_key:
-            self._client = AsyncTavilyClient(api_key=settings.tavily_api_key)
+        self._key_pool = get_tavily_key_pool()
+        current_key = self._key_pool.current_key()
+        if settings.search_enabled and current_key:
+            self._client = AsyncTavilyClient(api_key=current_key)
 
     def is_available(self) -> bool:
         return self._client is not None
@@ -63,77 +66,99 @@ class SearchClient:
                 entity=ticker,
             )
 
-        start = time.monotonic()
-        try:
-            raw: dict[str, Any] = await self._client.search(
-                query=query,
-                search_depth=search_depth or settings.search_depth,
-                max_results=settings.search_max_results,
-                days=settings.search_days,
-                # "news" topic: (a) makes Tavily's `days` cutoff actually apply
-                # server-side (per Tavily's docs, `days` is only honored for the
-                # news topic, not "general"), and (b) makes published_date far
-                # more reliably populated, since Tavily's news pipeline tracks
-                # publish dates explicitly.
-                topic="news",
-            )
-            duration_ms = int((time.monotonic() - start) * 1000)
-            items = [
-                SearchResultItem(
-                    title=r.get("title", ""),
-                    url=r.get("url", ""),
-                    content=r.get("content", ""),
-                    score=float(r.get("score", 0.0)),
-                    published_date=r.get("published_date"),
+        attempts_left = max(1, self._key_pool.total_keys)
+        while attempts_left > 0:
+            attempts_left -= 1
+            start = time.monotonic()
+            try:
+                raw: dict[str, Any] = await self._client.search(
+                    query=query,
+                    search_depth=search_depth or settings.search_depth,
+                    max_results=settings.search_max_results,
+                    days=settings.search_days,
+                    # "news" topic: (a) makes Tavily's `days` cutoff actually apply
+                    # server-side (per Tavily's docs, `days` is only honored for the
+                    # news topic, not "general"), and (b) makes published_date far
+                    # more reliably populated, since Tavily's news pipeline tracks
+                    # publish dates explicitly.
+                    topic="news",
                 )
-                for r in raw.get("results", [])
-            ]
-            response = SearchResponse(
-                query=query,
-                results=items,
-                retrieved_at=datetime.now(timezone.utc).isoformat(),
-            )
-            logger.info("Tavily search succeeded", extra={**extra, "result_count": len(items)})
-
-            if self._run_logger:
-                sources = [
-                    f"{item.title} — {urlparse(item.url).netloc or item.url}"
-                    for item in items
+                duration_ms = int((time.monotonic() - start) * 1000)
+                items = [
+                    SearchResultItem(
+                        title=r.get("title", ""),
+                        url=r.get("url", ""),
+                        content=r.get("content", ""),
+                        score=float(r.get("score", 0.0)),
+                        published_date=r.get("published_date"),
+                    )
+                    for r in raw.get("results", [])
                 ]
-                await self._run_logger.search_response(
-                    agent_id=agent_id,
-                    prompt_title=prompt_title,
-                    duration_ms=duration_ms,
-                    sources=sources,
-                    pipeline_id=pipeline_id,
-                    pipeline_type=pipeline_type,
-                    entity=ticker,
+                response = SearchResponse(
+                    query=query,
+                    results=items,
+                    retrieved_at=datetime.now(timezone.utc).isoformat(),
                 )
+                logger.info("Tavily search succeeded", extra={**extra, "result_count": len(items)})
 
-            return _format_context(response)
-        except Exception as exc:
-            if "plan's set usage limit" in str(exc):
-                logger.error("Tavily plan usage limit reached", extra={**extra, "error": str(exc)})
                 if self._run_logger:
-                    await self._run_logger.search_error(
+                    sources = [
+                        f"{item.title} — {urlparse(item.url).netloc or item.url}"
+                        for item in items
+                    ]
+                    await self._run_logger.search_response(
                         agent_id=agent_id,
                         prompt_title=prompt_title,
-                        error=str(exc),
+                        duration_ms=duration_ms,
+                        sources=sources,
                         pipeline_id=pipeline_id,
                         pipeline_type=pipeline_type,
                         entity=ticker,
                     )
-                    await notify_run_alert(
-                        self._run_logger.run_id,
-                        f"Tavily search quota exceeded — News/Macro agents are running without live "
-                        f"search context until this is resolved. ({exc})",
+
+                return _format_context(response)
+            except Exception as exc:
+                if _is_quota_or_rate_limit_error(exc):
+                    logger.error("Tavily key exhausted or rate-limited", extra={**extra, "error": str(exc)})
+                    next_key = await self._key_pool.mark_exhausted_and_rotate()
+                    if next_key and attempts_left > 0:
+                        self._client = AsyncTavilyClient(api_key=next_key)
+                        continue
+
+                    if self._run_logger:
+                        await self._run_logger.search_error(
+                            agent_id=agent_id,
+                            prompt_title=prompt_title,
+                            error=str(exc),
+                            pipeline_id=pipeline_id,
+                            pipeline_type=pipeline_type,
+                            entity=ticker,
+                        )
+                        await notify_run_alert(
+                            self._run_logger.run_id,
+                            f"All {self._key_pool.total_keys} Tavily API keys are quota/rate-limit "
+                            f"exhausted — News/Macro agents are running without live search context "
+                            f"until this is resolved. ({exc})",
+                        )
+                    return ""
+                else:
+                    logger.warning(
+                        "Tavily search failed — continuing without search context",
+                        extra={**extra, "error": str(exc)},
                     )
-            else:
-                logger.warning(
-                    "Tavily search failed — continuing without search context",
-                    extra={**extra, "error": str(exc)},
-                )
-            return ""
+                    return ""
+        return ""
+
+
+def _is_quota_or_rate_limit_error(exc: Exception) -> bool:
+    """Return True if this Tavily error means the current key is spent (quota or rate limit)."""
+    text = str(exc).lower()
+    return (
+        "plan's set usage limit" in text
+        or "rate limit" in text
+        or "429" in text
+        or "usage limit" in text
+    )
 
 
 def _format_context(response: SearchResponse) -> str:

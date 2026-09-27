@@ -3,11 +3,16 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import uuid
 import yaml
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
 from ai_service.config import settings
+from ai_service.db import models
+from ai_service.db.session import AsyncSessionLocal
 from ai_service.models.llm_client import LLMClient
 from ai_service.models.search_client import SearchClient
 from ai_service.pipeline import Pipeline
@@ -121,6 +126,8 @@ class CeoManager:
         semaphore: asyncio.Semaphore,
         run_dir: str,
         output_format: str,
+        run_id: str,
+        env: str,
         run_logger: RunLogger | None = None,
     ) -> None:
         # StockAggregator notifies once per (ticker, model) pair, so the queue
@@ -131,6 +138,8 @@ class CeoManager:
         self._semaphore = semaphore
         self._run_dir = run_dir
         self._output_format = output_format
+        self._run_id = run_id
+        self._env = env
         self._run_logger = run_logger
         self._queue: asyncio.Queue[tuple[str, str, dict[str, Any], dict[str, Any]]] = asyncio.Queue()
         self._sector_etf_map: dict[str, dict[str, Any]] = self._build_sector_etf_map()
@@ -321,6 +330,7 @@ class CeoManager:
             pipeline_type="ceo",
             run_dir=self._run_dir,
             output_prefix="CEO_",
+            env=self._env,
         )
         output = await pipeline.run()
         # Only disambiguate the filename by model when multiple models are in play —
@@ -341,3 +351,31 @@ class CeoManager:
             "CEO pipeline output written",
             extra={"ticker": entity.symbol, "model": mc.name},
         )
+        await self._persist_to_db(output.ticker, mc.name, output.model_dump())
+
+    async def _persist_to_db(self, ticker: str, model_name: str, data: dict[str, Any]) -> None:
+        """Best-effort mirror of the CEO output file into the ceo_analysis table.
+
+        Testing-period dual-write: the file above is written first and is always
+        authoritative. Any failure here (missing migration, DB hiccup, etc.) is
+        logged and swallowed — it must never affect the pipeline or the file output.
+        """
+        try:
+            async with AsyncSessionLocal() as session:
+                stmt = pg_insert(models.CeoAnalysis).values(
+                    run_id=uuid.UUID(self._run_id),
+                    ticker=ticker,
+                    model_name=model_name,
+                    data=data,
+                )
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["run_id", "ticker", "model_name"],
+                    set_={"data": stmt.excluded.data},
+                )
+                await session.execute(stmt)
+                await session.commit()
+        except Exception:
+            logger.exception(
+                "CEO analysis DB dual-write failed (non-fatal — file output already written)",
+                extra={"ticker": ticker, "model": model_name},
+            )

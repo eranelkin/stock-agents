@@ -108,6 +108,8 @@ class Orchestrator:
                     semaphore=asyncio.Semaphore(settings.max_concurrent_ceo_pipelines),
                     run_dir=run_dir,
                     output_format=settings.output_format,
+                    run_id=self.run_id,
+                    env=self.env,
                     run_logger=run_logger,
                 )
 

@@ -386,6 +386,10 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
   const [groupBy, setGroupBy] = useState<'none' | 'ticker' | 'model'>('none')
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [annotations, setAnnotations] = useState<Record<string, Annotation>>({})
+  // Testing-period toggle for the CEO-analysis DB dual-write (see backend
+  // /runs/{id}/ceo-analysis). Defaults to the existing file/SSE behavior —
+  // "Database" is strictly opt-in while the DB path is being validated.
+  const [dataSource, setDataSource] = useState<'files' | 'database'>('files')
   const esRef = useRef<EventSource | null>(null)
 
   // Success/comments/max-gain are manual review notes, not agent output — persisted
@@ -413,7 +417,29 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
       }
       return next
     })
-  }, [annotationsStorageKey])
+
+    // Testing-period mirror to the DB (see backend /runs/{id}/ceo-analysis PATCH).
+    // localStorage above remains the source of truth for the UI — this write is
+    // fire-and-forget and its failure must never affect the annotation UX.
+    const dbPatch: Record<string, unknown> = {}
+    if (patch.successSetup !== undefined) dbPatch.success_setup = patch.successSetup
+    if (patch.comments !== undefined) dbPatch.comments = patch.comments
+    if (patch.maxGain !== undefined) {
+      const n = parseFloat(patch.maxGain)
+      if (!isNaN(n)) dbPatch.max_gain_pct = n
+    }
+    if (Object.keys(dbPatch).length > 0) {
+      const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://127.0.0.1:4101'
+      fetch(
+        `${BACKEND}/runs/${run.id}/ceo-analysis/${encodeURIComponent(row._ticker)}/${encodeURIComponent(row._model)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(dbPatch),
+        },
+      ).catch(() => { /* non-fatal — localStorage already has the annotation */ })
+    }
+  }, [annotationsStorageKey, run.id])
 
   const getCellValue = useCallback((row: Row, col: string): unknown => {
     if (col === 'max_gain_pct') return annotations[rowAnnotationKey(row)]?.maxGain ?? ''
@@ -540,8 +566,9 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
   }, [dragCol])
   const handleDragEnd = useCallback(() => { setDragCol(null); setDragOverCol(null) }, [])
 
+  // Files mode (default) — unchanged live SSE tail of CEO_*.yaml files on disk.
   useEffect(() => {
-    if (!open) return
+    if (!open || dataSource !== 'files') return
     setRows([]); setColumns([]); setStreamDone(false)
     const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://127.0.0.1:4101'
     const es = new EventSource(`${BACKEND}/runs/${run.id}/ceo-stream`)
@@ -572,7 +599,53 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
     es.addEventListener('done', () => { setStreamDone(true); es.close(); esRef.current = null })
     es.onerror = () => { setStreamDone(true); es.close(); esRef.current = null }
     return () => { es.close(); esRef.current = null }
-  }, [open, run.id])
+  }, [open, run.id, dataSource])
+
+  // Database mode (testing toggle) — polls the ceo_analysis table dual-written by
+  // ai_service instead of tailing files. One-shot for a completed run; polls every
+  // 2s while the run is still active so it can be compared live against Files mode.
+  useEffect(() => {
+    if (!open || dataSource !== 'database') return
+    setRows([]); setColumns([]); setStreamDone(false)
+    const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://127.0.0.1:4101'
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`${BACKEND}/runs/${run.id}/ceo-analysis`)
+        const items = await res.json() as Array<{
+          ticker: string
+          model: string | null
+          data: Record<string, unknown>
+        }>
+        if (cancelled) return
+        const modelName = (m: string | null) => m ?? ''
+        setColumns(existing => {
+          const allKeys = items.flatMap(it => Object.keys(it.data).filter(k => k !== 'symbol'))
+          const newCols = allKeys.filter(k => !existing.includes(k))
+          return newCols.length > 0 ? [...existing, ...new Set(newCols)] : existing
+        })
+        setRows(items.map(it => ({
+          _ticker: it.ticker,
+          _model: modelName(it.model),
+          ...it.data,
+          ai_model_name: modelName(it.model) || it.data.ai_model_name,
+        }) as Row))
+      } catch { /* ignore — try again on next tick */ }
+
+      if (cancelled) return
+      const done = run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled'
+      if (done) {
+        setStreamDone(true)
+        return
+      }
+      timer = setTimeout(poll, 2000)
+    }
+    void poll()
+
+    return () => { cancelled = true; if (timer) clearTimeout(timer) }
+  }, [open, run.id, run.status, dataSource])
 
   const [copied, setCopied] = useState(false)
 
@@ -688,6 +761,26 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
           </Box>
 
           <Box sx={{ flex: 1 }} />
+
+          {/* Testing-period toggle: read CEO rows from files (SSE tail, default) or
+              from the new ceo_analysis DB table, to compare the two while the
+              DB dual-write is being validated. */}
+          <Tooltip title="Testing: choose whether this table reads from the CEO_*.yaml files (current) or the new ceo_analysis DB table (dual-written alongside the files)">
+            <ToggleButtonGroup
+              value={dataSource}
+              exclusive
+              size="small"
+              onChange={(_, v) => { if (v) setDataSource(v) }}
+              sx={{ height: 26, mr: 2 }}
+            >
+              <ToggleButton value="files" sx={{ px: 1.25, textTransform: 'none', fontSize: '0.7rem', fontWeight: 600 }}>
+                Files
+              </ToggleButton>
+              <ToggleButton value="database" sx={{ px: 1.25, textTransform: 'none', fontSize: '0.7rem', fontWeight: 600 }}>
+                Database
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Tooltip>
 
           {/* Live / Completed indicator — no chip */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.5 }}>

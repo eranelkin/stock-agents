@@ -38,7 +38,8 @@ class Settings(BaseSettings):
     postgres_password: str = "changeme"
 
     # Tavily web search
-    tavily_api_key: str = ""
+    tavily_api_keys: str = ""  # comma-separated; auto-rotates on quota/rate-limit errors
+    tavily_key_cooldown_seconds: float = 900  # 15 min — an exhausted key becomes eligible to retry after this
     search_enabled: bool = False
     search_max_results: int = 5
     search_depth: str = "basic"  # basic | advanced
@@ -46,8 +47,10 @@ class Settings(BaseSettings):
     search_max_tool_rounds: int = 10  # max LLM↔tool cycles before forcing final answer
     search_days: int = 3              # Tavily `days` param — hard cutoff (3 = last 72h)
 
-    # Gemini Google Search grounding — replaces Tavily for prod runs on Gemini models
-    search_grounding_enabled_prod: bool = True  # False = prod always uses Tavily too (rollback switch)
+    # Gemini Google Search grounding — replaces Tavily for test runs on Gemini models.
+    # Prod always uses Tavily (real verified published_date per article); test uses
+    # grounding to avoid burning Tavily's paid quota on non-production runs.
+    search_grounding_enabled_test: bool = True  # False = test always uses Tavily too (rollback switch)
 
     # Pre-market data
     finnhub_api_key: str = ""
@@ -60,6 +63,11 @@ class Settings(BaseSettings):
     # Service
     ai_service_port: int = 4102
     backend_url: str = "http://localhost:4101"  # used only for the run-alert callback (Tavily quota notice)
+
+    @property
+    def tavily_api_key_list(self) -> list[str]:
+        """Parsed, ordered Tavily API keys from the comma-separated setting."""
+        return [k.strip() for k in self.tavily_api_keys.split(",") if k.strip()]
 
     @property
     def database_url(self) -> str:
