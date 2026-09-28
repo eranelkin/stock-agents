@@ -119,6 +119,26 @@ def _check_premarket_hours(tz_name: str) -> bool:
     default=None,
     help="Comma-separated model IDs to use for the analysis run. Overrides settings.yaml model_names.",
 )
+@click.option(
+    "--run-id",
+    default=None,
+    help="Existing Run ID (UUID) to continue after IBK pull. When set, start-ai is called instead of creating a new run.",
+)
+@click.option(
+    "--env",
+    type=click.Choice(["prod", "test"], case_sensitive=False),
+    default="prod",
+    show_default=True,
+    help="Config environment: 'prod' loads screener.yaml/settings.yaml, 'test' loads screener_test.yaml/settings_test.yaml.",
+)
+@click.option(
+    "--direction",
+    type=click.Choice(["long", "short"], case_sensitive=False),
+    default="long",
+    show_default=True,
+    help="Trade direction for the screener scan: 'long' hunts pre-market gainers, "
+         "'short' hunts pre-market losers. Ignored in watchlist mode.",
+)
 def main(
     mode: str | None,
     use_scheduler: bool,
@@ -128,6 +148,9 @@ def main(
     log_level: str,
     only_pull: bool,
     model_ids: str | None,
+    run_id: str | None,
+    env: str,
+    direction: str,
 ) -> None:
     log_mode = "scheduler" if use_scheduler else (mode or "run")
     _setup_logging(log_level.upper(), mode=log_mode)
@@ -136,9 +159,10 @@ def main(
     # Load all configs upfront (fail fast on bad YAML)
     from src.config.loader import load_screener, load_settings, load_watchlist
 
-    settings_path = config_dir / "settings.yaml"
-    screener_path = config_dir / "screener.yaml"
-    watchlist_path = config_dir / "watchlist.yaml"
+    _suffix = "_test" if env == "test" else ""
+    settings_path = config_dir / f"settings{_suffix}.yaml"
+    screener_path = config_dir / f"screener{_suffix}.yaml"
+    watchlist_path = config_dir / f"watchlist{_suffix}.yaml"
 
     if not settings_path.exists():
         click.echo(f"ERROR: settings.yaml not found at {settings_path}", err=True)
@@ -155,7 +179,7 @@ def main(
         screener_config = load_screener(screener_path)
         watchlist = load_watchlist(watchlist_path)
         from src.scheduler.runner import start_scheduler
-        start_scheduler(app_config, screener_config, watchlist)
+        start_scheduler(app_config, screener_config, watchlist, env=env)
         return
 
     if not mode and not use_scheduler:
@@ -175,6 +199,7 @@ def main(
 
     if mode == "screener":
         screener_config = load_screener(screener_path)
+        screener_config.direction = direction
         from src.pipeline.screener_pipeline import run_screener_pipeline
         path = asyncio.run(run_screener_pipeline(app_config, screener_config, dry_run=dry_run))
     elif mode == "watchlist":
@@ -183,6 +208,7 @@ def main(
         path = asyncio.run(run_watchlist_pipeline(app_config, watchlist, dry_run=dry_run))
     else:  # mode == "merged"
         screener_config = load_screener(screener_path)
+        screener_config.direction = direction
         watchlist = load_watchlist(watchlist_path)
         from src.pipeline.merged_pipeline import run_merged_pipeline
         path = asyncio.run(run_merged_pipeline(app_config, screener_config, watchlist, dry_run=dry_run))
@@ -202,6 +228,9 @@ def main(
                 candle_frequency=sa.candle_frequency,
                 model_ids=explicit_model_ids,
                 model_names=sa.model_names or None if not explicit_model_ids else None,
+                run_id=run_id,
+                direction=direction,
+                env=env,
             )
 
 

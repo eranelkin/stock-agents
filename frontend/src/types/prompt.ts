@@ -10,6 +10,7 @@ export interface Prompt {
   input_schema: Record<string, unknown> | null
   thinking_budget_tokens: number | null
   search_depth: string | null
+  direction: 'long' | 'short' | null
   is_active: boolean
   created_at: string
   updated_at: string

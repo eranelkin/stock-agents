@@ -23,6 +23,7 @@ _TYPE_META: dict[str, tuple[str, str, str]] = {
     "llm_response_error": ("✗",  "llm-err",   "LLM ERROR"),
     "search_request":     ("⌕",  "srch-req",  "SEARCH REQ"),
     "search_response":    ("◉",  "srch-resp", "SEARCH RESP"),
+    "search_error":       ("✗",  "srch-err",  "SEARCH ERROR"),
 }
 
 _ENTITY_COLORS = ["#4a9eff", "#34d399", "#a78bfa", "#fb923c", "#f472b6", "#38bdf8"]
@@ -76,6 +77,10 @@ class RunLogger:
         self._stat_ttok = 0
         self._total_dur_ms = 0
         self._started_ms = 0
+
+    @property
+    def run_id(self) -> str:
+        return self._run_id
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -215,6 +220,31 @@ class RunLogger:
                 pipeline_id=pipeline_id, agent_id=agent_id,
                 prompt_title=prompt_title, status="ok", duration_ms=duration_ms,
                 payload={"sources": sources, "result_count": len(sources)},
+            ))
+
+    async def search_error(
+        self,
+        *,
+        agent_id: str,
+        prompt_title: str,
+        error: str,
+        pipeline_id: str = "",
+        pipeline_type: str = "",
+        entity: str = "",
+    ) -> None:
+        """Log a search failure worth surfacing (e.g. Tavily quota exceeded).
+
+        Unlike a normal search failure (which just logs a warning and continues
+        silently), this is for failures the user should actually see.
+        """
+        async with self._lock:
+            self._seq += 1
+            await self._append(_Event(
+                seq=self._seq, ts=_ts(), type="search_error",
+                pipeline_type=pipeline_type, entity=entity, model="",
+                pipeline_id=pipeline_id, agent_id=agent_id,
+                prompt_title=prompt_title, status="error", duration_ms=-1,
+                payload={"error": error},
             ))
 
     async def llm_request(

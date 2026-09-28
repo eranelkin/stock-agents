@@ -1,0 +1,9 @@
+watchlist:
+- symbol: GNRC
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+- symbol: AMAT
+  sec_type: STK
+  exchange: SMART
+  currency: USD

@@ -12,6 +12,7 @@ from ai_service.aggregator import Aggregator
 from ai_service.config import settings
 from ai_service.models.llm_client import LLMClient
 from ai_service.models.search_client import SearchClient, build_search_query
+from ai_service.utils.grounding_tool import is_gemini_model
 from ai_service.schemas.output import PipelineOutput
 from ai_service.schemas.run import PromptConfig
 from ai_service.utils.logger import get_logger
@@ -36,6 +37,7 @@ class Pipeline:
         pipeline_type: str = "stocks",
         run_dir: str = "",
         output_prefix: str = "output_",
+        env: str = "test",
     ) -> None:
         self.entity = entity
         self.entity_name = entity_name
@@ -51,6 +53,8 @@ class Pipeline:
         self._pipeline_type = pipeline_type
         self._run_dir = run_dir
         self._output_prefix = output_prefix
+        self._env = env
+        self._use_grounding = env == "prod" and is_gemini_model(llm_client.model_id)
 
     async def run(self) -> PipelineOutput:
         """Acquire a pipeline slot, run agents, return the aggregated result."""
@@ -105,7 +109,9 @@ class Pipeline:
     async def _run_parallel(self) -> dict[str, Any]:
         """Run all searches concurrently, then run all agents concurrently."""
         search_contexts: dict[str, str] = {}
-        if self._search and self._search.is_available():
+        # Prod+Gemini pipelines use live grounding instead of Tavily (see Agent.run) —
+        # skip the Tavily prefetch entirely so we don't pay for context that's thrown away.
+        if self._search and self._search.is_available() and not self._use_grounding:
             search_enabled = [p for p in self.prompts if p.search_enabled]
             if search_enabled:
                 contexts = await asyncio.gather(
@@ -125,6 +131,8 @@ class Pipeline:
                     output_schema=prompt_config.output_schema,
                     input_schema=prompt_config.input_schema,
                     thinking_budget_tokens=prompt_config.thinking_budget_tokens,
+                    env=self._env,
+                    search_enabled=prompt_config.search_enabled,
                 )
                 result = await agent.run(
                     ticker_input=self.entity.model_dump(),
@@ -150,7 +158,12 @@ class Pipeline:
 
         for prompt_config in self.prompts:
             search_context = ""
-            if self._search and self._search.is_available() and prompt_config.search_enabled:
+            if (
+                self._search
+                and self._search.is_available()
+                and prompt_config.search_enabled
+                and not self._use_grounding
+            ):
                 search_context = await self._fetch_search(prompt_config)
 
             agent = Agent(
@@ -163,6 +176,8 @@ class Pipeline:
                 output_schema=prompt_config.output_schema,
                 input_schema=prompt_config.input_schema,
                 thinking_budget_tokens=prompt_config.thinking_budget_tokens,
+                env=self._env,
+                search_enabled=prompt_config.search_enabled,
             )
             result = await agent.run(
                 ticker_input=self.entity.model_dump(),
@@ -183,15 +198,34 @@ class Pipeline:
         return results
 
     async def _fetch_search(self, prompt_config: PromptConfig) -> str:
-        """Build the query and call Tavily for a single prompt."""
+        """Build the query and call Tavily. Supports pipe-separated multi-queries."""
         assert self._search is not None
-        query = build_search_query(self.entity_name, prompt_config.search_query_template)
-        return await self._search.search(
-            query,
-            ticker=self.entity_name,
-            agent_id=prompt_config.id,
-            prompt_title=prompt_config.title,
-            pipeline_id=self.pipeline_id,
-            pipeline_type=self._pipeline_type,
-            search_depth=prompt_config.search_depth or self._llm.search_depth,
-        )
+        template = prompt_config.search_query_template or ""
+        templates = [t.strip() for t in template.split("|") if t.strip()] if "|" in template else [template or None]
+
+        if len(templates) == 1:
+            query = build_search_query(self.entity_name, templates[0])
+            return await self._search.search(
+                query,
+                ticker=self.entity_name,
+                agent_id=prompt_config.id,
+                prompt_title=prompt_config.title,
+                pipeline_id=self.pipeline_id,
+                pipeline_type=self._pipeline_type,
+                search_depth=prompt_config.search_depth or self._llm.search_depth,
+            )
+
+        # Multi-query: run all in parallel, concatenate results
+        contexts = await asyncio.gather(*[
+            self._search.search(
+                build_search_query(self.entity_name, t),
+                ticker=self.entity_name,
+                agent_id=prompt_config.id,
+                prompt_title=f"{prompt_config.title} [{i + 1}/{len(templates)}]",
+                pipeline_id=self.pipeline_id,
+                pipeline_type=self._pipeline_type,
+                search_depth=prompt_config.search_depth or self._llm.search_depth,
+            )
+            for i, t in enumerate(templates)
+        ])
+        return "\n\n".join(ctx for ctx in contexts if ctx)

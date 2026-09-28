@@ -9,6 +9,7 @@ from tavily import AsyncTavilyClient
 
 from ai_service.config import settings
 from ai_service.schemas.search import SearchResponse, SearchResultItem
+from ai_service.utils.backend_client import notify_run_alert
 from ai_service.utils.logger import get_logger
 from ai_service.utils.run_logger import RunLogger
 
@@ -68,6 +69,13 @@ class SearchClient:
                 query=query,
                 search_depth=search_depth or settings.search_depth,
                 max_results=settings.search_max_results,
+                days=settings.search_days,
+                # "news" topic: (a) makes Tavily's `days` cutoff actually apply
+                # server-side (per Tavily's docs, `days` is only honored for the
+                # news topic, not "general"), and (b) makes published_date far
+                # more reliably populated, since Tavily's news pipeline tracks
+                # publish dates explicitly.
+                topic="news",
             )
             duration_ms = int((time.monotonic() - start) * 1000)
             items = [
@@ -76,6 +84,7 @@ class SearchClient:
                     url=r.get("url", ""),
                     content=r.get("content", ""),
                     score=float(r.get("score", 0.0)),
+                    published_date=r.get("published_date"),
                 )
                 for r in raw.get("results", [])
             ]
@@ -103,19 +112,41 @@ class SearchClient:
 
             return _format_context(response)
         except Exception as exc:
-            logger.warning(
-                "Tavily search failed — continuing without search context",
-                extra={**extra, "error": str(exc)},
-            )
+            if "plan's set usage limit" in str(exc):
+                logger.error("Tavily plan usage limit reached", extra={**extra, "error": str(exc)})
+                if self._run_logger:
+                    await self._run_logger.search_error(
+                        agent_id=agent_id,
+                        prompt_title=prompt_title,
+                        error=str(exc),
+                        pipeline_id=pipeline_id,
+                        pipeline_type=pipeline_type,
+                        entity=ticker,
+                    )
+                    await notify_run_alert(
+                        self._run_logger.run_id,
+                        f"Tavily search quota exceeded — News/Macro agents are running without live "
+                        f"search context until this is resolved. ({exc})",
+                    )
+            else:
+                logger.warning(
+                    "Tavily search failed — continuing without search context",
+                    extra={**extra, "error": str(exc)},
+                )
             return ""
 
 
 def _format_context(response: SearchResponse) -> str:
     """Format a SearchResponse as a plain-text block for LLM injection."""
+    from datetime import timedelta
+    retrieved = datetime.fromisoformat(response.retrieved_at.replace("Z", "+00:00"))
+    cutoff = retrieved - timedelta(hours=72)
+    cutoff_str = cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
     lines: list[str] = [
         "--- LIVE WEB SEARCH CONTEXT ---",
         f'Query: "{response.query}"',
         f"Retrieved: {response.retrieved_at}",
+        f"72-hour cutoff: {cutoff_str}  <- EXCLUDE any article whose event/publish date is before this",
         "",
     ]
     for i, item in enumerate(response.results, start=1):
@@ -123,9 +154,11 @@ def _format_context(response: SearchResponse) -> str:
         snippet = item.content[:400].rstrip()
         if len(item.content) > 400:
             snippet += "..."
+        date_line = f"    Published: {item.published_date}" if item.published_date else "    Published: unknown"
         lines += [
             f"[{i}] {item.title}",
             f"    Source: {domain}",
+            date_line,
             f"    {snippet}",
             "",
         ]

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
+import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Dialog from '@mui/material/Dialog'
 import Divider from '@mui/material/Divider'
@@ -11,12 +12,15 @@ import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import TableSortLabel from '@mui/material/TableSortLabel'
+import ToggleButton from '@mui/material/ToggleButton'
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import CloseIcon from '@mui/icons-material/Close'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import CheckIcon from '@mui/icons-material/Check'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
+import FilterListOffIcon from '@mui/icons-material/FilterListOff'
 import type { Run } from '../types/run'
 
 interface CeoResultsPageProps {
@@ -25,16 +29,116 @@ interface CeoResultsPageProps {
   run: Run
 }
 
-type Row = Record<string, unknown> & { _ticker: string }
+type Row = Record<string, unknown> & { _ticker: string; _model: string }
+
+const COLUMN_LABELS: Record<string, string> = {
+  volume_dollar: 'VOLUME $',
+  ratio_vol_market_cap: 'RATIO VOL - MARKET CAP',
+  ai_model_name: 'Model',
+}
+
+const COLUMN_ORDER = [
+  'symbol',
+  'ai_model_name',
+  'current price',
+  'ceo verdict',
+  'conviction score',
+  'confidence',
+  'success prob',
+  'entry range',
+  'entry time',
+  'sl range',
+  'tp range',
+  'short_ratio',
+  'short_float',
+  'institutional_holding',
+  'squeeze_risk',
+  'approximate_gain_pct',
+  'ratio_vol_market_cap',
+  'float_turnover_ratio',
+  'volume_dollar',
+  'conviction_detect',
+  'collapse_trigger',
+  'catalyst reason',
+  'ai_suggestion',
+  'suggested_strategy',
+  'required_volume',
+  'r-multiple',
+  'regime',
+  'rvol',
+  'poc node',
+  'absorption',
+  'bid/ask spread',
+  'sector sympathy',
+  'spx/qqq_corr',
+  'date',
+]
+
+// Columns whose values are highlighted in red when they exceed a threshold, and the
+// header tooltip text explaining that range.
+const RED_THRESHOLDS: Record<string, number> = {
+  institutional_holding: 83,
+  squeeze_risk: 4,
+  short_ratio: 8,
+  short_float: 12,
+}
+
+// One-sided rules in the opposite direction — red when BELOW threshold, green when ABOVE.
+const RED_BELOW_THRESHOLDS: Record<string, number> = {
+  'success prob': 30,
+}
+const GREEN_ABOVE_THRESHOLDS: Record<string, number> = {
+  'success prob': 70,
+}
+
+// Rows are dropped entirely (not just styled) when a column's value is below this.
+const REMOVE_BELOW_THRESHOLDS: Record<string, number> = {
+  'success prob': 20,
+}
+
+const HEADER_TOOLTIPS: Record<string, string> = {
+  institutional_holding: 'Shown in red when > 83%',
+  squeeze_risk: 'Shown in red when > 4',
+  short_ratio: 'Shown in red when > 8',
+  short_float: 'Shown in red when > 12%',
+  'success prob': 'Rows below 20% are hidden. Shown in red when < 30%, green when > 70%.',
+}
+
+function parseNumeric(value: unknown): number | null {
+  if (typeof value === 'number') return value
+  if (typeof value !== 'string') return null
+  const n = parseFloat(value.replace(/[%,]/g, '').trim())
+  return isNaN(n) ? null : n
+}
+
+function isOverThreshold(col: string, value: unknown): boolean {
+  const threshold = RED_THRESHOLDS[col]
+  if (threshold === undefined) return false
+  const n = parseNumeric(value)
+  return n !== null && n > threshold
+}
+
+function isUnderThreshold(col: string, value: unknown): boolean {
+  const threshold = RED_BELOW_THRESHOLDS[col]
+  if (threshold === undefined) return false
+  const n = parseNumeric(value)
+  return n !== null && n < threshold
+}
+
+function isGreenAboveThreshold(col: string, value: unknown): boolean {
+  const threshold = GREEN_ABOVE_THRESHOLDS[col]
+  if (threshold === undefined) return false
+  const n = parseNumeric(value)
+  return n !== null && n > threshold
+}
 
 const LONG_TEXT_COLS = new Set([
   'analysis_strategy',
   'conviction_detect',
-  'collapse_conviction',
   'collapse_trigger',
-  'catalyst_reason',
-  'volume',
+  'catalyst reason',
   'ai_suggestion',
+  'suggested_strategy',
   'notes',
 ])
 
@@ -62,6 +166,12 @@ function cellText(value: unknown): string {
 
 function CellValue({ col, value }: { col: string; value: unknown }) {
   const text = cellText(value)
+  const alertSx =
+    isOverThreshold(col, value) || isUnderThreshold(col, value)
+      ? { color: '#f44336', fontWeight: 700 }
+      : isGreenAboveThreshold(col, value)
+        ? { color: '#4caf50', fontWeight: 700 }
+        : undefined
   if (isLongCol(col)) {
     return (
       <Tooltip
@@ -78,13 +188,14 @@ function CellValue({ col, value }: { col: string; value: unknown }) {
           whiteSpace: 'normal',
           lineHeight: '1.55',
           cursor: 'default',
+          ...alertSx,
         }}>
           {text}
         </span>
       </Tooltip>
     )
   }
-  return <>{text}</>
+  return <span style={alertSx}>{text}</span>
 }
 
 function StatItem({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
@@ -107,6 +218,36 @@ function StatItem({ label, value, valueColor }: { label: string; value: string; 
   )
 }
 
+function FilterInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <input
+      type="text"
+      value={value}
+      placeholder="Filter…"
+      onChange={e => onChange(e.target.value)}
+      onClick={e => e.stopPropagation()}
+      onMouseDown={e => e.stopPropagation()}
+      onDragStart={e => e.stopPropagation()}
+      draggable={false}
+      style={{
+        width: '100%',
+        boxSizing: 'border-box',
+        marginTop: 4,
+        padding: '2px 6px',
+        fontSize: '0.72rem',
+        fontWeight: 400,
+        textTransform: 'none',
+        letterSpacing: 'normal',
+        color: '#e8eaed',
+        background: 'rgba(255,255,255,0.06)',
+        border: '1px solid rgba(255,255,255,0.14)',
+        borderRadius: 4,
+        outline: 'none',
+      }}
+    />
+  )
+}
+
 function StatSep() {
   return <Box sx={{ width: '1px', height: 30, bgcolor: 'rgba(255,255,255,0.08)', flexShrink: 0 }} />
 }
@@ -119,7 +260,26 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
   const [dragOverCol, setDragOverCol] = useState<number | null>(null)
   const [sortCol, setSortCol] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [groupBy, setGroupBy] = useState<'none' | 'ticker' | 'model'>('none')
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const esRef = useRef<EventSource | null>(null)
+
+  const handleGroupByChange = useCallback((next: 'none' | 'ticker' | 'model') => {
+    setGroupBy(next)
+    setCollapsedGroups(new Set())
+  }, [])
+
+  const handleFilterChange = useCallback((col: string, value: string) => {
+    setFilters(prev => ({ ...prev, [col]: value }))
+  }, [])
+
+  const handleClearFilters = useCallback(() => setFilters({}), [])
+
+  const activeFilterCount = useMemo(
+    () => Object.values(filters).filter(v => v.trim() !== '').length,
+    [filters],
+  )
 
   const handleSort = useCallback((col: string) => {
     setSortCol(prev => {
@@ -132,9 +292,29 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
     })
   }, [])
 
+  const orderedColumns = useMemo(() => {
+    const known = COLUMN_ORDER.filter(c => columns.includes(c))
+    const rest = columns.filter(c => !COLUMN_ORDER.includes(c))
+    return [...known, ...rest]
+  }, [columns])
+
+  const filteredRows = useMemo(() => {
+    const active = Object.entries(filters).filter(([, v]) => v.trim() !== '')
+    return rows.filter(row => {
+      for (const [col, threshold] of Object.entries(REMOVE_BELOW_THRESHOLDS)) {
+        const n = parseNumeric(row[col])
+        if (n !== null && n < threshold) return false
+      }
+      return active.every(([col, needle]) => {
+        const raw = col === '_ticker' ? row._ticker : row[col]
+        return cellText(raw).toLowerCase().includes(needle.trim().toLowerCase())
+      })
+    })
+  }, [rows, filters])
+
   const sortedRows = useMemo(() => {
-    if (!sortCol) return rows
-    return [...rows].sort((a, b) => {
+    if (!sortCol) return filteredRows
+    return [...filteredRows].sort((a, b) => {
       const av = sortKey(sortCol === '_ticker' ? a._ticker : a[sortCol])
       const bv = sortKey(sortCol === '_ticker' ? b._ticker : b[sortCol])
       const cmp = typeof av === 'number' && typeof bv === 'number'
@@ -142,7 +322,50 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
         : String(av).localeCompare(String(bv))
       return sortDir === 'asc' ? cmp : -cmp
     })
-  }, [rows, sortCol, sortDir])
+  }, [filteredRows, sortCol, sortDir])
+
+  // Grouping clusters rows by ticker or model, inserting a section header between
+  // groups. It re-sorts by the group key as the primary key, but Array.sort is
+  // stable, so the existing filter/sort order is preserved *within* each group.
+  const groupedRows = useMemo(() => {
+    if (groupBy === 'none') return sortedRows
+    const keyFn = groupBy === 'ticker' ? (r: Row) => r._ticker : (r: Row) => r._model || '—'
+    return [...sortedRows].sort((a, b) => keyFn(a).localeCompare(keyFn(b)))
+  }, [sortedRows, groupBy])
+
+  type DisplayItem =
+    | { kind: 'header'; label: string; count: number; collapsed: boolean }
+    | { kind: 'row'; row: Row }
+
+  const toggleGroupCollapsed = useCallback((label: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(label)) next.delete(label)
+      else next.add(label)
+      return next
+    })
+  }, [])
+
+  const displayItems = useMemo<DisplayItem[]>(() => {
+    if (groupBy === 'none') return groupedRows.map(row => ({ kind: 'row', row }))
+    const keyFn = groupBy === 'ticker' ? (r: Row) => r._ticker : (r: Row) => r._model || '—'
+    const groups = new Map<string, Row[]>()
+    for (const row of groupedRows) {
+      const key = keyFn(row)
+      const bucket = groups.get(key)
+      if (bucket) bucket.push(row)
+      else groups.set(key, [row])
+    }
+    const items: DisplayItem[] = []
+    for (const [key, groupRows] of groups) {
+      const collapsed = collapsedGroups.has(key)
+      items.push({ kind: 'header', label: key, count: groupRows.length, collapsed })
+      if (!collapsed) {
+        for (const row of groupRows) items.push({ kind: 'row', row })
+      }
+    }
+    return items
+  }, [groupedRows, groupBy, collapsedGroups])
 
   const handleDragStart = useCallback((idx: number) => { setDragCol(idx) }, [])
   const handleDragOver = useCallback((e: React.DragEvent, idx: number) => {
@@ -168,11 +391,24 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
     esRef.current = es
     es.onmessage = (ev) => {
       try {
-        const { ticker, data } = JSON.parse(ev.data) as { ticker: string; data: Record<string, unknown> }
+        const { ticker, model, data } = JSON.parse(ev.data) as {
+          ticker: string
+          model: string | null
+          data: Record<string, unknown>
+        }
+        const modelName = model ?? ''
+        setColumns(existing => {
+          const newCols = Object.keys(data).filter(k => k !== 'symbol' && !existing.includes(k))
+          return newCols.length > 0 ? [...existing, ...newCols] : existing
+        })
         setRows(prev => {
-          if (prev.some(r => r._ticker === ticker)) return prev
-          if (prev.length === 0) setColumns(Object.keys(data).filter(k => k !== 'symbol'))
-          return [...prev, { _ticker: ticker, ...data }].sort((a, b) => a._ticker.localeCompare(b._ticker))
+          if (prev.some(r => r._ticker === ticker && r._model === modelName)) return prev
+          // The backend-reported model name is authoritative — it overrides whatever
+          // (if anything) the LLM itself self-reported under the same column.
+          const row: Row = { _ticker: ticker, _model: modelName, ...data, ai_model_name: modelName || data.ai_model_name }
+          return [...prev, row].sort((a, b) =>
+            a._ticker.localeCompare(b._ticker) || a._model.localeCompare(b._model)
+          )
         })
       } catch { /* ignore */ }
     }
@@ -185,7 +421,11 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
 
   const isLive = open && !streamDone
 
-  const stockCount = run.ticker_count ?? (rows.length > 0 ? rows.length : null)
+  const stockCount = (() => {
+    if (!streamDone && rows.length === 0) return run.ticker_count != null ? String(run.ticker_count) : '—'
+    if (run.ticker_count != null && rows.length < run.ticker_count) return `${rows.length} / ${run.ticker_count}`
+    return rows.length > 0 ? String(rows.length) : (run.ticker_count != null ? String(run.ticker_count) : '—')
+  })()
   const dateStr = new Date(run.created_at).toLocaleString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric',
     hour: '2-digit', minute: '2-digit', hour12: false,
@@ -229,12 +469,45 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
           px: 3, pt: 2.5, pb: 1.5,
         }}>
           <Box>
-            <Typography sx={{
-              fontSize: '1.75rem', fontWeight: 800, letterSpacing: '0.06em',
-              textTransform: 'uppercase', color: 'text.primary', lineHeight: 1,
-            }}>
-              CEO Analysis
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography sx={{
+                fontSize: '1.75rem', fontWeight: 800, letterSpacing: '0.06em',
+                textTransform: 'uppercase', color: 'text.primary', lineHeight: 1,
+              }}>
+                CEO Analysis
+              </Typography>
+              {run.direction === 'short' ? (
+                <Chip
+                  label="SHORT"
+                  sx={{
+                    bgcolor: 'rgba(248,113,113,0.15)',
+                    color: '#f87171',
+                    border: '1px solid rgba(248,113,113,0.5)',
+                    fontWeight: 700,
+                    letterSpacing: 1,
+                    fontSize: '1.4rem',
+                    height: 48,
+                    px: 1,
+                    animation: 'directionGlowRed 1.8s ease-in-out infinite',
+                  }}
+                />
+              ) : (
+                <Chip
+                  label="LONG"
+                  sx={{
+                    bgcolor: 'rgba(52,211,153,0.15)',
+                    color: '#34d399',
+                    border: '1px solid rgba(52,211,153,0.5)',
+                    fontWeight: 700,
+                    letterSpacing: 1,
+                    fontSize: '1.4rem',
+                    height: 48,
+                    px: 1,
+                    animation: 'directionGlowGreen 1.8s ease-in-out infinite',
+                  }}
+                />
+              )}
+            </Box>
             {/* Run ID row */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.75 }}>
               <Typography sx={{
@@ -290,7 +563,7 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0, px: 3, py: 1.5 }}>
           <StatItem
             label="Stocks"
-            value={stockCount != null ? String(stockCount) : '—'}
+            value={stockCount}
             valueColor="#90caf9"
           />
           <Box sx={{ mx: 3 }}><StatSep /></Box>
@@ -379,60 +652,182 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
             )}
           </Box>
         ) : (
-          <TableContainer sx={{ flex: 1, overflow: 'auto' }}>
+          <>
+            <Box sx={{
+              flexShrink: 0,
+              display: 'flex', alignItems: 'center', gap: 1.25,
+              px: 3, py: 1,
+              borderBottom: '1px solid rgba(255,255,255,0.06)',
+            }}>
+              <Typography sx={{
+                fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.08em',
+                textTransform: 'uppercase', color: 'text.secondary',
+              }}>
+                Group by
+              </Typography>
+              <ToggleButtonGroup
+                value={groupBy}
+                exclusive
+                size="small"
+                onChange={(_, v) => { if (v) handleGroupByChange(v) }}
+                sx={{ height: 28 }}
+              >
+                <ToggleButton value="none" sx={{ px: 1.5, textTransform: 'none', fontSize: '0.75rem', fontWeight: 600 }}>
+                  None
+                </ToggleButton>
+                <ToggleButton value="ticker" sx={{ px: 1.5, textTransform: 'none', fontSize: '0.75rem', fontWeight: 600 }}>
+                  Ticker
+                </ToggleButton>
+                <ToggleButton value="model" sx={{ px: 1.5, textTransform: 'none', fontSize: '0.75rem', fontWeight: 600 }}>
+                  Model
+                </ToggleButton>
+              </ToggleButtonGroup>
+
+              <Box sx={{ flex: 1 }} />
+
+              <Tooltip title={activeFilterCount > 0 ? `Clear ${activeFilterCount} filter${activeFilterCount > 1 ? 's' : ''}` : 'No active filters'}>
+                <span>
+                  <IconButton
+                    size="small"
+                    onClick={handleClearFilters}
+                    disabled={activeFilterCount === 0}
+                    sx={{
+                      color: activeFilterCount > 0 ? '#90caf9' : 'text.disabled',
+                      '&:hover': { color: '#90caf9', bgcolor: 'rgba(144,202,249,0.08)' },
+                    }}
+                  >
+                    <FilterListOffIcon fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </Box>
+            <TableContainer sx={{ flex: 1, overflow: 'auto' }}>
             <Table stickyHeader size="small" sx={{ minWidth: 900 }}>
               <TableHead>
                 <TableRow>
                   <TableCell
-                    sx={{ ...headerCellSx, cursor: 'pointer' }}
-                    onClick={() => handleSort('_ticker')}
+                    sx={{ ...headerCellSx, cursor: 'pointer', position: 'sticky', left: 0, zIndex: 3 }}
                   >
-                    <TableSortLabel
-                      active={sortCol === '_ticker'}
-                      direction={sortCol === '_ticker' ? sortDir : 'asc'}
-                      onClick={() => handleSort('_ticker')}
-                      sx={sortLabelSx}
-                    >
-                      Ticker
-                    </TableSortLabel>
-                  </TableCell>
-                  {columns.map((col, idx) => (
-                    <TableCell
-                      key={col}
-                      draggable
-                      onDragStart={() => handleDragStart(idx)}
-                      onDragOver={e => handleDragOver(e, idx)}
-                      onDrop={() => handleDrop(idx)}
-                      onDragEnd={handleDragEnd}
-                      onClick={() => handleSort(col)}
-                      sx={{
-                        ...headerCellSx,
-                        cursor: 'grab',
-                        opacity: dragCol === idx ? 0.4 : 1,
-                        borderLeft: dragOverCol === idx && dragCol !== idx
-                          ? '2px solid #90caf9'
-                          : '2px solid transparent',
-                        userSelect: 'none',
-                        '&:active': { cursor: 'grabbing' },
-                        ...(isLongCol(col) && { minWidth: 340 }),
-                      }}
-                    >
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                       <TableSortLabel
-                        active={sortCol === col}
-                        direction={sortCol === col ? sortDir : 'asc'}
-                        onClick={() => handleSort(col)}
+                        active={sortCol === '_ticker'}
+                        direction={sortCol === '_ticker' ? sortDir : 'asc'}
+                        onClick={() => handleSort('_ticker')}
                         sx={sortLabelSx}
                       >
-                        {col.replace(/_/g, ' ').replace('approximately gain in %', 'gain %')}
+                        Ticker
                       </TableSortLabel>
-                    </TableCell>
-                  ))}
+                      <FilterInput
+                        value={filters['_ticker'] ?? ''}
+                        onChange={v => handleFilterChange('_ticker', v)}
+                      />
+                    </Box>
+                  </TableCell>
+                  {orderedColumns.map((col, idx) => {
+                    const label = COLUMN_LABELS[col] ?? col.replace(/_/g, ' ').replace('approximately gain in %', 'gain %')
+                    const tooltip = HEADER_TOOLTIPS[col]
+                    return (
+                      <TableCell
+                        key={col}
+                        draggable
+                        onDragStart={() => handleDragStart(idx)}
+                        onDragOver={e => handleDragOver(e, idx)}
+                        onDrop={() => handleDrop(idx)}
+                        onDragEnd={handleDragEnd}
+                        sx={{
+                          ...headerCellSx,
+                          cursor: 'grab',
+                          opacity: dragCol === idx ? 0.4 : 1,
+                          borderLeft: dragOverCol === idx && dragCol !== idx
+                            ? '2px solid #90caf9'
+                            : '2px solid transparent',
+                          userSelect: 'none',
+                          '&:active': { cursor: 'grabbing' },
+                          ...(isLongCol(col) && { minWidth: 340 }),
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                          <TableSortLabel
+                            active={sortCol === col}
+                            direction={sortCol === col ? sortDir : 'asc'}
+                            onClick={() => handleSort(col)}
+                            sx={sortLabelSx}
+                          >
+                            {tooltip ? (
+                              <Tooltip title={tooltip} arrow placement="top">
+                                <span>{label}</span>
+                              </Tooltip>
+                            ) : label}
+                          </TableSortLabel>
+                          <FilterInput
+                            value={filters[col] ?? ''}
+                            onChange={v => handleFilterChange(col, v)}
+                          />
+                        </Box>
+                      </TableCell>
+                    )
+                  })}
                 </TableRow>
               </TableHead>
               <TableBody>
-                {sortedRows.map(row => (
+                {sortedRows.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={orderedColumns.length + 1}
+                      sx={{ ...dataCellSx, textAlign: 'center', color: 'text.disabled', py: 4 }}
+                    >
+                      No rows match the current filters.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {displayItems.map((item, i) => item.kind === 'header' ? (
+                  <TableRow key={`group-${item.label}-${i}`}>
+                    <TableCell
+                      colSpan={orderedColumns.length + 1}
+                      onClick={() => toggleGroupCollapsed(item.label)}
+                      sx={{
+                        ...dataCellSx,
+                        bgcolor: '#161a24',
+                        color: '#90caf9',
+                        fontWeight: 700,
+                        fontSize: '0.75rem',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.06em',
+                        py: 0.75,
+                        position: 'sticky',
+                        left: 0,
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box
+                          component="span"
+                          sx={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: 16,
+                            height: 16,
+                            borderRadius: '3px',
+                            border: '1px solid rgba(144,202,249,0.4)',
+                            fontFamily: 'monospace',
+                            fontSize: '0.75rem',
+                            lineHeight: 1,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {item.collapsed ? '+' : '−'}
+                        </Box>
+                        <span>
+                          {groupBy === 'ticker' ? 'Ticker' : 'Model'}: {item.label} ({item.count})
+                        </span>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ) : (
                   <TableRow
-                    key={row._ticker}
+                    key={`${item.row._ticker}::${item.row._model}`}
                     sx={{
                       borderLeft: '3px solid transparent',
                       transition: 'background-color 0.15s, border-left-color 0.15s',
@@ -448,24 +843,28 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
                       color: '#90caf9',
                       fontFamily: 'monospace',
                       fontSize: '0.9rem',
-                      background: 'linear-gradient(90deg, rgba(144,202,249,0.07) 0%, transparent 80%)',
+                      bgcolor: '#0f1117',
                       whiteSpace: 'nowrap',
+                      position: 'sticky',
+                      left: 0,
+                      zIndex: 1,
                     }}>
-                      {row._ticker}
+                      {item.row._ticker}
                     </TableCell>
-                    {columns.map(col => (
+                    {orderedColumns.map(col => (
                       <TableCell
                         key={col}
                         sx={{ ...dataCellSx, ...(isLongCol(col) && { whiteSpace: 'normal' }) }}
                       >
-                        <CellValue col={col} value={row[col]} />
+                        <CellValue col={col} value={item.row[col]} />
                       </TableCell>
                     ))}
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-          </TableContainer>
+            </TableContainer>
+          </>
         )}
       </Box>
 
@@ -473,6 +872,14 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
         @keyframes ceoPulse {
           0%, 100% { opacity: 1; transform: scale(1); }
           50% { opacity: 0.35; transform: scale(0.85); }
+        }
+        @keyframes directionGlowRed {
+          0%, 100% { box-shadow: 0 0 6px 0 rgba(248,113,113,0.4); }
+          50% { box-shadow: 0 0 18px 4px rgba(248,113,113,0.9); }
+        }
+        @keyframes directionGlowGreen {
+          0%, 100% { box-shadow: 0 0 6px 0 rgba(52,211,153,0.4); }
+          50% { box-shadow: 0 0 18px 4px rgba(52,211,153,0.9); }
         }
       `}</style>
     </Dialog>

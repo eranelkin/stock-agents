@@ -12,7 +12,7 @@ from src.config.loader import AppConfig, ScreenerConfig, WatchlistEntry
 log = logging.getLogger(__name__)
 
 
-async def _run_job(app_config: AppConfig, screener_config: ScreenerConfig, watchlist: List[WatchlistEntry]) -> None:
+async def _run_job(app_config: AppConfig, screener_config: ScreenerConfig, watchlist: List[WatchlistEntry], env: str = "test") -> None:
     """Job function called by APScheduler on each scheduled trigger."""
     mode = app_config.scheduler.mode
     log.info("Scheduler triggered — running '%s' pipeline", mode)
@@ -31,12 +31,13 @@ async def _run_job(app_config: AppConfig, screener_config: ScreenerConfig, watch
             sa = app_config.stock_agents
             await asyncio.to_thread(
                 trigger_stock_agents_run,
-                path,
-                sa.backend_url,
-                sa.run_name_prefix,
-                sa.enrichment_enabled,
-                sa.candle_frequency,
-                sa.model_names or None,
+                output_path=path,
+                backend_url=sa.backend_url,
+                run_name_prefix=sa.run_name_prefix,
+                enrichment_enabled=sa.enrichment_enabled,
+                candle_frequency=sa.candle_frequency,
+                model_names=sa.model_names or None,
+                env=env,
             )
     except Exception:
         log.exception("Scheduled job failed")
@@ -46,6 +47,7 @@ def start_scheduler(
     app_config: AppConfig,
     screener_config: ScreenerConfig,
     watchlist: List[WatchlistEntry],
+    env: str = "test",
 ) -> None:
     """
     Start the APScheduler daemon.
@@ -69,7 +71,7 @@ def start_scheduler(
     scheduler.add_job(
         _run_job,
         trigger=trigger,
-        args=[app_config, screener_config, watchlist],
+        args=[app_config, screener_config, watchlist, env],
         name="ibk_pull",
     )
 

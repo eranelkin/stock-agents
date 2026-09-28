@@ -14,6 +14,7 @@ import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
+import TablePagination from "@mui/material/TablePagination";
 import Chip from "@mui/material/Chip";
 import Checkbox from "@mui/material/Checkbox";
 import IconButton from "@mui/material/IconButton";
@@ -26,6 +27,8 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
 import DialogActions from "@mui/material/DialogActions";
 import MenuItem from "@mui/material/MenuItem";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import TableSortLabel from "@mui/material/TableSortLabel";
@@ -34,10 +37,36 @@ import AttachFileIcon from "@mui/icons-material/AttachFile";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CheckIcon from "@mui/icons-material/Check";
 import ArticleIcon from "@mui/icons-material/Article";
-import { createRun, deleteRun, deleteRuns, pollScreenerDone, stopRun, stopScreener, triggerScreener } from "../api/runs";
+import StorageIcon from "@mui/icons-material/Storage";
+import StarIcon from "@mui/icons-material/Star";
+import StarBorderIcon from "@mui/icons-material/StarBorder";
+import {
+  createRun,
+  deleteRun,
+  deleteRuns,
+  enrichPreview,
+  pollScreenerDone,
+  pollSessionDone,
+  stopMarketData,
+  stopRun,
+  stopScreener,
+  toggleFavorite,
+  triggerMarketData,
+  triggerScreener,
+} from "../api/runs";
+import { fetchModels } from "../api/models";
 import CeoResultsPage from "../components/CeoResultsPage";
 import type { Run } from "../types/run";
 import { formatDateTime } from "../utils/date";
+import type { Model } from "../types/model";
+
+// Prod runs are expensive/production-facing — models outside this set trigger a
+// confirmation dialog rather than running silently, to avoid an accidental
+// wrong-model prod run.
+const PROD_APPROVED_MODEL_NAMES = new Set([
+  "Gemini 2.5 Pro",
+  "Gemini 3.5 Flash",
+]);
 
 interface RunPageProps {
   selectedModelIds: string[];
@@ -48,12 +77,15 @@ const STATUS_COLOR: Record<
   string,
   "default" | "info" | "success" | "error" | "warning"
 > = {
+  fetching: "warning",
   pending: "warning",
   running: "info",
   completed: "success",
   failed: "error",
   cancelled: "default",
 };
+
+const ROWS_PER_PAGE = 30;
 
 const isToday = (dateStr: string) =>
   new Date(dateStr).toDateString() === new Date().toDateString();
@@ -81,17 +113,59 @@ export default function RunPage({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [resultsRun, setResultsRun] = useState<Run | null>(null);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [page, setPage] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
-  const [runMode, setRunMode] = useState<"run" | "pull-run" | "pull" | "watchlist">("run");
+  const [candleFrequency, setCandleFrequency] = useState("1d");
+  const [enrichmentEnabled, setEnrichmentEnabled] = useState(false);
+  const [testingEnrich, setTestingEnrich] = useState(false);
+  const [enrichResults, setEnrichResults] = useState<
+    Record<string, unknown>[] | null
+  >(null);
+  const [runMode, setRunMode] = useState<
+    "run" | "pull-run" | "pull" | "watchlist" | "watchlist-only" | "market-data"
+  >("run");
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [pullStage, setPullStage] = useState<string | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [runEnv, setRunEnv] = useState<"prod" | "test">(
+    () => (localStorage.getItem("runEnv") as "prod" | "test") ?? "prod",
+  );
+  const [runDirection, setRunDirection] = useState<"long" | "short">(
+    () => (localStorage.getItem("runDirection") as "long" | "short") ?? "long",
+  );
   const [stopping, setStopping] = useState(false);
+  const [models, setModels] = useState<Model[]>([]);
+  const [confirmProdModel, setConfirmProdModel] = useState(false);
+  const [activeAlert, setActiveAlert] = useState<{
+    runId: string;
+    message: string;
+  } | null>(null);
+  const seenAlertsRef = useRef<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const esRef = useRef<EventSource | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Load models once so we can resolve selectedModelIds -> display names for the
+  // prod-model confirmation check below.
+  useEffect(() => {
+    fetchModels()
+      .then(setModels)
+      .catch(() => setModels([]));
+  }, []);
+
+  // Pop a Dialog the first time any run reports a new (unacknowledged) alert
+  // (e.g. Tavily quota exceeded) — doesn't affect run status, just a heads-up.
+  useEffect(() => {
+    for (const run of runs) {
+      if (run.alert && !seenAlertsRef.current.has(run.id + run.alert)) {
+        seenAlertsRef.current.add(run.id + run.alert);
+        setActiveAlert({ runId: run.id, message: run.alert });
+        break;
+      }
+    }
+  }, [runs]);
 
   // Open SSE connection once on mount; first message delivers current run list
   useEffect(() => {
@@ -119,7 +193,10 @@ export default function RunPage({
   // Live duration tick + parent notification when active-run state changes
   useEffect(() => {
     const hasActive = runs.some(
-      (r) => r.status === "pending" || r.status === "running",
+      (r) =>
+        r.status === "fetching" ||
+        r.status === "pending" ||
+        r.status === "running",
     );
     onRunActiveChange?.(hasActive);
     if (hasActive) {
@@ -210,26 +287,31 @@ export default function RunPage({
   };
 
   const handleRun = async () => {
-    if (!rawFileText || !selectedFile) return;
     setError(null);
     setStarting(true);
     try {
-      const processedText = rawFileText.replace(
-        /CURRENTDATE/g,
-        formatCurrentDate(),
-      );
-      const lower = selectedFile.name.toLowerCase();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let tickers: Record<string, unknown>[];
-      const rawParsed =
-        lower.endsWith(".yaml") || lower.endsWith(".yml")
-          ? jsyaml.load(processedText)
-          : JSON.parse(processedText);
-      tickers = extractTickers(rawParsed) ?? [];
+      let tickers: Record<string, unknown>[] = [];
+      let runName = "macro-sector-run";
+      if (rawFileText && selectedFile) {
+        const processedText = rawFileText.replace(
+          /CURRENTDATE/g,
+          formatCurrentDate(),
+        );
+        const lower = selectedFile.name.toLowerCase();
+        const rawParsed =
+          lower.endsWith(".yaml") || lower.endsWith(".yml")
+            ? jsyaml.load(processedText)
+            : JSON.parse(processedText);
+        tickers = extractTickers(rawParsed) ?? [];
+        runName = selectedFile.name;
+      }
       const created = await createRun(
         selectedModelIds,
-        selectedFile.name,
+        runName,
         tickers,
+        runDirection,
+        runEnv,
       );
       setRuns((prev) => [created, ...prev]);
       setInnerTab(0); // switch to Today tab so user sees the new run
@@ -240,30 +322,70 @@ export default function RunPage({
     }
   };
 
-  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:4101";
+  const BACKEND_URL =
+    import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:4101";
 
   const RUN_MODE_OPTIONS = [
-    { mode: "run" as const,       label: "Run",                  desc: "AI analysis on uploaded file" },
-    { mode: "pull-run" as const,  label: "Pull & Run",           desc: "Pull from IBK then run AI analysis" },
-    { mode: "pull" as const,      label: "Pull",                 desc: "Pull from IBK only (no analysis)" },
-    { mode: "watchlist" as const, label: "Run-Pull - Watchlist", desc: "Screener + watchlist, then AI analysis" },
+    {
+      mode: "run" as const,
+      label: "Run",
+      desc: "AI analysis on uploaded file",
+    },
+    {
+      mode: "pull-run" as const,
+      label: "Pull & Run",
+      desc: "Pull from IBK then run AI analysis",
+    },
+    {
+      mode: "pull" as const,
+      label: "Pull",
+      desc: "Pull from IBK only (no analysis)",
+    },
+    {
+      mode: "watchlist" as const,
+      label: "Run-Pull - Watchlist",
+      desc: "Screener + watchlist, then AI analysis",
+    },
+    {
+      mode: "watchlist-only" as const,
+      label: "Watchlist",
+      desc: "Pull data from IBK for our watchlist stocks, then run AI analysis",
+    },
+    {
+      mode: "market-data" as const,
+      label: "Get market data",
+      desc: "Fetch ETF, S&P 500, VIX & sentiment via Alpha Vantage",
+    },
   ] as const;
 
-  const runModeLabel = RUN_MODE_OPTIONS.find((o) => o.mode === runMode)?.label ?? "Run";
+  const runModeLabel =
+    RUN_MODE_OPTIONS.find((o) => o.mode === runMode)?.label ?? "Run";
 
-  const handlePullClick = async (mode: "screener" | "screener-only-pull" | "merged") => {
+  const handlePullClick = async (
+    mode: "screener" | "screener-only-pull" | "merged" | "watchlist",
+  ) => {
     setError(null);
     setStarting(true);
     const stageCount = mode === "screener-only-pull" ? 1 : 2;
     setPullStage(`Stage 1/${stageCount} — Pulling data from IBK...`);
     try {
-      const { session_id } = await triggerScreener(mode, selectedModelIds);
+      const { session_id } = await triggerScreener(
+        mode,
+        selectedModelIds,
+        runEnv,
+        runDirection,
+      );
       setActiveSessionId(session_id);
       window.open(`${BACKEND_URL}/screener/log/${session_id}`, "_blank");
       if (stageCount === 2) {
-        setPullStage(`Stage 2/${stageCount} — IBK pull running, AI analysis will start automatically...`);
+        setPullStage(
+          `Stage 2/${stageCount} — IBK pull running, AI analysis will start automatically...`,
+        );
       }
-      pollScreenerDone(session_id, () => { setPullStage(null); setActiveSessionId(null); });
+      pollScreenerDone(session_id, () => {
+        setPullStage(null);
+        setActiveSessionId(null);
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to trigger pull");
       setPullStage(null);
@@ -272,28 +394,94 @@ export default function RunPage({
     }
   };
 
-  const handleRunClick = async () => {
-    if (runMode === "run")       return handleRun();
-    if (runMode === "pull-run")  return handlePullClick("screener");
-    if (runMode === "pull")      return handlePullClick("screener-only-pull");
+  const handleMarketDataClick = async () => {
+    setError(null);
+    setStarting(true);
+    setPullStage("Fetching ETF, S&P 500, VIX & sentiment data…");
+    try {
+      const { session_id } = await triggerMarketData();
+      setActiveSessionId(session_id);
+      window.open(`${BACKEND_URL}/market-data/log/${session_id}`, "_blank");
+      pollSessionDone(
+        `${BACKEND_URL}/market-data/log-rows/${session_id}`,
+        () => {
+          setPullStage(null);
+          setActiveSessionId(null);
+        },
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to trigger market data fetch",
+      );
+      setPullStage(null);
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const executeRun = async () => {
+    if (runMode === "run") return handleRun();
+    if (runMode === "pull-run") return handlePullClick("screener");
+    if (runMode === "pull") return handlePullClick("screener-only-pull");
     if (runMode === "watchlist") return handlePullClick("merged");
+    if (runMode === "watchlist-only") return handlePullClick("watchlist");
+    if (runMode === "market-data") return handleMarketDataClick();
+  };
+
+  // Modes that actually trigger AI analysis with the selected model(s) — "pull" and
+  // "market-data" don't use models, so the prod-model confirmation doesn't apply to them.
+  const MODEL_DRIVEN_RUN_MODES = new Set([
+    "run",
+    "pull-run",
+    "watchlist",
+    "watchlist-only",
+  ]);
+
+  const handleRunClick = async () => {
+    if (
+      runEnv === "prod" &&
+      MODEL_DRIVEN_RUN_MODES.has(runMode) &&
+      selectedModelIds.some((id) => {
+        const name = models.find((m) => m.id === id)?.name;
+        return !name || !PROD_APPROVED_MODEL_NAMES.has(name);
+      })
+    ) {
+      setConfirmProdModel(true);
+      return;
+    }
+    return executeRun();
+  };
+
+  const handleConfirmProdModel = () => {
+    setConfirmProdModel(false);
+    executeRun();
   };
 
   const handleStopAll = async () => {
     setStopping(true);
+    const sessionId = activeSessionId;
+    const mode = runMode;
     try {
-      if (activeSessionId) {
-        await stopScreener(activeSessionId);
-        setPullStage(null);
-        setActiveSessionId(null);
+      if (sessionId) {
+        if (mode === "market-data") {
+          await stopMarketData(sessionId);
+        } else {
+          await stopScreener(sessionId);
+        }
       }
-      const activeRun = runs.find((r) => r.status === "pending" || r.status === "running");
+      const activeRun = runs.find(
+        (r) => r.status === "pending" || r.status === "running",
+      );
       if (activeRun) {
         await stopRun(activeRun.id);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to stop");
     } finally {
+      setPullStage(null);
+      setActiveSessionId(null);
       setStopping(false);
     }
   };
@@ -306,6 +494,9 @@ export default function RunPage({
     )
       return;
     try {
+      if (run.status === "fetching" && run.ibk_session_id) {
+        await stopScreener(run.ibk_session_id);
+      }
       await stopRun(run.id);
       // SSE broadcaster will push the updated status automatically
     } catch (err) {
@@ -336,6 +527,21 @@ export default function RunPage({
     }
   };
 
+  const handleToggleFavorite = async (id: string) => {
+    try {
+      const updated = await toggleFavorite(id);
+      setRuns((prev) =>
+        prev.map((r) =>
+          r.id === id ? { ...r, is_favorite: updated.is_favorite } : r,
+        ),
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to toggle favorite",
+      );
+    }
+  };
+
   const handleToggleSelect = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -345,16 +551,16 @@ export default function RunPage({
   };
 
   const handleToggleAll = () => {
-    if (displayedRuns.every((r) => selectedIds.has(r.id))) {
+    if (pagedRuns.every((r) => selectedIds.has(r.id))) {
       setSelectedIds((prev) => {
         const next = new Set(prev);
-        displayedRuns.forEach((r) => next.delete(r.id));
+        pagedRuns.forEach((r) => next.delete(r.id));
         return next;
       });
     } else {
       setSelectedIds((prev) => {
         const next = new Set(prev);
-        displayedRuns.forEach((r) => next.add(r.id));
+        pagedRuns.forEach((r) => next.add(r.id));
         return next;
       });
     }
@@ -362,25 +568,40 @@ export default function RunPage({
 
   const todayRuns = runs.filter((r) => isToday(r.created_at));
   const historyRuns = runs.filter((r) => !isToday(r.created_at));
-  const sorted = (innerTab === 0 ? todayRuns : historyRuns)
-    .slice()
-    .sort((a, b) => {
-      const diff =
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      return sortOrder === "asc" ? diff : -diff;
-    });
-  const displayedRuns = sorted;
+  const favoriteRuns = runs.filter((r) => r.is_favorite);
+  const activePool =
+    innerTab === 0 ? todayRuns : innerTab === 1 ? historyRuns : favoriteRuns;
+  const displayedRuns = activePool.slice().sort((a, b) => {
+    const diff =
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    return sortOrder === "asc" ? diff : -diff;
+  });
+  const pageCount = Math.max(
+    1,
+    Math.ceil(displayedRuns.length / ROWS_PER_PAGE),
+  );
+  const clampedPage = Math.min(page, pageCount - 1);
+  const pagedRuns = displayedRuns.slice(
+    clampedPage * ROWS_PER_PAGE,
+    clampedPage * ROWS_PER_PAGE + ROWS_PER_PAGE,
+  );
 
   const runInProgress = runs.some(
-    (r) => r.status === "pending" || r.status === "running",
+    (r) =>
+      r.status === "fetching" ||
+      r.status === "pending" ||
+      r.status === "running",
   );
   const runDisabled =
     starting ||
     runInProgress ||
     Boolean(pullStage) ||
-    (runMode === "run" && (!selectedFile || !rawFileText || selectedModelIds.length === 0)) ||
+    (runMode === "run" && selectedModelIds.length === 0) ||
     (runMode === "pull-run" && selectedModelIds.length === 0) ||
-    (runMode === "watchlist" && selectedModelIds.length === 0);
+    (runMode === "watchlist" && selectedModelIds.length === 0) ||
+    (runMode === "watchlist-only" && selectedModelIds.length === 0);
+  // market-data mode has no extra requirements
+  // "run" mode no longer requires a file — macro/sector-only runs work without tickers
 
   return (
     <Box
@@ -450,6 +671,107 @@ export default function RunPage({
             </Typography>
           </Box>
 
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+            <ToggleButtonGroup
+              value={runEnv}
+              exclusive
+              size="small"
+              onChange={(_, v) => {
+                if (v) {
+                  setRunEnv(v);
+                  localStorage.setItem("runEnv", v);
+                }
+              }}
+              sx={{ height: 28 }}
+            >
+              <ToggleButton
+                value="prod"
+                sx={{
+                  width: 64,
+                  height: 28,
+                  textTransform: "none",
+                  fontWeight: 600,
+                  fontSize: 12,
+                  color: "#f87171",
+                  "&.Mui-selected": {
+                    color: "#f87171",
+                    borderColor: "#f87171",
+                    bgcolor: "rgba(248,113,113,0.08)",
+                  },
+                }}
+              >
+                Prod
+              </ToggleButton>
+              <ToggleButton
+                value="test"
+                sx={{
+                  width: 64,
+                  height: 28,
+                  textTransform: "none",
+                  fontWeight: 600,
+                  fontSize: 12,
+                  "&.Mui-selected": {
+                    color: "#fbbf24",
+                    borderColor: "#fbbf24",
+                    bgcolor: "rgba(251,191,36,0.08)",
+                  },
+                }}
+              >
+                Test
+              </ToggleButton>
+            </ToggleButtonGroup>
+
+            <ToggleButtonGroup
+              value={runDirection}
+              exclusive
+              size="small"
+              onChange={(_, v) => {
+                if (v) {
+                  setRunDirection(v);
+                  localStorage.setItem("runDirection", v);
+                }
+              }}
+              sx={{ height: 28 }}
+            >
+              <ToggleButton
+                value="long"
+                sx={{
+                  width: 64,
+                  height: 28,
+                  textTransform: "none",
+                  fontWeight: 600,
+                  fontSize: 12,
+                  color: "#34d399",
+                  "&.Mui-selected": {
+                    color: "#34d399",
+                    borderColor: "#34d399",
+                    bgcolor: "rgba(52,211,153,0.08)",
+                  },
+                }}
+              >
+                Long
+              </ToggleButton>
+              <ToggleButton
+                value="short"
+                sx={{
+                  width: 64,
+                  height: 28,
+                  textTransform: "none",
+                  fontWeight: 600,
+                  fontSize: 12,
+                  color: "#f87171",
+                  "&.Mui-selected": {
+                    color: "#f87171",
+                    borderColor: "#f87171",
+                    bgcolor: "rgba(248,113,113,0.08)",
+                  },
+                }}
+              >
+                Short
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+
           {(Boolean(pullStage) || runInProgress) && (
             <Button
               variant="contained"
@@ -463,18 +785,35 @@ export default function RunPage({
                 whiteSpace: "nowrap",
                 bgcolor: "#b71c1c",
                 "&:hover": { bgcolor: "#d32f2f" },
-                "&.Mui-disabled": { bgcolor: "rgba(183,28,28,0.4)", color: "rgba(255,255,255,0.4)" },
+                "&.Mui-disabled": {
+                  bgcolor: "rgba(183,28,28,0.4)",
+                  color: "rgba(255,255,255,0.4)",
+                },
               }}
             >
-              {stopping ? <CircularProgress size={16} color="inherit" /> : "Stop"}
+              {stopping ? (
+                <CircularProgress size={16} color="inherit" />
+              ) : (
+                "Stop"
+              )}
             </Button>
           )}
 
-          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 0.5 }}>
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-start",
+              gap: 0.5,
+            }}
+          >
             {pullStage && (
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                 <CircularProgress size={12} sx={{ color: "text.secondary" }} />
-                <Typography variant="caption" sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
+                <Typography
+                  variant="caption"
+                  sx={{ color: "text.secondary", whiteSpace: "nowrap" }}
+                >
                   {pullStage}
                 </Typography>
               </Box>
@@ -520,11 +859,22 @@ export default function RunPage({
                 <MenuItem
                   key={mode}
                   selected={runMode === mode}
-                  onClick={() => { setRunMode(mode); setMenuAnchor(null); }}
-                  sx={{ flexDirection: "column", alignItems: "flex-start", py: 1.2 }}
+                  onClick={() => {
+                    setRunMode(mode);
+                    setMenuAnchor(null);
+                  }}
+                  sx={{
+                    flexDirection: "column",
+                    alignItems: "flex-start",
+                    py: 1.2,
+                  }}
                 >
-                  <Typography variant="body2" fontWeight={600}>{label}</Typography>
-                  <Typography variant="caption" color="text.secondary">{desc}</Typography>
+                  <Typography variant="body2" fontWeight={600}>
+                    {label}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {desc}
+                  </Typography>
                 </MenuItem>
               ))}
             </Menu>
@@ -548,6 +898,14 @@ export default function RunPage({
           Select one or more models from the header dropdown.
         </Alert>
       )}
+      {selectedModelIds.length === 0 &&
+        ["pull-run", "watchlist", "watchlist-only"].includes(runMode) && (
+          <Alert severity="warning">
+            &ldquo;{RUN_MODE_OPTIONS.find((o) => o.mode === runMode)?.label}
+            &rdquo; runs AI analysis after pulling — select one or more models
+            from the header dropdown to enable the button.
+          </Alert>
+        )}
 
       <Divider />
 
@@ -558,13 +916,14 @@ export default function RunPage({
           onChange={(_, v: number) => {
             setInnerTab(v);
             setSelectedIds(new Set());
+            setPage(0);
           }}
           TabIndicatorProps={{
             style: { backgroundColor: "#1976d2", height: 2 },
           }}
           sx={{ minHeight: 40 }}
         >
-          {(["Today", "History"] as const).map((label) => (
+          {(["Today", "History", "Favorites"] as const).map((label) => (
             <Tab
               key={label}
               label={label}
@@ -615,7 +974,11 @@ export default function RunPage({
         ) : displayedRuns.length === 0 ? (
           <Box sx={{ display: "flex", justifyContent: "center", pt: 6 }}>
             <Typography variant="h6" color="text.secondary">
-              {innerTab === 0 ? "No runs today" : "No historical runs"}
+              {innerTab === 0
+                ? "No runs today"
+                : innerTab === 1
+                  ? "No historical runs"
+                  : "No favorites yet"}
             </Typography>
           </Box>
         ) : (
@@ -630,12 +993,12 @@ export default function RunPage({
                     <Checkbox
                       size="small"
                       indeterminate={
-                        displayedRuns.some((r) => selectedIds.has(r.id)) &&
-                        !displayedRuns.every((r) => selectedIds.has(r.id))
+                        pagedRuns.some((r) => selectedIds.has(r.id)) &&
+                        !pagedRuns.every((r) => selectedIds.has(r.id))
                       }
                       checked={
-                        displayedRuns.length > 0 &&
-                        displayedRuns.every((r) => selectedIds.has(r.id))
+                        pagedRuns.length > 0 &&
+                        pagedRuns.every((r) => selectedIds.has(r.id))
                       }
                       onChange={handleToggleAll}
                       sx={{
@@ -645,6 +1008,20 @@ export default function RunPage({
                         },
                       }}
                     />
+                  </TableCell>
+                  <TableCell
+                    sx={{ borderColor: "rgba(255,255,255,0.08)", width: 40 }}
+                  />
+                  <TableCell
+                    sx={{
+                      color: "text.secondary",
+                      fontSize: "0.8rem",
+                      borderColor: "rgba(255,255,255,0.08)",
+                      fontWeight: 600,
+                      width: 40,
+                    }}
+                  >
+                    #
                   </TableCell>
                   <TableCell
                     sx={{
@@ -657,9 +1034,10 @@ export default function RunPage({
                     <TableSortLabel
                       active
                       direction={sortOrder}
-                      onClick={() =>
-                        setSortOrder((o) => (o === "asc" ? "desc" : "asc"))
-                      }
+                      onClick={() => {
+                        setSortOrder((o) => (o === "asc" ? "desc" : "asc"));
+                        setPage(0);
+                      }}
                       sx={{
                         color: "text.secondary !important",
                         "& .MuiTableSortLabel-icon": {
@@ -699,7 +1077,7 @@ export default function RunPage({
                 </TableRow>
               </TableHead>
               <TableBody>
-                {displayedRuns.map((run) => (
+                {pagedRuns.map((run, idx) => (
                   <TableRow
                     key={run.id}
                     selected={selectedIds.has(run.id)}
@@ -725,6 +1103,52 @@ export default function RunPage({
                           "&.Mui-checked": { color: "#1976d2" },
                         }}
                       />
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        color: "text.secondary",
+                        borderColor: "rgba(255,255,255,0.06)",
+                        fontSize: "0.8rem",
+                        width: 40,
+                      }}
+                    >
+                      {clampedPage * ROWS_PER_PAGE + idx + 1}
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        borderColor: "rgba(255,255,255,0.06)",
+                        width: 40,
+                        px: 0.5,
+                      }}
+                    >
+                      <Tooltip
+                        title={
+                          run.is_favorite
+                            ? "Remove from favorites"
+                            : "Add to favorites"
+                        }
+                      >
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleFavorite(run.id);
+                          }}
+                        >
+                          {run.is_favorite ? (
+                            <StarIcon
+                              sx={{ color: "#FFD700", fontSize: "1.1rem" }}
+                            />
+                          ) : (
+                            <StarBorderIcon
+                              sx={{
+                                color: "rgba(255,255,255,0.3)",
+                                fontSize: "1.1rem",
+                              }}
+                            />
+                          )}
+                        </IconButton>
+                      </Tooltip>
                     </TableCell>
                     <TableCell
                       sx={{
@@ -860,7 +1284,9 @@ export default function RunPage({
                           ? new Date(run.completed_at).getTime()
                           : null;
                         const active =
-                          run.status === "pending" || run.status === "running";
+                          run.status === "fetching" ||
+                          run.status === "pending" ||
+                          run.status === "running";
                         if (active) {
                           return (
                             <Typography
@@ -900,16 +1326,75 @@ export default function RunPage({
                       })()}
                     </TableCell>
                     <TableCell sx={{ borderColor: "rgba(255,255,255,0.06)" }}>
-                      <Chip
-                        label={run.status.toUpperCase()}
-                        color={STATUS_COLOR[run.status] ?? "default"}
-                        size="small"
-                        sx={{
-                          fontWeight: 700,
-                          letterSpacing: 0.5,
-                          fontSize: "0.7rem",
-                        }}
-                      />
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+                      >
+                        <Chip
+                          label={
+                            run.status === "fetching"
+                              ? "FETCHING DATA"
+                              : run.status.toUpperCase()
+                          }
+                          color={STATUS_COLOR[run.status] ?? "default"}
+                          size="small"
+                          sx={{
+                            fontWeight: 700,
+                            letterSpacing: 0.5,
+                            fontSize: "0.7rem",
+                          }}
+                        />
+                        {run.direction === "short" && (
+                          <Chip
+                            label="SHORT"
+                            size="small"
+                            sx={{
+                              bgcolor: "rgba(248,113,113,0.15)",
+                              color: "#f87171",
+                              border: "1px solid rgba(248,113,113,0.3)",
+                              fontWeight: 700,
+                              letterSpacing: 0.5,
+                              fontSize: "0.65rem",
+                            }}
+                          />
+                        )}
+                        {run.direction === "long" && (
+                          <Chip
+                            label="LONG"
+                            size="small"
+                            sx={{
+                              bgcolor: "rgba(52,211,153,0.15)",
+                              color: "#34d399",
+                              border: "1px solid rgba(52,211,153,0.3)",
+                              fontWeight: 700,
+                              letterSpacing: 0.5,
+                              fontSize: "0.65rem",
+                            }}
+                          />
+                        )}
+                        <Chip
+                          label={run.env === "prod" ? "PROD" : "TEST"}
+                          size="small"
+                          sx={
+                            run.env === "prod"
+                              ? {
+                                  bgcolor: "rgba(248,113,113,0.15)",
+                                  color: "#f87171",
+                                  border: "1px solid rgba(248,113,113,0.3)",
+                                  fontWeight: 700,
+                                  letterSpacing: 0.5,
+                                  fontSize: "0.65rem",
+                                }
+                              : {
+                                  bgcolor: "rgba(251,191,36,0.15)",
+                                  color: "#fbbf24",
+                                  border: "1px solid rgba(251,191,36,0.3)",
+                                  fontWeight: 700,
+                                  letterSpacing: 0.5,
+                                  fontSize: "0.65rem",
+                                }
+                          }
+                        />
+                      </Box>
                     </TableCell>
                     <TableCell
                       align="right"
@@ -926,7 +1411,8 @@ export default function RunPage({
                           gap: 0.75,
                         }}
                       >
-                        {(run.status === "pending" ||
+                        {(run.status === "fetching" ||
+                          run.status === "pending" ||
                           run.status === "running") && (
                           <Tooltip title="Stop run">
                             <Box
@@ -966,7 +1452,28 @@ export default function RunPage({
                             </Box>
                           </Tooltip>
                         )}
-                        <Tooltip title="View live log">
+                        {run.ibk_session_id && (
+                          <Tooltip title="View IBK pull log">
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() =>
+                                  window.open(
+                                    `${import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:4101"}/screener/log/${run.ibk_session_id}`,
+                                    "_blank",
+                                  )
+                                }
+                                sx={{
+                                  color: "text.secondary",
+                                  "&:hover": { color: "#fbbf24" },
+                                }}
+                              >
+                                <StorageIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        )}
+                        <Tooltip title="View AI analysis log">
                           <span>
                             <IconButton
                               size="small"
@@ -1005,6 +1512,20 @@ export default function RunPage({
           </TableContainer>
         )}
       </Box>
+      {!loading && displayedRuns.length > 0 && (
+        <TablePagination
+          component="div"
+          count={displayedRuns.length}
+          page={clampedPage}
+          onPageChange={(_, newPage) => setPage(newPage)}
+          rowsPerPage={ROWS_PER_PAGE}
+          rowsPerPageOptions={[ROWS_PER_PAGE]}
+          sx={{
+            color: "text.secondary",
+            borderTop: "1px solid rgba(255,255,255,0.08)",
+          }}
+        />
+      )}
       {resultsRun && (
         <CeoResultsPage
           open={Boolean(resultsRun)}
@@ -1054,6 +1575,86 @@ export default function RunPage({
             sx={{ textTransform: "none", fontWeight: 600 }}
           >
             Delete {selectedIds.size > 1 ? `all ${selectedIds.size}` : ""}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={confirmProdModel}
+        onClose={() => setConfirmProdModel(false)}
+        PaperProps={{
+          sx: {
+            bgcolor: "#1a1d27",
+            border: "1px solid rgba(255,255,255,0.12)",
+            borderRadius: 2,
+          },
+        }}
+      >
+        <DialogTitle sx={{ color: "text.primary", fontWeight: 700 }}>
+          Run in Prod with a non-standard model?
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ color: "text.secondary" }}>
+            You're running in <strong style={{ color: "#f87171" }}>Prod</strong>{" "}
+            mode with{" "}
+            <strong style={{ color: "#fbbf24" }}>
+              {selectedModelIds
+                .map((id) => models.find((m) => m.id === id)?.name ?? id)
+                .filter((name) => !PROD_APPROVED_MODEL_NAMES.has(name))
+                .join(", ")}
+            </strong>{" "}
+            — the approved prod models are Gemini 2.5 Pro and Gemini 3.5 Flash.
+            Continue anyway?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button
+            variant="outlined"
+            onClick={() => setConfirmProdModel(false)}
+            sx={{
+              textTransform: "none",
+              borderColor: "rgba(255,255,255,0.2)",
+              color: "text.secondary",
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirmProdModel}
+            sx={{ textTransform: "none", fontWeight: 600 }}
+          >
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={activeAlert !== null}
+        onClose={() => setActiveAlert(null)}
+        PaperProps={{
+          sx: {
+            bgcolor: "#1a1d27",
+            border: "1px solid rgba(255,255,255,0.12)",
+            borderRadius: 2,
+          },
+        }}
+      >
+        <DialogTitle sx={{ color: "text.primary", fontWeight: 700 }}>
+          Run notice
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ color: "text.secondary" }}>
+            {activeAlert?.message}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button
+            variant="contained"
+            onClick={() => setActiveAlert(null)}
+            sx={{ textTransform: "none", fontWeight: 600 }}
+          >
+            Dismiss
           </Button>
         </DialogActions>
       </Dialog>

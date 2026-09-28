@@ -61,10 +61,17 @@ async def _run_single_scan(ib: IB, config: ScreenerConfig, batch: ScannerBatch) 
       client-side instead, against the 20-day average computed from historical bars
       (see filters.reject_reason()).
     """
+    # Short direction hunts pre-market losers instead of gainers. Only the well-known
+    # default gain code is auto-inverted — a custom scan_code is left untouched, since
+    # there's no general way to know its "opposite" (e.g. a sector-specific scan code).
+    scan_code = config.scan_code
+    if config.direction == "short" and scan_code == "TOP_PERC_GAIN":
+        scan_code = "TOP_PERC_LOSE"
+
     sub = ScannerSubscription()
     sub.instrument = config.instrument
     sub.locationCode = config.location_code
-    sub.scanCode = config.scan_code
+    sub.scanCode = scan_code
     sub.numberOfRows = min(config.number_of_rows, 50)
     if config.exclude_etfs:
         sub.stockTypeFilter = "STOCK"
@@ -85,7 +92,7 @@ async def _run_single_scan(ib: IB, config: ScreenerConfig, batch: ScannerBatch) 
     cap_below = f"{batch.market_cap_max_usd / 1_000_000:.0f}M" if batch.market_cap_max_usd else "none"
     log.info(
         "Running IB scanner: scanCode=%s, rows=%d, marketCapAbove=%s, marketCapBelow=%s, abovePrice=%s",
-        config.scan_code, sub.numberOfRows, cap_above, cap_below,
+        scan_code, sub.numberOfRows, cap_above, cap_below,
         config.price_min or "none",
     )
 

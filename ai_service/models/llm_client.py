@@ -35,6 +35,27 @@ class LLMClient:
         self._api_key = model_config.api_key
         self.search_depth: str | None = model_config.search_depth
         self._run_logger = run_logger
+        self._json_mode = self._detect_json_mode_support()
+
+    @property
+    def model_id(self) -> str:
+        """The litellm model identifier this client is configured for (e.g. 'gemini/gemini-2.5-pro')."""
+        return self._model
+
+    def _detect_json_mode_support(self) -> bool:
+        """Auto-detect whether this model supports response_format JSON mode.
+
+        Uses litellm's param registry. Falls back to False for unknown models
+        so we never send an unsupported param that causes OpenRouter 404s.
+        The llm_json_mode setting acts as a manual override when needed.
+        """
+        if not settings.llm_json_mode:
+            return False
+        try:
+            supported = litellm.get_supported_openai_params(model=self._model) or []
+            return "response_format" in supported
+        except Exception:
+            return False
 
     async def complete(
         self,
@@ -42,8 +63,15 @@ class LLMClient:
         user_message: str,
         log_context: dict[str, Any] | None = None,
         thinking_budget_tokens: int | None = None,
+        tools: list[dict] | None = None,
     ) -> str:
-        """Send a chat completion and return the response text."""
+        """Send a chat completion and return the response text.
+
+        `tools` is a passthrough to litellm (e.g. Gemini's native grounding tool) —
+        unlike `complete_with_tools()`, this does not run a client-side tool-call
+        loop; it's for tools the provider executes server-side and returns
+        grounded text for directly.
+        """
         ctx = log_context or {}
         agent_id = ctx.get("agent_id", "")
         prompt_title = ctx.get("prompt_title", "")
@@ -70,7 +98,10 @@ class LLMClient:
 
         start = time.monotonic()
         try:
-            response = await self._call_llm(messages, thinking_budget_tokens=thinking_budget_tokens)
+            call_kwargs: dict[str, Any] = {"tools": tools} if tools else {}
+            response = await self._call_llm(
+                messages, thinking_budget_tokens=thinking_budget_tokens, **call_kwargs
+            )
             duration_ms = int((time.monotonic() - start) * 1000)
             text = response.choices[0].message.content or ""
 
@@ -225,23 +256,38 @@ class LLMClient:
             logger.error("LLM tool-use completion failed", exc_info=True)
             raise LLMError(str(exc)) from exc
 
-    @retry(
-        stop=stop_after_attempt(settings.llm_max_retries),
-        wait=wait_random_exponential(min=5, max=60),
-        retry=retry_if_exception_type((litellm.RateLimitError, litellm.Timeout)),
-    )
     async def _call_llm(
         self,
         messages: list[dict[str, Any]],
         thinking_budget_tokens: int | None = None,
         **kwargs: Any,
     ) -> Any:
-        """Single LLM call with retry on rate-limit or timeout errors."""
+        """Single LLM call with retry on rate-limit/timeout and JSON-mode fallback."""
+        params = self._build_params(messages, thinking_budget_tokens, **kwargs)
+        try:
+            return await self._call_llm_with_retry(params)
+        except litellm.NotFoundError:
+            if "response_format" in params:
+                logger.warning(
+                    "Model does not support JSON mode — retrying without response_format",
+                    extra={"model": self._model},
+                )
+                self._json_mode = False
+                params.pop("response_format")
+                return await self._call_llm_with_retry(params)
+            raise
+
+    def _build_params(
+        self,
+        messages: list[dict[str, Any]],
+        thinking_budget_tokens: int | None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Assemble litellm.acompletion kwargs for this call."""
         if settings.llm_request_delay_seconds > 0:
-            await asyncio.sleep(settings.llm_request_delay_seconds)
+            pass  # delay applied inside _call_llm_with_retry
 
         thinking_enabled = thinking_budget_tokens is not None
-
         params: dict[str, Any] = {
             "model": self._model,
             "messages": messages,
@@ -251,16 +297,23 @@ class LLMClient:
             **kwargs,
         }
         if thinking_enabled:
-            params["thinking"] = {
-                "type": "enabled",
-                "budget_tokens": thinking_budget_tokens,
-            }
-        # response_format (JSON mode) conflicts with thinking and tool calls.
-        elif "tools" not in kwargs:
+            params["thinking"] = {"type": "enabled", "budget_tokens": thinking_budget_tokens}
+        # response_format conflicts with thinking, tool calls, and some OpenRouter models.
+        elif "tools" not in kwargs and self._json_mode:
             params["response_format"] = {"type": "json_object"}
         if self._base_url:
             params["base_url"] = self._base_url
         if self._api_key:
             params["api_key"] = self._api_key
+        return params
 
+    @retry(
+        stop=stop_after_attempt(settings.llm_max_retries),
+        wait=wait_random_exponential(min=5, max=60),
+        retry=retry_if_exception_type((litellm.RateLimitError, litellm.Timeout)),
+    )
+    async def _call_llm_with_retry(self, params: dict[str, Any]) -> Any:
+        """Inner retry loop — only retries on rate-limit or timeout errors."""
+        if settings.llm_request_delay_seconds > 0:
+            await asyncio.sleep(settings.llm_request_delay_seconds)
         return await litellm.acompletion(**params)

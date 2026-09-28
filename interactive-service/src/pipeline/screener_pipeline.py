@@ -12,6 +12,7 @@ from ib_async import IB
 
 from src.config.loader import AppConfig, PacingConfig, ScreenerConfig
 from src.external.news_data import fetch_news_catalysts
+from src.ib.news import fetch_ib_news_for_all, fetch_news_providers
 from src.external.yfinance_data import fetch_yfinance_benchmark_data, fetch_yfinance_data
 from src.ib.client import IBClient
 from src.ib.contract_details import fetch_all_contract_details, fetch_contract_details
@@ -28,7 +29,7 @@ from src.ib.volume_profile import fetch_volume_profile
 from src.output.writer import write_output, write_output_live
 from src.processing.atr import calculate_atr
 from src.processing.enrichment import StockRecord, _compute_beta, build_single_record
-from src.processing.filters import apply_screener_filters, reject_reason
+from src.processing.filters import apply_screener_filters, chg_pct_passes, reject_reason
 
 log = logging.getLogger(__name__)
 
@@ -103,6 +104,7 @@ def _apply_phase1_snapshot_filters(
                 market_cap_usd=None, pre_market_chg_pct=None,
                 fifty_two_week_high=None, fifty_two_week_low=None,
                 shares_outstanding=None, beta=None,
+                shortable_shares=None, shortability=None, halted=None,
             )
             deferred_count += 1
             log.debug("%s: no IB price snapshot — deferred to Phase 2 (yfinance fallback)", sym)
@@ -139,10 +141,14 @@ def _apply_phase1_snapshot_filters(
             if chg is None:
                 surviving[sym] = info  # defer to Phase 2 yfinance check
                 log.debug("%s: pre_market_chg_pct unavailable from IB — deferred to Phase 2", sym)
-            elif chg >= threshold:
+            elif chg_pct_passes(chg, threshold, screener_config.direction):
                 surviving[sym] = info
             else:
-                drop_log[sym] = f"pre_market_chg_pct {chg:+.2f}% < min {threshold:+.2f}%"
+                side = "<= -" if screener_config.direction == "short" else ">= "
+                drop_log[sym] = (
+                    f"pre_market_chg_pct {chg:+.2f}% does not clear {side}{threshold:.2f}% "
+                    f"(direction={screener_config.direction})"
+                )
 
     log.info(
         "Phase 1 snapshot filter: %d candidates → %d passed (%d deferred to Phase 2, price_min=%s, chg_pct_min=%s)",
@@ -175,9 +181,9 @@ async def collect_screener_records(
     _log_data_sources(app_config)
 
     log.debug(
-        "Scanner config: scan_code=%s instrument=%s location_code=%s "
+        "Scanner config: direction=%s scan_code=%s instrument=%s location_code=%s "
         "number_of_rows=%s avg_volume_min=%s scan_batches=%s",
-        screener_config.scan_code, screener_config.instrument,
+        screener_config.direction, screener_config.scan_code, screener_config.instrument,
         screener_config.location_code, screener_config.number_of_rows,
         screener_config.avg_volume_min, screener_config.scan_batches,
     )
@@ -524,7 +530,11 @@ async def collect_screener_records(
                 continue
             records_all.append(rec)
             if _live_path and app_config:
-                write_output_live(records_all, _live_path, app_config, max_stocks=app_config.max_number_of_stocks)
+                write_output_live(
+                    records_all, _live_path, app_config,
+                    max_stocks=app_config.max_number_of_stocks,
+                    direction=screener_config.direction,
+                )
             log.info("%s: enrichment complete (%d record(s) so far)", rec.symbol, len(records_all))
 
         if benchmark_sym in bars_map and benchmark_sym not in _bench_bars_cache:
@@ -560,6 +570,16 @@ async def collect_screener_records(
         if fmp_key and max_headlines > 0 and _should_output_external_data("output_news_catalysts", source="yfinance"):
             log.info("Fetching news catalysts via FMP for %d symbols...", len(surviving_syms))
             news_data = await fetch_news_catalysts(surviving_syms, fmp_key, max_headlines)
+        elif max_headlines > 0 and _should_output_external_data("output_news_catalysts", source="ibk"):
+            log.info("Fetching news catalysts via IB for %d symbols...", len(surviving_syms))
+            provider_codes = await fetch_news_providers(ib)
+            if provider_codes:
+                con_ids = {
+                    sym: contract_infos[sym].contract.conId
+                    for sym in surviving_syms
+                    if sym in contract_infos and contract_infos[sym].contract.conId
+                }
+                news_data = await fetch_ib_news_for_all(ib, con_ids, provider_codes, pacing, max_results=max_headlines)
         else:
             log.info("Skipping news fetch (API key/flag not set or output disabled)")
 
@@ -737,7 +757,8 @@ async def collect_screener_records(
                     if ib_data_cfg.output_beta == "yfinance":
                         rec.beta = None
 
-            if _should_output_external_data("output_news_catalysts", source="yfinance"):
+            if _should_output_external_data("output_news_catalysts", source="yfinance") or \
+               _should_output_external_data("output_news_catalysts", source="ibk"):
                 rec.news_catalysts = news_data.get(rec.symbol, [])
             else:
                 rec.news_catalysts = []
@@ -788,7 +809,9 @@ async def collect_screener_records(
         return passing_records, batch_drop_log
 
     # ── Orchestration loop: initial pass + up to 2 top-up passes ─────────────
-    target = screener_config.number_of_rows
+    # Target: stop once this many stocks pass ALL Phase 2 filters (= what ends up in output).
+    # Using number_of_rows would over-process — Phase 2 would run until 24 pass, then truncate to 8.
+    target = app_config.max_number_of_stocks if app_config and app_config.max_number_of_stocks else screener_config.number_of_rows
     seen: set[str] = set()
     all_records: list[StockRecord] = []
     all_drop_log: dict[str, str] = {}
@@ -816,7 +839,7 @@ async def collect_screener_records(
                 iteration, _MAX_TOPUP_ITERATIONS - 1, len(all_records), target,
             )
 
-        rows_to_request = min((iteration + 1) * target, 50)
+        rows_to_request = min((iteration + 1) * screener_config.number_of_rows, 50)
         scan_cfg = dataclasses.replace(screener_config, number_of_rows=rows_to_request)
         raw_syms = await run_scanner_batches(ib, scan_cfg)
         await asyncio.sleep(8.0)
@@ -847,8 +870,21 @@ async def collect_screener_records(
             log.info("No symbols survived Phase 1 filter for this iteration")
             continue
 
-        # Phase 2: expensive — only for Phase 1 survivors
-        batch_records, p2_drops = await _phase2_enrich(p1_infos, p1_snaps)
+        # Phase 2: expensive — only for Phase 1 survivors, capped to avoid IB rate limit.
+        # Each stock uses 2 historical requests (daily bars + pre-market bars).
+        # phase2_batch_limit (default 27) × 2 = 54 requests, safely under the 59/10-min IB limit.
+        p2_limit = screener_config.phase2_batch_limit
+        if len(p1_infos) > p2_limit:
+            log.info(
+                "Phase 2 batch limit: capping %d Phase 1 survivors to %d (skipping %d to avoid IB rate limit)",
+                len(p1_infos), p2_limit, len(p1_infos) - p2_limit,
+            )
+            p1_infos_capped = dict(list(p1_infos.items())[:p2_limit])
+            p1_snaps_capped = {s: p1_snaps[s] for s in p1_infos_capped if s in p1_snaps}
+        else:
+            p1_infos_capped = p1_infos
+            p1_snaps_capped = p1_snaps
+        batch_records, p2_drops = await _phase2_enrich(p1_infos_capped, p1_snaps_capped)
         all_records.extend(batch_records)
         all_drop_log.update(p2_drops)
 
@@ -857,6 +893,7 @@ async def collect_screener_records(
             write_output_live(
                 all_records, _live_path, app_config,
                 max_stocks=app_config.max_number_of_stocks,
+                direction=screener_config.direction,
             )
             log.info("Live output updated: %d record(s) → %s", len(all_records), _live_path)
 
@@ -889,11 +926,15 @@ async def run_screener_pipeline(
 
     if not records:
         log.warning("No records passed all filters")
-        return write_output([], app_config)
+        return write_output([], app_config, direction=screener_config.direction)
 
     if dry_run:
         log.info("[dry-run] Would write %d records to %s",
                  len(records), app_config.output.directory)
         return Path(app_config.output.directory) / "dry_run.json"
 
-    return write_output(records, app_config, max_stocks=app_config.max_number_of_stocks)
+    return write_output(
+        records, app_config,
+        max_stocks=app_config.max_number_of_stocks,
+        direction=screener_config.direction,
+    )

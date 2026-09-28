@@ -8,6 +8,7 @@ class SearchResultItem(BaseModel):
     url: str
     content: str
     score: float = 0.0
+    published_date: str | None = None
 
 
 class SearchResponse(BaseModel):

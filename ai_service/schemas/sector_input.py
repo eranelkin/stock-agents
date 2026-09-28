@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, model_validator
 
 
@@ -8,6 +10,9 @@ class SectorInput(BaseModel):
 
     name: str
     etf_symbol: str | None = None
+    quote: dict[str, Any] | None = None
+    pre_market: dict[str, Any] | None = None
+    sentiment: dict[str, Any] | None = None
 
     @model_validator(mode="before")
     @classmethod

@@ -14,6 +14,7 @@ from ai_service.models.search_client import SearchClient
 from ai_service.utils.logger import get_logger
 from ai_service.utils.run_logger import RunLogger
 from ai_service.utils.search_tool import WEB_SEARCH_TOOL, execute_search
+from ai_service.utils.grounding_tool import GOOGLE_GROUNDING_TOOL, is_gemini_model
 
 logger = get_logger(__name__)
 
@@ -106,6 +107,8 @@ class Agent:
         output_schema: dict[str, Any] | None = None,
         input_schema: dict[str, Any] | None = None,
         thinking_budget_tokens: int | None = None,
+        env: str = "test",
+        search_enabled: bool = False,
     ) -> None:
         self.agent_id = agent_id
         self.prompt = prompt
@@ -116,6 +119,22 @@ class Agent:
         self._output_schema = output_schema
         self._input_schema = input_schema
         self._thinking_budget_tokens = thinking_budget_tokens
+        self._env = env
+        self._search_enabled = search_enabled
+
+    @property
+    def _use_grounding(self) -> bool:
+        """Prod runs on a Gemini model use live Google Search grounding instead of Tavily.
+
+        Only for prompts actually configured to search — matches the same
+        per-prompt `search_enabled` gate Pipeline uses for the Tavily prefetch path.
+        """
+        return (
+            self._env == "prod"
+            and settings.search_grounding_enabled_prod
+            and is_gemini_model(self._llm.model_id)
+            and self._search_enabled
+        )
 
     async def run(
         self,
@@ -146,24 +165,45 @@ class Agent:
         effective_search_mode = self._search_mode or settings.search_mode
 
         try:
-            if effective_search_mode == "tool_call":
-                search_handler = self._make_search_handler(
-                    ticker=ticker,
-                    prompt_title=prompt_title,
-                    pipeline_id=pipeline_id,
-                    pipeline_type=(log_context or {}).get("pipeline_type", ""),
-                )
-                raw = await self._llm.complete_with_tools(
-                    system_prompt=system_prompt,
-                    user_message=json.dumps(user_content),
-                    tools=[WEB_SEARCH_TOOL],
-                    tool_handlers={"web_search": search_handler},
-                    max_tool_rounds=settings.search_max_tool_rounds,
-                    log_context=full_log_context,
-                    thinking_budget_tokens=self._thinking_budget_tokens,
-                )
+            if effective_search_mode == "tool_call" and self._search_enabled:
+                if self._use_grounding:
+                    raw = await self._llm.complete(
+                        system_prompt=system_prompt,
+                        user_message=json.dumps(user_content),
+                        log_context=full_log_context,
+                        thinking_budget_tokens=self._thinking_budget_tokens,
+                        tools=GOOGLE_GROUNDING_TOOL,
+                    )
+                else:
+                    search_handler = self._make_search_handler(
+                        ticker=ticker,
+                        prompt_title=prompt_title,
+                        pipeline_id=pipeline_id,
+                        pipeline_type=(log_context or {}).get("pipeline_type", ""),
+                    )
+                    raw = await self._llm.complete_with_tools(
+                        system_prompt=system_prompt,
+                        user_message=json.dumps(user_content),
+                        tools=[WEB_SEARCH_TOOL],
+                        tool_handlers={"web_search": search_handler},
+                        max_tool_rounds=settings.search_max_tool_rounds,
+                        log_context=full_log_context,
+                        thinking_budget_tokens=self._thinking_budget_tokens,
+                    )
                 return self._parse_and_validate(raw, extra)
             else:
+                if self._use_grounding:
+                    # Prefetch mode: Pipeline already skipped the Tavily prefetch for
+                    # grounding-eligible agents — use live grounding instead of
+                    # injecting prefetched text.
+                    raw = await self._llm.complete(
+                        system_prompt=system_prompt,
+                        user_message=json.dumps(user_content),
+                        log_context=full_log_context,
+                        thinking_budget_tokens=self._thinking_budget_tokens,
+                        tools=GOOGLE_GROUNDING_TOOL,
+                    )
+                    return self._parse_and_validate(raw, extra)
                 if search_context:
                     user_content["search_context"] = search_context
                 return await self._run_with_schema_retry(

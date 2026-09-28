@@ -28,6 +28,7 @@ interface HeaderProps {
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'run', label: 'Run' },
+  { id: 'watchlist', label: 'Watchlist' },
   { id: 'prompts', label: 'Prompts' },
   { id: 'chat', label: 'Chat' },
   { id: 'models', label: 'Models' },

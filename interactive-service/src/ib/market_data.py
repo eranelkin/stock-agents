@@ -14,8 +14,20 @@ log = logging.getLogger(__name__)
 
 # Tick types requested:
 #   233 = RTVolume (real-time volume, last price, last size)
-#   236 = Shortable shares
+#   236 = Shortable — delivers BOTH tick 46 (ticker.shortable, IB's own difficulty
+#         score) and tick 89 (ticker.shortableShares, exact share count) from a
+#         single request; no separate request needed for each.
 #   258 = Fundamental Ratios (market cap, PE, etc.)
+#
+# IMPORTANT: "49" (Halted) is NOT a legal genericTickList request code for STK
+# contracts — confirmed via a live IB rejection: "Warning 321: Error validating
+# request... Incorrect generic tick list of 165,233,236,258,49. Legal ones for
+# (STK) are: 100,101,105,106,165,221/220,225,232/221,233,236,258/47,292,293,294,
+# 295,318,375,411,456/59,460,577,586,587,588,595,614,619,623" — 49 is absent.
+# IB rejects the ENTIRE genericTickList when any single code in it is invalid, so
+# adding "49" here previously broke every field in every market-data request, not
+# just halted (ticker.halted stays unpopulated/None as a result — no working
+# request-time code for it has been found yet for STK contracts).
 _GENERIC_TICKS = "165,233,236,258"
 
 # Seconds to wait after opening subscriptions before reading ticks.
@@ -38,6 +50,9 @@ class MarketSnapshot:
     fifty_two_week_low: Optional[float]  # TickType LOW_52_WEEKS  (tick 19, genericTick=165)
     shares_outstanding: Optional[float]  # fundamentalRatios.TTMSHOUT × 1M (tick 258)
     beta: Optional[float]                # fundamentalRatios.BETA (tick 258)
+    shortable_shares: Optional[float]    # ticker.shortableShares, exact count (tick 89, genericTick=236)
+    shortability: Optional[str]          # derived from ticker.shortable difficulty score (tick 46, genericTick=236)
+    halted: Optional[bool]               # ticker.halted != 0 — currently always None; no valid genericTick request code found for STK (see _GENERIC_TICKS comment)
 
 
 def _safe(val: float) -> Optional[float]:
@@ -54,6 +69,25 @@ def _calc_chg_pct(price: Optional[float], close: Optional[float]) -> Optional[fl
     if price is None or close is None or close == 0:
         return None
     return (price - close) / close * 100
+
+
+# ticker.shortable (tick 46) is IB's own difficulty score, not a share count:
+#   0        = not available to short
+#   0 - 1.5  = shortable, but hard to borrow / may carry a high borrow fee
+#   1.5 - 2.5 = shortable, moderately available
+#   > 2.5    = easily shortable, large quantity available
+# Bucketed here into a human/LLM-readable label. Verify these breakpoints against
+# current IB API docs if shortability output looks off in practice.
+def _shortability_label(shortable_score: Optional[float]) -> Optional[str]:
+    if shortable_score is None:
+        return None
+    if shortable_score <= 0:
+        return "Not Shortable"
+    if shortable_score <= 1.5:
+        return "Hard"
+    if shortable_score <= 2.5:
+        return "Medium"
+    return "Easy"
 
 
 async def fetch_market_snapshots(
@@ -228,6 +262,15 @@ def _extract_snapshot(symbol: str, ticker) -> MarketSnapshot:
 
     volume = _safe(ticker.volume)
 
+    # Shortable shares + difficulty — both delivered via genericTick=236 (tick 89 /
+    # tick 46 respectively). halted: read defensively in case IB ever populates it
+    # without an explicit request, but no valid genericTick request code for STK
+    # has been found — expect this to stay None (see _GENERIC_TICKS comment above).
+    shortable_shares = _safe(getattr(ticker, "shortableShares", None))
+    shortability = _shortability_label(_safe(getattr(ticker, "shortable", None)))
+    halted_raw = _safe(getattr(ticker, "halted", None))
+    halted = None if halted_raw is None else halted_raw != 0
+
     return MarketSnapshot(
         symbol=symbol,
         pre_market_price=pre_market_price,
@@ -239,4 +282,7 @@ def _extract_snapshot(symbol: str, ticker) -> MarketSnapshot:
         fifty_two_week_low=fifty_two_week_low,
         shares_outstanding=shares_outstanding,
         beta=beta,
+        shortable_shares=shortable_shares,
+        shortability=shortability,
+        halted=halted,
     )

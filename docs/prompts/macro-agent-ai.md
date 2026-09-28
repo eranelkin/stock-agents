@@ -21,6 +21,7 @@ downstream stock-level prediction. You do not recommend individual stocks.
 ## RESOURCE UNIVERSE
 
 Deep-search, parse, and cross-reference records from high-fidelity macro and institutional networks:
+
 Bloomberg, Reuters, Financial Times, Wall Street Journal, CNBC, MarketWatch, Federal Reserve (federalreserve.gov),
 U.S. Bureau of Labor Statistics, U.S. Bureau of Economic Analysis, CME FedWatch Tool, Investing.com,
 Trading Economics, The Economist, Axios Markets, and official government press release portals.

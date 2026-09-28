@@ -1,0 +1,33 @@
+from ib_insync import IB, Stock
+
+ib = IB()
+
+# Connect to IB Gateway:
+# Use port 4002 for Paper Trading, or 4001 for Live Trading
+ib.connect('127.0.0.1', 7496, clientId=1)
+
+# 1. Fetch available news providers on your account
+providers = ib.reqNewsProviders()
+provider_codes = "+".join([p.code for p in providers])
+print(f"Active Provider Codes: {provider_codes}")
+
+if not provider_codes:
+    print("No active API news providers found on this account.")
+else:
+    # 2. Qualify stock contract
+    contract = Stock('AAPL', 'SMART', 'USD')
+    ib.qualifyContracts(contract)
+
+    # 3. Request recent headlines
+    headlines = ib.reqHistoricalNews(
+        contract.conId,
+        providerCodes=provider_codes,
+        startDateTime='',
+        endDateTime='',
+        totalResults=5
+    )
+
+    for article in headlines:
+        print(f"[{article.time}] ({article.providerCode}) {article.headline}")
+
+ib.disconnect()

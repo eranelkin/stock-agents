@@ -20,10 +20,30 @@ from backend.api.broadcaster import broadcaster
 from backend.config import settings
 from backend.db.models import AIModel, AnalyticsRun, Prompt, Run, ScanResult, TickerResult
 from backend.db.session import AsyncSessionLocal, get_session
-from backend.schemas.run import BulkDeleteRequest, RunCreate, RunResponse
 from backend.services.ceo_parser import parse_ceo_file
+from pydantic import BaseModel
+
+from backend.schemas.run import BulkDeleteRequest, RunAlertRequest, RunCreate, RunResponse
 
 router = APIRouter(prefix="/runs", tags=["runs"])
+
+
+async def _fetch_prompts(session: AsyncSession, category: str, direction: str) -> list[Prompt]:
+    """Active prompts in a category, filtered to this run's direction.
+
+    A prompt with direction=NULL always runs (News, Sectors, Macro — direction-agnostic).
+    A prompt with direction="long"/"short" only runs when it matches the run's direction
+    (Technical, CEO — the prompts a user duplicates per direction).
+    """
+    result = await session.execute(
+        select(Prompt).where(
+            Prompt.category == category,
+            Prompt.is_active == True,  # noqa: E712
+            (Prompt.direction.is_(None)) | (Prompt.direction == direction),
+        )
+    )
+    return list(result.scalars().all())
+
 
 def _load_schema(filename: str) -> dict | None:
     path = Path(__file__).resolve().parent.parent.parent / filename
@@ -41,19 +61,16 @@ _SECTOR_SCHEMA: dict | None = _load_schema("sector_schema.json")
 _MACRO_SCHEMA: dict | None = _load_schema("macro_schema.json")
 
 
-def _build_ceo_input_schema(agent_prompts: list[Prompt]) -> dict | None:
+def _build_ceo_input_schema(agent_prompts: list[Prompt]) -> dict:
     """Build the CEO input schema from active stock agent output schemas.
 
-    Returns None if no agent has an output_schema defined yet.
-    The CEO always receives {"name": <ticker>, "agents": {<title>: <agent_output>, ...}}.
+    The CEO receives {"name": <ticker>, "agents": {...}, "macro_analysis": {...}}.
+    macro_analysis is the full output of the Macro agent for this run.
     """
     agent_properties: dict[str, Any] = {}
     for p in agent_prompts:
         if p.output_schema:
             agent_properties[p.title] = p.output_schema
-
-    if not agent_properties:
-        return None
 
     return {
         "type": "object",
@@ -62,6 +79,37 @@ def _build_ceo_input_schema(agent_prompts: list[Prompt]) -> dict | None:
             "agents": {
                 "type": "object",
                 "properties": agent_properties,
+            },
+            "macro_analysis": {
+                "type": "object",
+                "nullable": True,
+                "description": (
+                    "Macro agent's full output analysis for this run: market regime, "
+                    "VIX/SPY/QQQ readings, macro news events with risk-on/off rating, "
+                    "and sector context. Use this as the macro specialist's already-interpreted "
+                    "market view — do not re-derive what the macro agent has already concluded."
+                ),
+            },
+            "sector_etf": {
+                "type": "object",
+                "nullable": True,
+                "description": (
+                    "Live market data for the sector ETF that corresponds to this stock's industry. "
+                    "Fields: etf (symbol), name, sector, quote (price/change_percent/volume), "
+                    "pre_market (price/change/change_percent), sentiment (score/label/bullish_signals/bearish_signals). "
+                    "Use this to assess whether the stock is moving with or against its sector."
+                ),
+            },
+            "borrow_fee_rate": {
+                "type": "number",
+                "nullable": True,
+                "description": (
+                    "Annualized cost to borrow this stock's shares (%), sourced from IB's stock-loan "
+                    "data via the most recent 'Get Market Data' run. Only provided to the CEO agent, "
+                    "not to Technical Analysis — largely irrelevant for a long (longs don't pay "
+                    "borrow fees), but a key cost/viability input for a short trade. Null when no "
+                    "recent market-data run has fetched it yet."
+                ),
             },
         },
         "required": ["name", "agents"],
@@ -73,9 +121,6 @@ async def create_run(
     body: RunCreate, session: AsyncSession = Depends(get_session)
 ) -> Run:
     """Create a Run record and trigger the AI service to begin processing."""
-    if not body.tickers:
-        raise HTTPException(status_code=400, detail="Tickers list is empty.")
-
     result = await session.execute(
         select(AIModel).where(
             AIModel.id.in_(body.model_ids),
@@ -90,30 +135,19 @@ async def create_run(
             detail="No active models found for the provided IDs. Enable models in the Models tab first.",
         )
 
-    prompt_result = await session.execute(
-        select(Prompt).where(Prompt.category == "agents", Prompt.is_active == True)  # noqa: E712
-    )
-    agent_prompts = prompt_result.scalars().all()
-    if not agent_prompts:
+    direction = body.direction or "long"
+    agent_prompts = await _fetch_prompts(session, "agents", direction)
+    sector_prompts = await _fetch_prompts(session, "sectors", direction)
+    macro_prompts = await _fetch_prompts(session, "macro", direction)
+
+    # At least one pipeline must have something to do.
+    if not body.tickers and not macro_prompts and not sector_prompts:
         raise HTTPException(
             status_code=400,
-            detail="No active Agent prompts configured. Enable prompts in the Agents tab first.",
+            detail="Nothing to run: provide tickers or enable Macro/Sector prompts.",
         )
 
-    sector_prompt_result = await session.execute(
-        select(Prompt).where(Prompt.category == "sectors", Prompt.is_active == True)  # noqa: E712
-    )
-    sector_prompts = sector_prompt_result.scalars().all()
-
-    macro_prompt_result = await session.execute(
-        select(Prompt).where(Prompt.category == "macro", Prompt.is_active == True)  # noqa: E712
-    )
-    macro_prompts = macro_prompt_result.scalars().all()
-
-    ceo_prompt_result = await session.execute(
-        select(Prompt).where(Prompt.category == "ceo", Prompt.is_active == True)  # noqa: E712
-    )
-    ceo_prompts = ceo_prompt_result.scalars().all()
+    ceo_prompts = await _fetch_prompts(session, "ceo", direction)
 
     model_configs = [
         {
@@ -127,7 +161,13 @@ async def create_run(
         for m in ai_models
     ]
 
-    run = Run(name=body.name, model_names=[m.name for m in ai_models], ticker_count=len(body.tickers))
+    run = Run(
+        name=body.name,
+        model_names=[m.name for m in ai_models],
+        ticker_count=len(body.tickers),
+        direction=direction,
+        env=body.env,
+    )
     session.add(run)
     await session.commit()
     await session.refresh(run)
@@ -140,8 +180,163 @@ async def create_run(
                 f"{settings.ai_service_url}/run",
                 json={
                     "run_id": str(run.id),
+                    "env": body.env,
                     "models": model_configs,
                     "tickers": body.tickers,
+                    "prompts": [
+                        {
+                            "id": str(p.id),
+                            "title": p.title,
+                            "content": p.content,
+                            "search_enabled": p.search_enabled,
+                            "search_query_template": p.search_query_template,
+                            "search_mode": p.search_mode,
+                            "search_depth": p.search_depth,
+                            "output_schema": p.output_schema,
+                            "input_schema": p.input_schema or _TICKER_SCHEMA,
+                            "thinking_budget_tokens": p.thinking_budget_tokens,
+                        }
+                        for p in agent_prompts
+                    ],
+                    "sector_prompts": [
+                        {
+                            "id": str(p.id),
+                            "title": p.title,
+                            "content": p.content,
+                            "search_enabled": p.search_enabled,
+                            "search_query_template": p.search_query_template,
+                            "search_mode": p.search_mode,
+                            "search_depth": p.search_depth,
+                            "output_schema": p.output_schema,
+                            "input_schema": p.input_schema or _SECTOR_SCHEMA,
+                            "thinking_budget_tokens": p.thinking_budget_tokens,
+                        }
+                        for p in sector_prompts
+                    ],
+                    "macro_prompts": [
+                        {
+                            "id": str(p.id),
+                            "title": p.title,
+                            "content": p.content,
+                            "search_enabled": p.search_enabled,
+                            "search_query_template": p.search_query_template,
+                            "search_mode": p.search_mode,
+                            "search_depth": p.search_depth,
+                            "output_schema": p.output_schema,
+                            "input_schema": p.input_schema or _MACRO_SCHEMA,
+                            "thinking_budget_tokens": p.thinking_budget_tokens,
+                        }
+                        for p in macro_prompts
+                    ],
+                    "ceo_prompts": [
+                        {
+                            "id": str(p.id),
+                            "title": p.title,
+                            "content": p.content,
+                            "search_enabled": p.search_enabled,
+                            "search_query_template": p.search_query_template,
+                            "search_mode": p.search_mode,
+                            "search_depth": p.search_depth,
+                            "output_schema": p.output_schema,
+                            "input_schema": ceo_input_schema,
+                            "thinking_budget_tokens": p.thinking_budget_tokens,
+                        }
+                        for p in ceo_prompts
+                    ],
+                },
+                timeout=10.0,
+            )
+        except httpx.HTTPError as exc:
+            run.status = "failed"
+            run.error = f"Could not reach ai-service: {exc}"
+            await session.commit()
+            raise HTTPException(status_code=502, detail="Failed to reach ai-service") from exc
+
+    return run
+
+
+class StartAiBody(BaseModel):
+    model_ids: list[uuid.UUID]
+    tickers: list[dict[str, Any]]
+    candle_frequency: str = "1d"
+    enrichment_enabled: bool = True
+    env: str = "test"  # "prod" | "test" — not yet sent by interactive-service; defaults preserve today's behavior
+
+
+@router.post("/{run_id}/start-ai", response_model=RunResponse)
+async def start_ai_for_run(
+    run_id: uuid.UUID,
+    body: StartAiBody,
+    session: AsyncSession = Depends(get_session),
+) -> Run:
+    """Transition a 'fetching' run to the AI pipeline stage.
+
+    Called by the interactive-service after an IBK pull completes. The run record
+    already exists (created when the screener was triggered). This endpoint queries
+    models/prompts, triggers the AI service, and updates the run status to 'pending'.
+    """
+    run = await session.get(Run, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run.status != "fetching":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Run is in '{run.status}' state — expected 'fetching'",
+        )
+
+    result = await session.execute(
+        select(AIModel).where(
+            AIModel.id.in_(body.model_ids),
+            AIModel.is_active == True,  # noqa: E712
+        )
+    )
+    ai_models = result.scalars().all()
+    if not ai_models:
+        raise HTTPException(
+            status_code=400,
+            detail="No active models found for the provided IDs.",
+        )
+
+    # run.direction was fixed when the 'fetching' Run was created (screener trigger) —
+    # continuing the run here must not silently change which prompts it uses.
+    direction = run.direction or "long"
+    agent_prompts = await _fetch_prompts(session, "agents", direction)
+    sector_prompts = await _fetch_prompts(session, "sectors", direction)
+    macro_prompts = await _fetch_prompts(session, "macro", direction)
+    ceo_prompts = await _fetch_prompts(session, "ceo", direction)
+
+    run.model_names = [m.name for m in ai_models]
+    run.ticker_count = len(body.tickers)
+    run.status = "pending"
+    run.env = body.env
+    await session.commit()
+    await session.refresh(run)
+
+    model_configs = [
+        {
+            "id": str(m.id),
+            "name": m.name,
+            "model_id": m.model_id,
+            "base_url": m.base_url,
+            "api_key": os.environ.get(m.api_key_env_var) if m.api_key_env_var else None,
+            "search_depth": m.search_depth,
+        }
+        for m in ai_models
+    ]
+
+    ceo_input_schema = _build_ceo_input_schema(list(agent_prompts))
+
+    async with httpx.AsyncClient() as client:
+        try:
+            await client.post(
+                f"{settings.ai_service_url}/run",
+                json={
+                    "run_id": str(run.id),
+                    "env": body.env,
+                    "models": model_configs,
+                    "tickers": body.tickers,
+                    "candle_frequency": body.candle_frequency,
+                    "enrichment_enabled": body.enrichment_enabled,
                     "prompts": [
                         {
                             "id": str(p.id),
@@ -240,10 +435,21 @@ async def stream_runs() -> StreamingResponse:
                 yield "data: []\n\n"  # DB unavailable; broadcaster will push real data once it connects
             while True:
                 try:
-                    data = await asyncio.wait_for(q.get(), timeout=15.0)
+                    data = await asyncio.wait_for(q.get(), timeout=5.0)
                     yield f"data: {data}\n\n"
                 except asyncio.TimeoutError:
-                    yield ": keepalive\n\n"
+                    # Broadcaster may have missed an update — re-poll DB directly as fallback
+                    try:
+                        async with AsyncSessionLocal() as session:
+                            result = await session.execute(select(Run).order_by(Run.created_at.desc()))
+                            runs = result.scalars().all()
+                        payload = json.dumps(
+                            [RunResponse.model_validate(r).model_dump(mode="json") for r in runs],
+                            default=str,
+                        )
+                        yield f"data: {payload}\n\n"
+                    except Exception:
+                        yield ": keepalive\n\n"
                 except asyncio.CancelledError:
                     return
         finally:
@@ -265,6 +471,69 @@ async def get_run(run_id: uuid.UUID, session: AsyncSession = Depends(get_session
     return run
 
 
+@router.patch("/{run_id}/favorite", response_model=RunResponse)
+async def toggle_favorite(run_id: uuid.UUID, session: AsyncSession = Depends(get_session)) -> Run:
+    """Toggle the is_favorite flag on a run."""
+    run = await session.get(Run, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    run.is_favorite = not run.is_favorite
+    await session.commit()
+    await session.refresh(run)
+    return run
+
+
+class FailRunBody(BaseModel):
+    error: str = "No stocks passed the screener filters"
+
+
+@router.post("/{run_id}/fail", response_model=RunResponse)
+async def fail_run(
+    run_id: uuid.UUID,
+    body: FailRunBody = FailRunBody(),
+    session: AsyncSession = Depends(get_session),
+) -> Run:
+    """Mark a run as failed. Used by the interactive-service when no stocks pass the screener."""
+    from datetime import datetime, timezone
+
+    run = await session.get(Run, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run.status not in ("fetching", "pending", "running"):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Run is already in terminal state: {run.status}",
+        )
+
+    run.status = "failed"
+    run.error = body.error
+    run.completed_at = datetime.now(timezone.utc)
+    await session.commit()
+    await session.refresh(run)
+    return run
+
+
+@router.post("/{run_id}/alert", response_model=RunResponse)
+async def set_run_alert(
+    run_id: uuid.UUID,
+    body: RunAlertRequest,
+    session: AsyncSession = Depends(get_session),
+) -> Run:
+    """Set a non-fatal alert message on a run (e.g. Tavily quota exceeded).
+
+    Unlike `error`, this does not change run status — the run keeps going,
+    this just surfaces a notice in the UI via the existing /runs/stream feed.
+    """
+    run = await session.get(Run, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    run.alert = body.message
+    await session.commit()
+    await session.refresh(run)
+    return run
+
+
 @router.post("/{run_id}/stop", response_model=RunResponse)
 async def stop_run(
     run_id: uuid.UUID, session: AsyncSession = Depends(get_session)
@@ -275,20 +544,21 @@ async def stop_run(
     run = await session.get(Run, run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
-    if run.status not in ("pending", "running"):
+    if run.status not in ("fetching", "pending", "running"):
         raise HTTPException(
             status_code=409,
             detail=f"Run is already in terminal state: {run.status}",
         )
 
-    async with httpx.AsyncClient() as client:
-        try:
-            await client.post(
-                f"{settings.ai_service_url}/stop/{run_id}",
-                timeout=5.0,
-            )
-        except httpx.HTTPError:
-            pass  # best-effort; proceed to mark cancelled in DB regardless
+    if run.status in ("pending", "running"):
+        async with httpx.AsyncClient() as client:
+            try:
+                await client.post(
+                    f"{settings.ai_service_url}/stop/{run_id}",
+                    timeout=5.0,
+                )
+            except httpx.HTTPError:
+                pass  # best-effort; proceed to mark cancelled in DB regardless
 
     run.status = "cancelled"
     run.completed_at = datetime.now(timezone.utc)
@@ -508,7 +778,11 @@ async def stream_run_log(
 async def stream_ceo_results(run_id: uuid.UUID) -> StreamingResponse:
     """SSE: streams CEO analysis rows as CEO_*.json files land on disk."""
     async def generator() -> AsyncGenerator[str, None]:
-        seen: set[str] = set()
+        # Each CEO_*.{ext} filename is unique per (ticker, model) by construction (the model
+        # slug is only omitted when a single model is selected, in which case there's only
+        # ever one file per ticker) — so tracking seen *files* is equivalent to tracking seen
+        # (ticker, model) pairs, and avoids re-parsing a file on every poll tick.
+        seen_files: set[str] = set()
 
         async with AsyncSessionLocal() as session:
             run = await session.get(Run, run_id)
@@ -519,11 +793,12 @@ async def stream_ceo_results(run_id: uuid.UUID) -> StreamingResponse:
         if run.output_dir:
             for ext in ("yaml", "json"):
                 for f in sorted(Path(run.output_dir).glob(f"CEO_*.{ext}")):
-                    ticker = f.stem[4:]
-                    data = parse_ceo_file(f)
-                    if data:
-                        seen.add(ticker)
-                        yield f"data: {json.dumps({'ticker': ticker, 'data': data})}\n\n"
+                    ticker = f.stem[4:].split("__", 1)[0]
+                    parsed = _parse_ceo_file(f)
+                    if parsed:
+                        data, model_name = parsed
+                        seen_files.add(str(f))
+                        yield f"data: {json.dumps({'ticker': ticker, 'model': model_name, 'data': data})}\n\n"
 
         if run.status in ("completed", "failed", "cancelled"):
             yield "event: done\ndata: {}\n\n"
@@ -545,13 +820,15 @@ async def stream_ceo_results(run_id: uuid.UUID) -> StreamingResponse:
             if run.output_dir:
                 for ext in ("yaml", "json"):
                     for f in sorted(Path(run.output_dir).glob(f"CEO_*.{ext}")):
-                        ticker = f.stem[4:]
-                        if ticker not in seen:
-                            data = parse_ceo_file(f)
-                            if data:
-                                seen.add(ticker)
-                                yield f"data: {json.dumps({'ticker': ticker, 'data': data})}\n\n"
-                                idle_ticks = 0
+                        if str(f) in seen_files:
+                            continue
+                        ticker = f.stem[4:].split("__", 1)[0]
+                        parsed = _parse_ceo_file(f)
+                        if parsed:
+                            data, model_name = parsed
+                            seen_files.add(str(f))
+                            yield f"data: {json.dumps({'ticker': ticker, 'model': model_name, 'data': data})}\n\n"
+                            idle_ticks = 0
 
             idle_ticks += 1
             if idle_ticks >= 15:
@@ -575,6 +852,140 @@ def _log_file_path(output_dir: str) -> Path:
     """Derive the HTML log file path from a run's output_dir."""
     ts = Path(output_dir).name  # e.g. "2026-06-04_10-00-00"
     return Path(output_dir).parent.parent / "logs" / f"{ts}.html"
+
+
+def _try_parse_raw_output(raw: str) -> dict | None:
+    """Parse a (possibly truncated) JSON string from raw_output.
+
+    Tries the string as-is first, then attempts structural repair by stripping
+    any trailing incomplete key and closing unclosed braces/brackets.
+    Returns a flat dict of CEO fields (unwrapping one level of nesting if needed).
+    """
+    def _extract(obj: dict) -> dict:
+        # Unwrap {"symbol": {...}} or {"key": {...}} → use inner dict
+        for v in obj.values():
+            if isinstance(v, dict) and v:
+                return v
+        return obj
+
+    # Strip markdown code fences (```json ... ``` or ``` ... ```)
+    raw = re.sub(r'^```[a-zA-Z]*\n?', '', raw.strip())
+    raw = re.sub(r'\n?```$', '', raw.strip())
+
+    # Fix invalid JSON escape sequences the LLM sometimes emits:
+    # \' is not a valid JSON escape (only \" is); replace with bare apostrophe
+    raw = raw.replace("\\'", "'")
+
+    # 1. Try as-is (valid complete JSON)
+    try:
+        result = json.loads(raw)
+        if isinstance(result, dict):
+            return _extract(result)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # 1b. The model sometimes emits a complete, valid JSON object followed by
+    # stray trailing characters (e.g. an extra "}" and blank lines). json.loads
+    # rejects that as "Extra data" even though the object itself is fine, and
+    # the brace-balance repair below only handles *missing* closes, not *extra*
+    # ones (it bails when opens_brace goes negative). raw_decode() parses just
+    # the first complete JSON value and ignores whatever comes after it.
+    try:
+        result, _ = json.JSONDecoder().raw_decode(raw.strip())
+        if isinstance(result, dict):
+            return _extract(result)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # 2. Repair: strip trailing incomplete key like `"key":` or `"key": `
+    text = re.sub(r',?\s*"[^"]*":\s*$', '', raw.strip())
+
+    # Close any unterminated string value before brace repair
+    if text.count('"') % 2 != 0:
+        text += '"'
+
+    # Count unclosed braces and brackets
+    opens_brace = text.count('{') - text.count('}')
+    opens_bracket = text.count('[') - text.count(']')
+    if opens_brace < 0 or opens_bracket < 0:
+        return None
+
+    repaired = text + ']' * opens_bracket + '}' * opens_brace
+    try:
+        result = json.loads(repaired)
+        if isinstance(result, dict):
+            return _extract(result)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    return None
+
+
+def _parse_ceo_file(file_path: Path) -> tuple[dict, str | None] | None:
+    """Extract the stock analysis dict (+ producing model name) from a CEO_*.yaml/json file.
+
+    Handles three LLM output patterns:
+    - Each analysis field as a separate list item under `stocks` (old JSON pattern)
+    - Analysis fields nested under a key (e.g. "symbol") in agent_data (current YAML pattern)
+    - parse_error: true with raw_output containing a JSON string (LLM returned invalid JSON)
+    All are merged into one flat dict. The model name comes from the file's own top-level
+    `model_name` field (always present — it's part of PipelineOutput), not from the filename
+    or any LLM self-reported value, so it's reliable even for pre-existing single-model runs.
+    """
+    try:
+        with open(file_path) as f:
+            doc = yaml.safe_load(f) if file_path.suffix == ".yaml" else json.load(f)
+        model_name = doc.get("model_name") if isinstance(doc, dict) else None
+        for agent_data in doc.get("agents", {}).values():
+            if not isinstance(agent_data, dict):
+                continue
+            merged: dict = {}
+            _SKIP = {"stocks", "raw_output", "parse_error", "reasoning", "schema_error", "schema_errors"}
+            # Old JSON pattern: stocks is a list of single-key dicts
+            for item in agent_data.get("stocks") or []:
+                if isinstance(item, dict):
+                    merged.update(item)
+            # Current YAML pattern: data is a dict nested under a key (e.g. "symbol"),
+            # or flat sibling keys alongside stocks
+            for k, v in agent_data.items():
+                if k in _SKIP:
+                    continue
+                if isinstance(v, dict):
+                    merged.update(v)
+                else:
+                    merged.setdefault(k, v)
+            # Fallback: parse_error pattern — LLM returned a JSON string in raw_output
+            # The string may be truncated mid-stream, so we attempt repair before parsing.
+            if not merged and agent_data.get("parse_error") and agent_data.get("raw_output"):
+                raw_str = agent_data["raw_output"]
+                parsed = _try_parse_raw_output(raw_str)
+                if parsed:
+                    merged.update(parsed)
+            if merged:
+                # Normalize snake_case keys that some LLMs output instead of the canonical
+                # space/slash/dash-separated names expected by the schema and frontend.
+                _CANONICAL_KEYS = {
+                    "current_price": "current price",
+                    "ceo_verdict": "ceo verdict",
+                    "conviction_score": "conviction score",
+                    "success_prob": "success prob",
+                    "entry_range": "entry range",
+                    "entry_time": "entry time",
+                    "sl_range": "sl range",
+                    "tp_range": "tp range",
+                    "poc_node": "poc node",
+                    "bid_ask_spread": "bid/ask spread",
+                    "bid/ask_spread": "bid/ask spread",
+                    "sector_sympathy": "sector sympathy",
+                    "spx_qqq_corr": "spx/qqq_corr",
+                    "r_multiple": "r-multiple",
+                    "catalyst_reason": "catalyst reason",
+                }
+                merged = {_CANONICAL_KEYS.get(k, k): v for k, v in merged.items()}
+                return merged, model_name
+    except Exception:
+        pass
+    return None
 
 
 def _parse_log_stats(html: str) -> dict[str, int]:

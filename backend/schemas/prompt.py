@@ -18,6 +18,7 @@ class PromptCreate(BaseModel):
     input_schema: dict | None = None
     thinking_budget_tokens: int | None = None
     search_depth: str | None = None  # "basic" | "advanced" | None = use model default
+    direction: str | None = None  # "long" | "short" | None = runs for every direction
 
 
 class PromptUpdate(BaseModel):
@@ -32,6 +33,7 @@ class PromptUpdate(BaseModel):
     input_schema: dict | None = None
     thinking_budget_tokens: int | None = None
     search_depth: str | None = None
+    direction: str | None = None
 
 
 class PromptActiveUpdate(BaseModel):
@@ -50,6 +52,7 @@ class PromptResponse(BaseModel):
     input_schema: dict | None
     thinking_budget_tokens: int | None = None
     search_depth: str | None = None
+    direction: str | None = None
     is_active: bool
     created_at: datetime
     updated_at: datetime

@@ -145,6 +145,11 @@ class StockRecord:
     short_ratio: Optional[float] = None
     institutional_holding_pct: Optional[float] = None
 
+    # ── Short-mechanics fields from IB market data (tick 236; halted currently unavailable) ────────
+    shortable_shares: Optional[float] = None
+    shortability: Optional[str] = None
+    halted: Optional[bool] = None
+
 
 # ── Builder ────────────────────────────────────────────────────────────────────
 
@@ -218,6 +223,9 @@ def build_single_record(
         fifty_two_week_low=(snap.fifty_two_week_low if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_fifty_two_week_low == "ibk") else None,
         shares_outstanding=(snap.shares_outstanding if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_shares_outstanding == "ibk") else None,
         beta=(snap.beta if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_beta == "ibk") else None,
+        shortable_shares=(snap.shortable_shares if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_shortable_shares == "ibk") else None,
+        shortability=(snap.shortability if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_shortability == "ibk") else None,
+        halted=(snap.halted if snap else None) if (ib_data_cfg is None or ib_data_cfg.output_halted == "ibk") else None,
         emas=emas_val,
         rsi_14=rsi_14_val,
         mc_vol_ratio=None,

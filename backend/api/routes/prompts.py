@@ -71,6 +71,7 @@ async def create_prompt(
         input_schema=body.input_schema,
         thinking_budget_tokens=body.thinking_budget_tokens,
         search_depth=body.search_depth,
+        direction=body.direction,
         is_active=body.is_active,
     )
     session.add(prompt)
@@ -110,6 +111,8 @@ async def update_prompt(
         prompt.thinking_budget_tokens = body.thinking_budget_tokens
     if "search_depth" in body.model_fields_set:
         prompt.search_depth = body.search_depth
+    if "direction" in body.model_fields_set:
+        prompt.direction = body.direction
     if body.is_active is not None:
         prompt.is_active = body.is_active
 

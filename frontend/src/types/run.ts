@@ -1,12 +1,23 @@
 export interface Run {
-  id: string
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
-  name: string | null
-  created_at: string
-  completed_at: string | null
-  error: string | null
-  output_dir: string | null
-  model_names: string[] | null
-  ticker_count: number | null
-  last_scanned_at: string | null
+  id: string;
+  status:
+    | "fetching"
+    | "pending"
+    | "running"
+    | "completed"
+    | "failed"
+    | "cancelled";
+  name: string | null;
+  created_at: string;
+  completed_at: string | null;
+  error: string | null;
+  alert: string | null;
+  output_dir: string | null;
+  model_names: string[] | null;
+  ticker_count: number | null;
+  last_scanned_at: string | null;
+  ibk_session_id: string | null;
+  is_favorite: boolean;
+  direction: "long" | "short";
+  env: "prod" | "test";
 }
