@@ -54,7 +54,11 @@ class Pipeline:
         self._run_dir = run_dir
         self._output_prefix = output_prefix
         self._env = env
-        self._use_grounding = env == "prod" and is_gemini_model(llm_client.model_id)
+        self._use_grounding = (
+            env == "test"
+            and settings.search_grounding_enabled_test
+            and is_gemini_model(llm_client.model_id)
+        )
 
     async def run(self) -> PipelineOutput:
         """Acquire a pipeline slot, run agents, return the aggregated result."""
@@ -106,13 +110,26 @@ class Pipeline:
             logger.info("Pipeline done", extra={**extra, "duration_ms": duration_ms})
             return output
 
+    def _is_prefetch_mode(self, prompt_config: PromptConfig) -> bool:
+        """Whether this prompt actually consumes a Tavily prefetch.
+
+        Agent.run() only reads `search_context` in "prefetch" mode — in "tool_call"
+        mode the agent searches for itself via its own tool-calling loop and never
+        looks at any prefetched text at all. Prefetching for a tool_call prompt
+        would just be a wasted, unused Tavily call, so this must mirror the same
+        effective-mode calculation Agent.run() does (`search_mode or settings.search_mode`).
+        """
+        return (prompt_config.search_mode or settings.search_mode) != "tool_call"
+
     async def _run_parallel(self) -> dict[str, Any]:
         """Run all searches concurrently, then run all agents concurrently."""
         search_contexts: dict[str, str] = {}
-        # Prod+Gemini pipelines use live grounding instead of Tavily (see Agent.run) —
-        # skip the Tavily prefetch entirely so we don't pay for context that's thrown away.
+        # Grounding-eligible pipelines use live grounding instead of Tavily (see
+        # Agent.run) — skip the Tavily prefetch entirely so we don't pay for context
+        # that's thrown away. Same for any prompt in tool_call mode, since its agent
+        # never reads the prefetched context either (it searches for itself instead).
         if self._search and self._search.is_available() and not self._use_grounding:
-            search_enabled = [p for p in self.prompts if p.search_enabled]
+            search_enabled = [p for p in self.prompts if p.search_enabled and self._is_prefetch_mode(p)]
             if search_enabled:
                 contexts = await asyncio.gather(
                     *[self._fetch_search(p) for p in search_enabled]
@@ -163,6 +180,7 @@ class Pipeline:
                 and self._search.is_available()
                 and prompt_config.search_enabled
                 and not self._use_grounding
+                and self._is_prefetch_mode(prompt_config)
             ):
                 search_context = await self._fetch_search(prompt_config)
 

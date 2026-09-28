@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -46,6 +46,31 @@ class TickerResult(Base):
     )
 
     run: Mapped[Run] = relationship(back_populates="results")
+
+
+class CeoAnalysis(Base):
+    """DB mirror of a CEO_*.yaml/json output file for one (run, ticker, model).
+
+    Dual-written alongside the file by CeoManager during the DB-migration testing
+    period — the file remains authoritative. Schema must match backend/db/models.py
+    (which owns the Alembic migration for this table).
+    """
+
+    __tablename__ = "ceo_analysis"
+    __table_args__ = (UniqueConstraint("run_id", "ticker", "model_name", name="uq_ceo_analysis_run_ticker_model"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("runs.id"), nullable=False)
+    ticker: Mapped[str] = mapped_column(String(20), nullable=False)
+    model_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    data: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    success_setup: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    comments: Mapped[str | None] = mapped_column(Text, nullable=True)
+    max_gain_pct: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    annotation_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class AIModel(Base):

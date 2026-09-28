@@ -32,11 +32,16 @@ class Settings(BaseSettings):
     market_data_schedule_minute: int = 30
 
     # Tavily web search
-    tavily_api_key: str = ""
+    tavily_api_keys: str = ""  # comma-separated; chat search tries each in order on quota/rate-limit
     search_enabled: bool = False
     search_max_results: int = 5
     search_depth: str = "basic"
     search_mode: str = "prefetch"  # prefetch | tool_call
+
+    @property
+    def tavily_api_key_list(self) -> list[str]:
+        """Parsed, ordered Tavily API keys from the comma-separated setting."""
+        return [k.strip() for k in self.tavily_api_keys.split(",") if k.strip()]
 
     @property
     def database_url(self) -> str:

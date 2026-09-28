@@ -3,7 +3,19 @@ watchlist:
   sec_type: STK
   exchange: SMART
   currency: USD
+  active: true
 - symbol: AMAT
   sec_type: STK
   exchange: SMART
   currency: USD
+  active: true
+- symbol: TSLA
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: true
+- symbol: AMZN
+  sec_type: STK
+  exchange: SMART
+  currency: USD
+  active: true

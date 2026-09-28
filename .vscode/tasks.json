@@ -4,7 +4,7 @@
         {
             "label": "backend",
             "type": "shell",
-            "command": "uvicorn backend.main:app --port 4101 --reload",
+            "command": "uvicorn backend.main:app --port 4101 --reload --reload-dir backend",
             "presentation": {
                 "label": "backend (4101)",
                 "panel": "new",
@@ -15,7 +15,7 @@
         {
             "label": "ai-service",
             "type": "shell",
-            "command": "uvicorn ai_service.main:app --port 4102 --reload",
+            "command": "uvicorn ai_service.main:app --port 4102 --reload --reload-dir ai_service",
             "presentation": {
                 "label": "ai-service (4102)",
                 "panel": "new",
