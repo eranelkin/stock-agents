@@ -410,10 +410,15 @@ async def start_ai_for_run(
     return run
 
 
+_MAX_RUNS_RETURNED = 300  # growth cap — payload was unbounded and growing with every run ever created
+
+
 @router.get("", response_model=list[RunResponse])
 async def list_runs(session: AsyncSession = Depends(get_session)) -> list[Run]:
-    """Return all runs ordered by creation time descending."""
-    result = await session.execute(select(Run).order_by(Run.created_at.desc()))
+    """Return the most recent runs, newest first (capped, see _MAX_RUNS_RETURNED)."""
+    result = await session.execute(
+        select(Run).order_by(Run.created_at.desc()).limit(_MAX_RUNS_RETURNED)
+    )
     return list(result.scalars().all())
 
 
@@ -425,7 +430,9 @@ async def stream_runs() -> StreamingResponse:
         try:
             try:
                 async with AsyncSessionLocal() as session:
-                    result = await session.execute(select(Run).order_by(Run.created_at.desc()))
+                    result = await session.execute(
+                        select(Run).order_by(Run.created_at.desc()).limit(_MAX_RUNS_RETURNED)
+                    )
                     runs = result.scalars().all()
                 payload = json.dumps(
                     [RunResponse.model_validate(r).model_dump(mode="json") for r in runs],
@@ -442,7 +449,9 @@ async def stream_runs() -> StreamingResponse:
                     # Broadcaster may have missed an update — re-poll DB directly as fallback
                     try:
                         async with AsyncSessionLocal() as session:
-                            result = await session.execute(select(Run).order_by(Run.created_at.desc()))
+                            result = await session.execute(
+                                select(Run).order_by(Run.created_at.desc()).limit(_MAX_RUNS_RETURNED)
+                            )
                             runs = result.scalars().all()
                         payload = json.dumps(
                             [RunResponse.model_validate(r).model_dump(mode="json") for r in runs],

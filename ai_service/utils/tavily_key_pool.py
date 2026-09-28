@@ -51,8 +51,12 @@ class TavilyKeyPool:
     def total_keys(self) -> int:
         return len(self._keys)
 
-    async def mark_exhausted_and_rotate(self) -> str | None:
-        """Mark the current key exhausted and return the next live key, or None if all are exhausted."""
+    async def mark_exhausted_and_rotate(self) -> tuple[str, int, int] | None:
+        """Mark the current key exhausted and rotate to the next live one.
+
+        Returns `(next_key, exhausted_index, next_index)` (0-based) so callers can
+        log which key switch actually happened, or `None` if all keys are exhausted.
+        """
         async with self._lock:
             exhausted_index = self._index
             self._exhausted_at[exhausted_index] = time.monotonic()
@@ -67,7 +71,7 @@ class TavilyKeyPool:
                         candidate + 1,
                         len(self._keys),
                     )
-                    return self._keys[candidate]
+                    return self._keys[candidate], exhausted_index, candidate
             logger.error(
                 "All %d Tavily keys exhausted (each retries automatically after %.0fs)",
                 len(self._keys),

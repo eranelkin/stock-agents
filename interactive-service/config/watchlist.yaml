@@ -8,7 +8,7 @@ watchlist:
   sec_type: STK
   exchange: SMART
   currency: USD
-  active: false
+  active: true
 - symbol: MAGS
   sec_type: STK
   exchange: SMART
@@ -28,7 +28,7 @@ watchlist:
   sec_type: STK
   exchange: SMART
   currency: USD
-  active: false
+  active: true
 - symbol: HPE
   sec_type: STK
   exchange: SMART
@@ -69,8 +69,8 @@ watchlist:
   exchange: SMART
   currency: USD
   active: false
-- symbol: P
+- symbol: ABNB
   sec_type: STK
   exchange: SMART
   currency: USD
-  active: true
+  active: false

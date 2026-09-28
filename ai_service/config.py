@@ -45,7 +45,8 @@ class Settings(BaseSettings):
     search_depth: str = "basic"  # basic | advanced
     search_mode: str = "prefetch"  # prefetch | tool_call
     search_max_tool_rounds: int = 10  # max LLM↔tool cycles before forcing final answer
-    search_days: int = 3              # Tavily `days` param — hard cutoff (3 = last 72h)
+    search_days: int = 3              # Tavily `days` param — fallback cutoff when since-last-close is disabled
+    search_since_last_close_enabled: bool = True  # True = filter by last NYSE close instead of `search_days` (rollback switch)
 
     # Gemini Google Search grounding — replaces Tavily for test runs on Gemini models.
     # Prod always uses Tavily (real verified published_date per article); test uses

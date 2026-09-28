@@ -53,7 +53,8 @@ const COLUMN_LABELS: Record<string, string> = {
 }
 
 // Manual review columns — not part of the streamed agent output. Their values are
-// entered by the user and persisted locally per run (see ANNOTATION_COLUMNS below).
+// entered by the user and persisted in the `ceo_analysis` DB table, shared across
+// browsers/machines (see ANNOTATION_COLUMNS below).
 const ANNOTATION_COLUMNS = ['max_gain_pct', 'success_setup', 'comments'] as const
 type AnnotationColumn = typeof ANNOTATION_COLUMNS[number]
 
@@ -392,19 +393,53 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
   const [dataSource, setDataSource] = useState<'files' | 'database'>('files')
   const esRef = useRef<EventSource | null>(null)
 
-  // Success/comments/max-gain are manual review notes, not agent output — persisted
-  // per run in localStorage rather than sent to the backend.
+  // Success/comments/max-gain are manual review notes, not agent output. The DB
+  // (`ceo_analysis` table) is authoritative and shared across browsers/machines;
+  // localStorage is kept only as an instant local echo while typing so edits feel
+  // responsive without waiting on a round-trip.
   const annotationsStorageKey = `ceo-annotations-${run.id}`
 
   useEffect(() => {
     if (!open) return
+
+    let cancelled = false
+    let localAnnotations: Record<string, Annotation> = {}
     try {
       const raw = localStorage.getItem(annotationsStorageKey)
-      setAnnotations(raw ? (JSON.parse(raw) as Record<string, Annotation>) : {})
+      localAnnotations = raw ? (JSON.parse(raw) as Record<string, Annotation>) : {}
     } catch {
-      setAnnotations({})
+      localAnnotations = {}
     }
-  }, [open, annotationsStorageKey])
+    setAnnotations(localAnnotations)
+
+    const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://127.0.0.1:4101'
+    fetch(`${BACKEND}/runs/${run.id}/ceo-analysis`)
+      .then(res => res.json())
+      .then((items: Array<{
+        ticker: string
+        model: string | null
+        success_setup: boolean | null
+        comments: string | null
+        max_gain_pct: number | null
+      }>) => {
+        if (cancelled) return
+        const fromDb: Record<string, Annotation> = {}
+        for (const it of items) {
+          if (it.success_setup === null && it.comments === null && it.max_gain_pct === null) continue
+          const key = `${it.ticker}::${it.model ?? ''}`
+          fromDb[key] = {
+            successSetup: it.success_setup ?? false,
+            comments: it.comments ?? '',
+            maxGain: it.max_gain_pct !== null ? String(it.max_gain_pct) : '',
+          }
+        }
+        // DB wins over localStorage — it's the shared/authoritative store.
+        setAnnotations(prev => ({ ...prev, ...fromDb }))
+      })
+      .catch(() => { /* offline/backend down — keep whatever localStorage had */ })
+
+    return () => { cancelled = true }
+  }, [open, annotationsStorageKey, run.id])
 
   const updateAnnotation = useCallback((row: Row, patch: Partial<Annotation>) => {
     const key = rowAnnotationKey(row)
@@ -418,9 +453,8 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
       return next
     })
 
-    // Testing-period mirror to the DB (see backend /runs/{id}/ceo-analysis PATCH).
-    // localStorage above remains the source of truth for the UI — this write is
-    // fire-and-forget and its failure must never affect the annotation UX.
+    // Persist to the DB (see backend /runs/{id}/ceo-analysis PATCH) — this is now the
+    // authoritative store read back on load; localStorage above is just a local echo.
     const dbPatch: Record<string, unknown> = {}
     if (patch.successSetup !== undefined) dbPatch.success_setup = patch.successSetup
     if (patch.comments !== undefined) dbPatch.comments = patch.comments
@@ -437,7 +471,13 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(dbPatch),
         },
-      ).catch(() => { /* non-fatal — localStorage already has the annotation */ })
+      ).then(res => {
+        if (!res.ok) {
+          console.error(`Failed to save annotation for ${row._ticker}/${row._model}: HTTP ${res.status}`)
+        }
+      }).catch(err => {
+        console.error(`Failed to save annotation for ${row._ticker}/${row._model}:`, err)
+      })
     }
   }, [annotationsStorageKey, run.id])
 
@@ -618,6 +658,9 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
           ticker: string
           model: string | null
           data: Record<string, unknown>
+          success_setup: boolean | null
+          comments: string | null
+          max_gain_pct: number | null
         }>
         if (cancelled) return
         const modelName = (m: string | null) => m ?? ''
@@ -632,6 +675,21 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
           ...it.data,
           ai_model_name: modelName(it.model) || it.data.ai_model_name,
         }) as Row))
+        // Annotations are manual review fields, not agent-output columns — keep them
+        // in `annotations` state (DB-authoritative) rather than merging into `data`.
+        setAnnotations(prev => {
+          const next = { ...prev }
+          for (const it of items) {
+            if (it.success_setup === null && it.comments === null && it.max_gain_pct === null) continue
+            const key = `${it.ticker}::${modelName(it.model)}`
+            next[key] = {
+              successSetup: it.success_setup ?? false,
+              comments: it.comments ?? '',
+              maxGain: it.max_gain_pct !== null ? String(it.max_gain_pct) : '',
+            }
+          }
+          return next
+        })
       } catch { /* ignore — try again on next tick */ }
 
       if (cancelled) return

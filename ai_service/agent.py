@@ -13,6 +13,7 @@ from ai_service.config import settings
 from ai_service.models.llm_client import LLMClient, LLMError
 from ai_service.models.search_client import SearchClient
 from ai_service.utils.logger import get_logger
+from ai_service.utils.market_calendar import last_market_close
 from ai_service.utils.run_logger import RunLogger
 from ai_service.utils.search_tool import WEB_SEARCH_TOOL, execute_search
 from ai_service.utils.grounding_tool import GOOGLE_GROUNDING_TOOL, is_gemini_model
@@ -74,7 +75,12 @@ def _resolve_placeholders(text: str) -> str:
     """Replace known placeholders in a prompt string before sending to the LLM."""
     now = datetime.now(ZoneInfo("America/New_York"))
     current_date = now.strftime(f"%B {now.day}, %Y, %H:%M %Z")
-    return text.replace("{CURRENTDATE}", current_date)
+    text = text.replace("{CURRENTDATE}", current_date)
+    if "{SEARCH_WINDOW_START}" in text:
+        window_start = last_market_close(now)
+        window_start_str = window_start.strftime(f"%B {window_start.day}, %Y, %H:%M %Z")
+        text = text.replace("{SEARCH_WINDOW_START}", window_start_str)
+    return text
 
 
 def _build_system_prompt(

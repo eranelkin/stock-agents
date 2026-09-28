@@ -43,6 +43,7 @@ import StarBorderIcon from "@mui/icons-material/StarBorder";
 import { createRun, deleteRun, deleteRuns, enrichPreview, pollScreenerDone, pollSessionDone, stopMarketData, stopRun, stopScreener, toggleFavorite, triggerMarketData, triggerScreener } from "../api/runs";
 import { fetchModels } from "../api/models";
 import CeoResultsPage from "../components/CeoResultsPage";
+import { useLocalStorage } from "../hooks/useLocalStorage";
 import type { Run } from "../types/run";
 import type { Model } from "../types/model";
 
@@ -114,7 +115,10 @@ export default function RunPage({
   const [models, setModels] = useState<Model[]>([]);
   const [confirmProdModel, setConfirmProdModel] = useState(false);
   const [activeAlert, setActiveAlert] = useState<{ runId: string; message: string } | null>(null);
-  const seenAlertsRef = useRef<Set<string>>(new Set());
+  // Persisted across reloads — otherwise a dismissed alert (e.g. Tavily quota
+  // exceeded) pops right back up the next time this page mounts, since the run
+  // itself still carries that alert message in the DB forever.
+  const [seenAlerts, setSeenAlerts] = useLocalStorage<string[]>("seenRunAlerts", []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const esRef = useRef<EventSource | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -129,13 +133,14 @@ export default function RunPage({
   // (e.g. Tavily quota exceeded) — doesn't affect run status, just a heads-up.
   useEffect(() => {
     for (const run of runs) {
-      if (run.alert && !seenAlertsRef.current.has(run.id + run.alert)) {
-        seenAlertsRef.current.add(run.id + run.alert);
+      const alertKey = run.id + run.alert;
+      if (run.alert && !seenAlerts.includes(alertKey)) {
+        setSeenAlerts(prev => [...prev, alertKey]);
         setActiveAlert({ runId: run.id, message: run.alert });
         break;
       }
     }
-  }, [runs]);
+  }, [runs, seenAlerts, setSeenAlerts]);
 
   // Open SSE connection once on mount; first message delivers current run list
   useEffect(() => {
@@ -484,13 +489,18 @@ export default function RunPage({
     clampedPage * ROWS_PER_PAGE + ROWS_PER_PAGE,
   );
 
-  const runInProgress = runs.some(
+  // Any run still fetching/pending/running — used to show the "Stop" button, which can
+  // still stop an in-progress AI analysis even after a new pull has been triggered.
+  const anyRunActive = runs.some(
     (r) => r.status === "fetching" || r.status === "pending" || r.status === "running",
   );
+  // Only block a new trigger while a pull is actually in flight — AI analysis on a
+  // previous run can keep running in the background while the next pull starts.
+  const pullInProgress =
+    runs.some((r) => r.status === "fetching") || Boolean(pullStage);
   const runDisabled =
     starting ||
-    runInProgress ||
-    Boolean(pullStage) ||
+    pullInProgress ||
     (runMode === "run" && selectedModelIds.length === 0) ||
     (runMode === "pull-run" && selectedModelIds.length === 0) ||
     (runMode === "watchlist" && selectedModelIds.length === 0) ||
@@ -625,7 +635,7 @@ export default function RunPage({
             </ToggleButtonGroup>
           </Box>
 
-          {(Boolean(pullStage) || runInProgress) && (
+          {(Boolean(pullStage) || anyRunActive) && (
             <Button
               variant="contained"
               onClick={handleStopAll}

@@ -4,6 +4,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 from tavily import AsyncTavilyClient
 
@@ -11,10 +12,13 @@ from ai_service.config import settings
 from ai_service.schemas.search import SearchResponse, SearchResultItem
 from ai_service.utils.backend_client import notify_run_alert
 from ai_service.utils.logger import get_logger
+from ai_service.utils.market_calendar import last_market_close
 from ai_service.utils.run_logger import RunLogger
 from ai_service.utils.tavily_key_pool import get_tavily_key_pool
 
 logger = get_logger(__name__)
+
+_ET = ZoneInfo("America/New_York")
 
 
 def build_search_query(ticker: str, template: str | None = None) -> str:
@@ -66,6 +70,20 @@ class SearchClient:
                 entity=ticker,
             )
 
+        # Freshness filter: prefer the exact last-NYSE-close window (day-granularity
+        # on Tavily's side — the precise 16:00 boundary is enforced at the prompt
+        # level, see _format_context below) over the flat rolling `days` window.
+        # This is a rollback switch, not a per-call choice, so every search-enabled
+        # agent gets the same behavior consistently.
+        freshness_params: dict[str, Any]
+        if settings.search_since_last_close_enabled:
+            freshness_params = {
+                "start_date": last_market_close().date().isoformat(),
+                "end_date": datetime.now(_ET).date().isoformat(),
+            }
+        else:
+            freshness_params = {"days": settings.search_days}
+
         attempts_left = max(1, self._key_pool.total_keys)
         while attempts_left > 0:
             attempts_left -= 1
@@ -75,13 +93,13 @@ class SearchClient:
                     query=query,
                     search_depth=search_depth or settings.search_depth,
                     max_results=settings.search_max_results,
-                    days=settings.search_days,
-                    # "news" topic: (a) makes Tavily's `days` cutoff actually apply
-                    # server-side (per Tavily's docs, `days` is only honored for the
-                    # news topic, not "general"), and (b) makes published_date far
-                    # more reliably populated, since Tavily's news pipeline tracks
-                    # publish dates explicitly.
+                    # "news" topic: (a) makes Tavily's date filters actually apply
+                    # server-side (per Tavily's docs, day-based filters are only
+                    # honored for the news topic, not "general"), and (b) makes
+                    # published_date far more reliably populated, since Tavily's
+                    # news pipeline tracks publish dates explicitly.
                     topic="news",
+                    **freshness_params,
                 )
                 duration_ms = int((time.monotonic() - start) * 1000)
                 items = [
@@ -120,9 +138,22 @@ class SearchClient:
             except Exception as exc:
                 if _is_quota_or_rate_limit_error(exc):
                     logger.error("Tavily key exhausted or rate-limited", extra={**extra, "error": str(exc)})
-                    next_key = await self._key_pool.mark_exhausted_and_rotate()
-                    if next_key and attempts_left > 0:
+                    rotation = await self._key_pool.mark_exhausted_and_rotate()
+                    if rotation and attempts_left > 0:
+                        next_key, exhausted_index, next_index = rotation
                         self._client = AsyncTavilyClient(api_key=next_key)
+                        if self._run_logger:
+                            await self._run_logger.key_switch(
+                                agent_id=agent_id,
+                                prompt_title=prompt_title,
+                                exhausted_index=exhausted_index,
+                                next_index=next_index,
+                                total_keys=self._key_pool.total_keys,
+                                reason=str(exc),
+                                pipeline_id=pipeline_id,
+                                pipeline_type=pipeline_type,
+                                entity=ticker,
+                            )
                         continue
 
                     if self._run_logger:
@@ -163,15 +194,13 @@ def _is_quota_or_rate_limit_error(exc: Exception) -> bool:
 
 def _format_context(response: SearchResponse) -> str:
     """Format a SearchResponse as a plain-text block for LLM injection."""
-    from datetime import timedelta
-    retrieved = datetime.fromisoformat(response.retrieved_at.replace("Z", "+00:00"))
-    cutoff = retrieved - timedelta(hours=72)
-    cutoff_str = cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
+    cutoff = last_market_close()
+    cutoff_str = cutoff.strftime("%Y-%m-%d %H:%M %Z")
     lines: list[str] = [
         "--- LIVE WEB SEARCH CONTEXT ---",
         f'Query: "{response.query}"',
         f"Retrieved: {response.retrieved_at}",
-        f"72-hour cutoff: {cutoff_str}  <- EXCLUDE any article whose event/publish date is before this",
+        f"Last market close cutoff: {cutoff_str}  <- EXCLUDE any article whose event/publish date is before this",
         "",
     ]
     for i, item in enumerate(response.results, start=1):
