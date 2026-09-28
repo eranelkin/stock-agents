@@ -38,6 +38,50 @@ class SimulationOutcome:
     # reached the entry zone vs. no candles existed in that window at all).
     entry_window_low: float | None = None
     entry_window_high: float | None = None
+    # Maximum favorable excursion: the best unrealized gain (%) reached at any
+    # point from fill through the end of the trading day, and when it happened
+    # — independent of the actual exit, so it shows what was left on the table.
+    max_gain_pct: float | None = None
+    max_gain_time: Any | None = None
+    max_gain_price: float | None = None
+
+
+@dataclass(frozen=True)
+class SetupByTimeOutcome:
+    """Naive "trade the signal's timing, not its price zone" scenario: assumes
+    a fill at the market price of the first candle at/after the CEO's
+    entry-time-start, ignoring the recommended entry-price range entirely,
+    then finds the single best percentage gain reachable at any point for the
+    rest of the trading day. Independent of `SimulationOutcome` — this answers
+    "what if we'd just acted on the signal's timing instead of waiting for
+    price to enter the recommended range."
+    """
+
+    action_time: Any | None = None
+    fill_price: float | None = None
+    best_price: float | None = None
+    best_time: Any | None = None
+    gain_pct: float | None = None
+
+
+@dataclass(frozen=True)
+class SetupByPriceOutcome:
+    """Naive "trade the signal's price zone, not its time window" scenario:
+    assumes a fill the first time price touches the CEO's recommended
+    entry-price range at any point in the trading day (ignoring the
+    entry-time window entirely), then finds the single best percentage gain
+    reachable at any point for the rest of the day. Independent of
+    `SimulationOutcome` — this answers "what if we'd bought whenever price
+    first hit the recommended zone, instead of only within the signal's
+    stated time window." `fill_price` is None if price never touched the
+    zone at all that day.
+    """
+
+    fill_time: Any | None = None
+    fill_price: float | None = None
+    best_price: float | None = None
+    best_time: Any | None = None
+    gain_pct: float | None = None
 
 
 def _clean_number(s: str) -> str:
@@ -149,6 +193,9 @@ def simulate_trade(rec: Recommendation, candles: list[Candle]) -> SimulationOutc
     fill_candle = ordered[fill_idx]
     fill_price = min(max(fill_candle.open, rec.entry_low), rec.entry_high)
 
+    max_gain_candle = max(ordered[fill_idx:], key=lambda c: c.high)
+    max_gain_pct = (max_gain_candle.high - fill_price) / fill_price * 100
+
     exit_reason: str | None = None
     exit_time = None
     exit_price: float | None = None
@@ -182,4 +229,65 @@ def simulate_trade(rec: Recommendation, candles: list[Candle]) -> SimulationOutc
         r_multiple=r_multiple,
         entry_window_low=entry_window_low,
         entry_window_high=entry_window_high,
+        max_gain_pct=max_gain_pct,
+        max_gain_time=max_gain_candle.timestamp,
+        max_gain_price=max_gain_candle.high,
+    )
+
+
+def simulate_setup_by_time(rec: Recommendation, candles: list[Candle]) -> SetupByTimeOutcome:
+    """See `SetupByTimeOutcome` docstring for the scenario this models."""
+    if not candles:
+        return SetupByTimeOutcome()
+
+    ordered = sorted(candles, key=lambda c: c.timestamp)
+    action_candles = [c for c in ordered if c.timestamp.time() >= rec.entry_time_start]
+    if not action_candles:
+        return SetupByTimeOutcome()
+
+    action_candle = action_candles[0]
+    fill_price = action_candle.open
+
+    best_candle = max(action_candles, key=lambda c: c.high)
+    best_price = best_candle.high
+    gain_pct = (best_price - fill_price) / fill_price * 100
+
+    return SetupByTimeOutcome(
+        action_time=action_candle.timestamp,
+        fill_price=fill_price,
+        best_price=best_price,
+        best_time=best_candle.timestamp,
+        gain_pct=gain_pct,
+    )
+
+
+def simulate_setup_by_price(rec: Recommendation, candles: list[Candle]) -> SetupByPriceOutcome:
+    """See `SetupByPriceOutcome` docstring for the scenario this models."""
+    if not candles:
+        return SetupByPriceOutcome()
+
+    ordered = sorted(candles, key=lambda c: c.timestamp)
+
+    fill_idx: int | None = None
+    for i, c in enumerate(ordered):
+        if c.low <= rec.entry_high and c.high >= rec.entry_low:
+            fill_idx = i
+            break
+
+    if fill_idx is None:
+        return SetupByPriceOutcome()
+
+    fill_candle = ordered[fill_idx]
+    fill_price = min(max(fill_candle.open, rec.entry_low), rec.entry_high)
+
+    best_candle = max(ordered[fill_idx:], key=lambda c: c.high)
+    best_price = best_candle.high
+    gain_pct = (best_price - fill_price) / fill_price * 100
+
+    return SetupByPriceOutcome(
+        fill_time=fill_candle.timestamp,
+        fill_price=fill_price,
+        best_price=best_price,
+        best_time=best_candle.timestamp,
+        gain_pct=gain_pct,
     )

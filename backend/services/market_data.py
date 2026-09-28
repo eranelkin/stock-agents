@@ -101,3 +101,21 @@ async def fetch_1m_candles(symbol: str, trading_date: date) -> list[Candle] | No
         )
 
     return candles or None
+
+
+_SP500_SYMBOL = "^GSPC"
+
+
+async def fetch_sp500_close_pct(trading_date: date) -> float | None:
+    """The S&P 500's own move on a trading date: percent change from the
+    opening print of the first 1-minute bar to the closing print of the last
+    one. Used as market-context baseline alongside a per-ticker scan result —
+    same value for every ticker scanned within a run, since it's tied to the
+    trading date, not the symbol. Returns None if index data is unavailable."""
+    candles = await fetch_1m_candles(_SP500_SYMBOL, trading_date)
+    if not candles:
+        return None
+    ordered = sorted(candles, key=lambda c: c.timestamp)
+    day_open = ordered[0].open
+    day_close = ordered[-1].close
+    return (day_close - day_open) / day_open * 100

@@ -35,6 +35,22 @@ class ScanResultResponse(BaseModel):
     exit_price: float | None = None
     pnl_pct: float | None = None
     r_multiple: float | None = None
+    max_gain_pct: float | None = None
+    max_gain_time: datetime | None = None
+    max_gain_price: float | None = None
+    sp500_close_pct: float | None = None
+
+    action_time: datetime | None = None
+    action_fill_price: float | None = None
+    action_best_price: float | None = None
+    action_best_time: datetime | None = None
+    action_gain_pct: float | None = None
+
+    price_fill_time: datetime | None = None
+    price_fill_price: float | None = None
+    price_best_price: float | None = None
+    price_best_time: datetime | None = None
+    price_gain_pct: float | None = None
 
     scanned_at: datetime
 

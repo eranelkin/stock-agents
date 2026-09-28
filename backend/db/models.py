@@ -101,6 +101,29 @@ class ScanResult(Base):
     exit_price: Mapped[float | None] = mapped_column(nullable=True)
     pnl_pct: Mapped[float | None] = mapped_column(nullable=True)
     r_multiple: Mapped[float | None] = mapped_column(nullable=True)
+    max_gain_pct: Mapped[float | None] = mapped_column(nullable=True)
+    max_gain_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    max_gain_price: Mapped[float | None] = mapped_column(nullable=True)
+    sp500_close_pct: Mapped[float | None] = mapped_column(nullable=True)
+
+    # "Setup By Time" — naive scenario: enter at market price the moment the
+    # signal's entry-time-start hits, ignoring the recommended price zone,
+    # then track the best % gain reachable for the rest of the day.
+    action_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    action_fill_price: Mapped[float | None] = mapped_column(nullable=True)
+    action_best_price: Mapped[float | None] = mapped_column(nullable=True)
+    action_best_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    action_gain_pct: Mapped[float | None] = mapped_column(nullable=True)
+
+    # "Setup By Price" — naive scenario: enter the first moment price touches
+    # the recommended entry-price zone at any point in the day (ignoring the
+    # signal's stated time window), then track the best % gain reachable for
+    # the rest of the day.
+    price_fill_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    price_fill_price: Mapped[float | None] = mapped_column(nullable=True)
+    price_best_price: Mapped[float | None] = mapped_column(nullable=True)
+    price_best_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    price_gain_pct: Mapped[float | None] = mapped_column(nullable=True)
 
     scanned_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

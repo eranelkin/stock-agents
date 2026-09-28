@@ -13,8 +13,13 @@ from backend.db.session import get_session
 from backend.schemas.run import RunResponse
 from backend.schemas.scan import ScanResultResponse
 from backend.services.ceo_parser import parse_ceo_file
-from backend.services.market_data import fetch_1m_candles
-from backend.services.trade_simulator import normalize_recommendation, simulate_trade
+from backend.services.market_data import fetch_1m_candles, fetch_sp500_close_pct
+from backend.services.trade_simulator import (
+    normalize_recommendation,
+    simulate_setup_by_price,
+    simulate_setup_by_time,
+    simulate_trade,
+)
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -66,6 +71,7 @@ async def scan_run(
         raise HTTPException(status_code=409, detail="Run has no output directory")
 
     trading_date = run.created_at.astimezone(ET).date()
+    sp500_close_pct = await fetch_sp500_close_pct(trading_date)
 
     ceo_files: dict[str, Path] = {}
     for ext in ("yaml", "json"):
@@ -91,6 +97,7 @@ async def scan_run(
                     error_message="Could not parse recommendation",
                     recommendation=raw or {},
                     fill_status="no_fill",
+                    sp500_close_pct=sp500_close_pct,
                 )
             )
             continue
@@ -117,11 +124,14 @@ async def scan_run(
                     tp_low=rec.tp_low,
                     tp_high=rec.tp_high,
                     fill_status="no_fill",
+                    sp500_close_pct=sp500_close_pct,
                 )
             )
             continue
 
         outcome = simulate_trade(rec, candles)
+        setup_time = simulate_setup_by_time(rec, candles)
+        setup_price = simulate_setup_by_price(rec, candles)
         session.add(
             ScanResult(
                 run_id=run_id,
@@ -146,6 +156,20 @@ async def scan_run(
                 exit_price=outcome.exit_price,
                 pnl_pct=outcome.pnl_pct,
                 r_multiple=outcome.r_multiple,
+                max_gain_pct=outcome.max_gain_pct,
+                max_gain_time=outcome.max_gain_time,
+                max_gain_price=outcome.max_gain_price,
+                sp500_close_pct=sp500_close_pct,
+                action_time=setup_time.action_time,
+                action_fill_price=setup_time.fill_price,
+                action_best_price=setup_time.best_price,
+                action_best_time=setup_time.best_time,
+                action_gain_pct=setup_time.gain_pct,
+                price_fill_time=setup_price.fill_time,
+                price_fill_price=setup_price.fill_price,
+                price_best_price=setup_price.best_price,
+                price_best_time=setup_price.best_time,
+                price_gain_pct=setup_price.gain_pct,
             )
         )
 

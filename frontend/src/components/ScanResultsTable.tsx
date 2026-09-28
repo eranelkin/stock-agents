@@ -29,6 +29,10 @@ const HEADERS = [
   "Exit Price",
   "PnL %",
   "R-Multiple",
+  "Max Gain",
+  "S&P Close %",
+  "Setup By Time",
+  "Setup By Price",
 ];
 
 const headerCellSx = {
@@ -49,6 +53,16 @@ const fmtRange = (low: number | null, high: number | null) =>
   low != null && high != null ? `${low} - ${high}` : "—";
 
 const fmtNum = (n: number | null, digits = 2) => (n != null ? n.toFixed(digits) : "—");
+
+const fmtTimeET = (iso: string | null): string | null =>
+  iso == null
+    ? null
+    : new Date(iso).toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        timeZone: "America/New_York",
+      });
 
 const fillStatusTooltip = (r: ScanResult): string => {
   const entryZone = `$${fmtNum(r.entry_low)} - $${fmtNum(r.entry_high)}`;
@@ -159,7 +173,12 @@ export default function ScanResultsTable({ results, loading }: ScanResultsTableP
                     <TableCell sx={bodyCellSx}>{fmtRange(r.sl_low, r.sl_high)}</TableCell>
                     <TableCell sx={bodyCellSx}>{fmtRange(r.tp_low, r.tp_high)}</TableCell>
                     <TableCell sx={bodyCellSx}>
-                      <Tooltip title={fillStatusTooltip(r)} arrow placement="top">
+                      <Tooltip
+                        title={fillStatusTooltip(r)}
+                        arrow
+                        placement="top"
+                        componentsProps={{ tooltip: { sx: { fontSize: "0.8125rem" } } }}
+                      >
                         <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, cursor: "help" }}>
                           <Chip
                             label={r.fill_status === "filled" ? "FILLED" : "NO FILL"}
@@ -179,8 +198,22 @@ export default function ScanResultsTable({ results, loading }: ScanResultsTableP
                       </Tooltip>
                     </TableCell>
                     <TableCell sx={bodyCellSx}>{r.exit_reason ? r.exit_reason.replace("_", " ") : "—"}</TableCell>
-                    <TableCell sx={bodyCellSx}>{fmtNum(r.fill_price)}</TableCell>
-                    <TableCell sx={bodyCellSx}>{fmtNum(r.exit_price)}</TableCell>
+                    <TableCell sx={bodyCellSx}>
+                      {fmtNum(r.fill_price)}
+                      {fmtTimeET(r.fill_time) && (
+                        <Typography component="div" variant="caption" sx={{ color: "text.secondary", fontSize: "0.7rem" }}>
+                          {fmtTimeET(r.fill_time)} ET
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell sx={bodyCellSx}>
+                      {fmtNum(r.exit_price)}
+                      {fmtTimeET(r.exit_time) && (
+                        <Typography component="div" variant="caption" sx={{ color: "text.secondary", fontSize: "0.7rem" }}>
+                          {fmtTimeET(r.exit_time)} ET
+                        </Typography>
+                      )}
+                    </TableCell>
                     <TableCell
                       sx={{
                         ...bodyCellSx,
@@ -191,6 +224,93 @@ export default function ScanResultsTable({ results, loading }: ScanResultsTableP
                       {r.pnl_pct != null ? `${r.pnl_pct >= 0 ? "+" : ""}${fmtNum(r.pnl_pct)}%` : "—"}
                     </TableCell>
                     <TableCell sx={bodyCellSx}>{fmtNum(r.r_multiple)}</TableCell>
+                    <TableCell sx={bodyCellSx}>
+                      {r.max_gain_pct != null ? (
+                        <>
+                          <Typography
+                            component="span"
+                            variant="body2"
+                            sx={{ color: r.max_gain_pct >= 0 ? "#81c784" : "#ef9a9a", fontWeight: 600, fontSize: "0.85rem" }}
+                          >
+                            {r.max_gain_pct >= 0 ? "+" : ""}
+                            {fmtNum(r.max_gain_pct)}%{r.max_gain_price != null ? ` ($${fmtNum(r.max_gain_price)})` : ""}
+                          </Typography>
+                          {fmtTimeET(r.max_gain_time) && (
+                            <Typography component="div" variant="caption" sx={{ color: "text.secondary", fontSize: "0.7rem" }}>
+                              {fmtTimeET(r.max_gain_time)} ET
+                            </Typography>
+                          )}
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        ...bodyCellSx,
+                        color: r.sp500_close_pct != null ? (r.sp500_close_pct >= 0 ? "#81c784" : "#ef9a9a") : "text.disabled",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {r.sp500_close_pct != null
+                        ? `${r.sp500_close_pct >= 0 ? "+" : ""}${fmtNum(r.sp500_close_pct)}%`
+                        : "—"}
+                    </TableCell>
+                    <TableCell sx={bodyCellSx}>
+                      {r.action_gain_pct != null ? (
+                        <>
+                          {(fmtTimeET(r.action_time) || fmtTimeET(r.action_best_time)) && (
+                            <Typography component="div" variant="caption" sx={{ color: "text.secondary", fontSize: "0.7rem" }}>
+                              {fmtTimeET(r.action_time) ?? "—"} → {fmtTimeET(r.action_best_time) ?? "—"} ET
+                            </Typography>
+                          )}
+                          <Typography component="div" variant="body2" sx={{ fontSize: "0.85rem" }}>
+                            {fmtNum(r.action_fill_price)} - {fmtNum(r.action_best_price)}
+                          </Typography>
+                          <Typography
+                            component="div"
+                            variant="body2"
+                            sx={{ color: r.action_gain_pct >= 0 ? "#81c784" : "#ef9a9a", fontWeight: 600, fontSize: "0.85rem" }}
+                          >
+                            {r.action_gain_pct >= 0 ? "+" : ""}
+                            {fmtNum(r.action_gain_pct)}%
+                          </Typography>
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </TableCell>
+                    <TableCell sx={bodyCellSx}>
+                      {r.price_gain_pct != null ? (
+                        <>
+                          <Typography component="div" variant="caption" sx={{ color: "text.secondary", fontSize: "0.7rem" }}>
+                            {fmtRange(r.entry_low, r.entry_high)}
+                          </Typography>
+                          {(fmtTimeET(r.price_fill_time) || fmtTimeET(r.price_best_time)) && (
+                            <Typography component="div" variant="caption" sx={{ color: "text.secondary", fontSize: "0.7rem" }}>
+                              {fmtTimeET(r.price_fill_time) ?? "—"} → {fmtTimeET(r.price_best_time) ?? "—"} ET
+                            </Typography>
+                          )}
+                          <Typography component="div" variant="body2" sx={{ fontSize: "0.85rem" }}>
+                            {fmtNum(r.price_fill_price)} - {fmtNum(r.price_best_price)}
+                          </Typography>
+                          <Typography
+                            component="div"
+                            variant="body2"
+                            sx={{ color: r.price_gain_pct >= 0 ? "#81c784" : "#ef9a9a", fontWeight: 600, fontSize: "0.85rem" }}
+                          >
+                            {r.price_gain_pct >= 0 ? "+" : ""}
+                            {fmtNum(r.price_gain_pct)}%
+                          </Typography>
+                        </>
+                      ) : (
+                        <Tooltip title="Price never touched the recommended entry range at any point during this trading day." arrow placement="top">
+                          <Typography component="span" variant="body2" sx={{ color: "text.disabled", cursor: "help" }}>
+                            —
+                          </Typography>
+                        </Tooltip>
+                      )}
+                    </TableCell>
                   </>
                 )}
               </TableRow>
