@@ -11,7 +11,7 @@ from typing import Any, AsyncGenerator
 
 import aiofiles
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from fastapi.responses import HTMLResponse, StreamingResponse
 from sqlalchemy import delete as sql_delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,10 +20,18 @@ from backend.api.broadcaster import broadcaster
 from backend.config import settings
 from backend.db.models import AIModel, AnalyticsRun, Prompt, Run, ScanResult, TickerResult
 from backend.db.session import AsyncSessionLocal, get_session
-from backend.services.ceo_parser import parse_ceo_file
+from backend.services.ceo_parser import has_ceo_report, parse_ceo_file
+from backend.services.report_export import build_export_zip
+from backend.services.report_import import import_run_zip
 from pydantic import BaseModel
 
-from backend.schemas.run import BulkDeleteRequest, RunAlertRequest, RunCreate, RunResponse
+from backend.schemas.run import (
+    BulkDeleteRequest,
+    BulkExportRequest,
+    RunAlertRequest,
+    RunCreate,
+    RunResponse,
+)
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -413,7 +421,10 @@ async def start_ai_for_run(
 async def list_runs(session: AsyncSession = Depends(get_session)) -> list[Run]:
     """Return all runs ordered by creation time descending."""
     result = await session.execute(select(Run).order_by(Run.created_at.desc()))
-    return list(result.scalars().all())
+    runs = list(result.scalars().all())
+    for run in runs:
+        run.has_ceo_report = has_ceo_report(run.output_dir)  # type: ignore[attr-defined]
+    return runs
 
 
 @router.get("/stream")
@@ -426,6 +437,8 @@ async def stream_runs() -> StreamingResponse:
                 async with AsyncSessionLocal() as session:
                     result = await session.execute(select(Run).order_by(Run.created_at.desc()))
                     runs = result.scalars().all()
+                for run in runs:
+                    run.has_ceo_report = has_ceo_report(run.output_dir)  # type: ignore[attr-defined]
                 payload = json.dumps(
                     [RunResponse.model_validate(r).model_dump(mode="json") for r in runs],
                     default=str,
@@ -443,6 +456,8 @@ async def stream_runs() -> StreamingResponse:
                         async with AsyncSessionLocal() as session:
                             result = await session.execute(select(Run).order_by(Run.created_at.desc()))
                             runs = result.scalars().all()
+                        for run in runs:
+                            run.has_ceo_report = has_ceo_report(run.output_dir)  # type: ignore[attr-defined]
                         payload = json.dumps(
                             [RunResponse.model_validate(r).model_dump(mode="json") for r in runs],
                             default=str,
@@ -468,7 +483,84 @@ async def get_run(run_id: uuid.UUID, session: AsyncSession = Depends(get_session
     run = await session.get(Run, run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
+    run.has_ceo_report = has_ceo_report(run.output_dir)  # type: ignore[attr-defined]
     return run
+
+
+@router.get("/{run_id}/export")
+async def export_run(
+    run_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+) -> Response:
+    """Download a zip bundling this run's DB rows, output files, and log —
+    for importing into another machine's Analysis (see /runs/import)."""
+    run = await session.get(Run, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run.status != "completed" or not has_ceo_report(run.output_dir):
+        raise HTTPException(
+            status_code=409, detail="Run has no completed CEO analysis report to export"
+        )
+    run.has_ceo_report = True  # type: ignore[attr-defined]
+
+    zip_bytes = await build_export_zip([run], session)
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="run_export_{run_id}.zip"'},
+    )
+
+
+@router.post("/export/bulk")
+async def export_runs_bulk(
+    body: BulkExportRequest, session: AsyncSession = Depends(get_session)
+) -> Response:
+    """Download a zip bundling several runs at once (same format as the
+    single-run export, several runs nested inside). Runs that aren't
+    completed or have no CEO report are silently skipped — the count is
+    reported via the X-Skipped-Count response header."""
+    eligible: list[Run] = []
+    skipped = 0
+    for run_id in body.run_ids:
+        run = await session.get(Run, run_id)
+        if run is None or run.status != "completed" or not has_ceo_report(run.output_dir):
+            skipped += 1
+            continue
+        run.has_ceo_report = True  # type: ignore[attr-defined]
+        eligible.append(run)
+
+    if not eligible:
+        raise HTTPException(
+            status_code=409,
+            detail="None of the selected runs have a completed CEO analysis report to export",
+        )
+
+    zip_bytes = await build_export_zip(eligible, session)
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="run_export_bulk_{len(eligible)}.zip"',
+            "X-Skipped-Count": str(skipped),
+        },
+    )
+
+
+@router.post("/import", response_model=list[RunResponse])
+async def import_run(
+    file: UploadFile = File(...), session: AsyncSession = Depends(get_session)
+) -> list[Run]:
+    """Import a run bundle produced by GET /runs/{run_id}/export or
+    /runs/export/bulk — for bringing finished report(s) from another
+    machine into this one. Always returns a list, even for a single-run
+    bundle."""
+    data = await file.read()
+    try:
+        runs = await import_run_zip(data, session)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    for run in runs:
+        run.has_ceo_report = has_ceo_report(run.output_dir)  # type: ignore[attr-defined]
+    return runs
 
 
 @router.patch("/{run_id}/favorite", response_model=RunResponse)

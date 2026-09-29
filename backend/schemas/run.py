@@ -19,6 +19,10 @@ class BulkDeleteRequest(BaseModel):
     run_ids: list[uuid.UUID]
 
 
+class BulkExportRequest(BaseModel):
+    run_ids: list[uuid.UUID]
+
+
 class RunAlertRequest(BaseModel):
     message: str
 
@@ -39,5 +43,15 @@ class RunResponse(BaseModel):
     is_favorite: bool = False
     direction: str = "long"
     env: str = "test"
+    has_ceo_report: bool = False
+
+    model_config = {"from_attributes": True}
+
+
+class TickerResultResponse(BaseModel):
+    id: uuid.UUID
+    ticker: str
+    output: dict[str, Any]
+    created_at: datetime
 
     model_config = {"from_attributes": True}

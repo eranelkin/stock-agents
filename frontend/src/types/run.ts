@@ -20,4 +20,5 @@ export interface Run {
   is_favorite: boolean;
   direction: "long" | "short";
   env: "prod" | "test";
+  has_ceo_report: boolean;
 }

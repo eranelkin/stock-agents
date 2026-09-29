@@ -153,6 +153,43 @@ export async function toggleFavorite(id: string): Promise<Run> {
   return res.json()
 }
 
+export async function importRun(file: File): Promise<Run[]> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await fetch(`${BASE}/import`, { method: 'POST', body: formData })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.detail ?? `Failed to import report: ${res.statusText}`)
+  }
+  return res.json()
+}
+
+export async function exportRunsBulk(ids: string[]): Promise<{ skippedCount: number }> {
+  const res = await fetch(`${BASE}/export/bulk`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ run_ids: ids }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.detail ?? `Failed to export runs: ${res.statusText}`)
+  }
+  const skippedCount = Number(res.headers.get('X-Skipped-Count') ?? '0')
+  const disposition = res.headers.get('Content-Disposition') ?? ''
+  const filenameMatch = disposition.match(/filename="([^"]+)"/)
+  const filename = filenameMatch?.[1] ?? `run_export_bulk_${ids.length}.zip`
+
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+
+  return { skippedCount }
+}
+
 export async function stopRun(id: string): Promise<Run> {
   const res = await fetch(`${BASE}/${id}/stop`, { method: 'POST' })
   if (!res.ok) {

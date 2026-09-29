@@ -40,11 +40,15 @@ import ArticleIcon from "@mui/icons-material/Article";
 import StorageIcon from "@mui/icons-material/Storage";
 import StarIcon from "@mui/icons-material/Star";
 import StarBorderIcon from "@mui/icons-material/StarBorder";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
 import {
   createRun,
   deleteRun,
   deleteRuns,
   enrichPreview,
+  exportRunsBulk,
+  importRun,
   pollScreenerDone,
   pollSessionDone,
   stopMarketData,
@@ -144,6 +148,9 @@ export default function RunPage({
   } | null>(null);
   const seenAlertsRef = useRef<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [exportingBulk, setExportingBulk] = useState(false);
   const esRef = useRef<EventSource | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -319,6 +326,43 @@ export default function RunPage({
       setError(err instanceof Error ? err.message : "Failed to start run");
     } finally {
       setStarting(false);
+    }
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file next time
+    if (!file) return;
+    setError(null);
+    setImporting(true);
+    try {
+      const imported = await importRun(file);
+      setRuns((prev) => [...imported, ...prev]);
+      // Jump to whichever tab will show the first imported run
+      if (imported[0]) setInnerTab(isToday(imported[0].created_at) ? 0 : 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to import report");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleBulkExport = async () => {
+    setError(null);
+    setExportingBulk(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const { skippedCount } = await exportRunsBulk(ids);
+      if (skippedCount > 0) {
+        setError(
+          `Exported ${ids.length - skippedCount} of ${ids.length} selected run(s) — ` +
+            `${skippedCount} skipped (no completed CEO report).`,
+        );
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to export runs");
+    } finally {
+      setExportingBulk(false);
     }
   };
 
@@ -939,7 +983,60 @@ export default function RunPage({
             />
           ))}
         </Tabs>
-        <Box sx={{ ml: "auto" }}>
+        <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 0.5 }}>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".zip"
+            hidden
+            onChange={handleImportFile}
+          />
+          <Tooltip title="Import report(s) exported from another machine">
+            <span>
+              <IconButton
+                size="small"
+                disabled={importing}
+                onClick={() => importInputRef.current?.click()}
+                sx={{
+                  color: "text.secondary",
+                  "&.Mui-disabled": { color: "text.disabled" },
+                  "&:hover": { color: "#90caf9" },
+                }}
+              >
+                {importing ? (
+                  <CircularProgress size={16} color="inherit" />
+                ) : (
+                  <UploadFileIcon fontSize="small" />
+                )}
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip
+            title={
+              selectedIds.size === 0
+                ? "Select rows to export"
+                : `Export ${selectedIds.size} selected run${selectedIds.size > 1 ? "s" : ""}`
+            }
+          >
+            <span>
+              <IconButton
+                size="small"
+                disabled={selectedIds.size === 0 || exportingBulk}
+                onClick={handleBulkExport}
+                sx={{
+                  color: "text.secondary",
+                  "&.Mui-disabled": { color: "text.disabled" },
+                  "&:hover": { color: "#81c784", bgcolor: "rgba(129,199,132,0.08)" },
+                }}
+              >
+                {exportingBulk ? (
+                  <CircularProgress size={16} color="inherit" />
+                ) : (
+                  <FileDownloadIcon fontSize="small" />
+                )}
+              </IconButton>
+            </span>
+          </Tooltip>
           <Tooltip
             title={
               selectedIds.size === 0
@@ -1491,6 +1588,33 @@ export default function RunPage({
                               }}
                             >
                               <ArticleIcon fontSize="small" />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                        <Tooltip
+                          title={
+                            run.has_ceo_report
+                              ? "Export report"
+                              : "No CEO report to export"
+                          }
+                        >
+                          <span>
+                            <IconButton
+                              size="small"
+                              disabled={!run.has_ceo_report}
+                              onClick={() =>
+                                window.open(
+                                  `${import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:4101"}/runs/${run.id}/export`,
+                                  "_blank",
+                                )
+                              }
+                              sx={{
+                                color: "text.secondary",
+                                "&:hover": { color: "#81c784" },
+                                "&.Mui-disabled": { color: "text.disabled" },
+                              }}
+                            >
+                              <FileDownloadIcon fontSize="small" />
                             </IconButton>
                           </span>
                         </Tooltip>

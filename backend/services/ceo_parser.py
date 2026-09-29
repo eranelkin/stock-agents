@@ -7,6 +7,21 @@ from pathlib import Path
 import yaml
 
 
+def has_ceo_report(output_dir: str | None) -> bool:
+    """True if at least one CEO_*.yaml/json file exists in the run's output dir.
+
+    `run.status == "completed"` alone doesn't guarantee this — CEO output is
+    skipped whenever a run has no active CEO-category prompts for its
+    direction, so a completed run can still have zero CEO files.
+    """
+    if not output_dir:
+        return False
+    path = Path(output_dir)
+    if not path.is_dir():
+        return False
+    return any(path.glob("CEO_*.yaml")) or any(path.glob("CEO_*.json"))
+
+
 def try_parse_raw_output(raw: str) -> dict | None:
     """Parse a (possibly truncated) JSON string from raw_output.
 
