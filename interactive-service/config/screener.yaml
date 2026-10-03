@@ -63,6 +63,12 @@ screener:
   # These run on streaming tick data only (fast). Volume is NOT filtered here because
   # the streaming tick undercounts by 40–50% and would incorrectly drop valid stocks.
   exclude_etfs: true             # drop ETFs/ETNs from results (stockType check via IB ContractDetails)
+  exclude_foreign_primary_listings: true  # drop symbols whose primary/home listing is a
+                                           # foreign exchange (e.g. TSX) even if they also
+                                           # trade on a US exchange under the same ticker
+                                           # (e.g. EQX, HBM) — avoids cross-currency confusion.
+                                           # Does not affect ADRs (BABA, TSM, ...) since those
+                                           # trade under a different ticker on their home exchange.
   price_min: 2.0                 # defualt= 2 | minimum stock price (filters penny stocks)
   pre_market_chg_pct_min: 1.75  # defualt= 2% | minimum pre-market change % — drops flat/down stocks before expensive fetches
                                  # Set to null to disable
