@@ -29,7 +29,7 @@ from src.ib.volume_profile import fetch_volume_profile
 from src.output.writer import write_output, write_output_live
 from src.processing.atr import calculate_atr
 from src.processing.enrichment import StockRecord, _compute_beta, build_single_record
-from src.processing.filters import apply_screener_filters, chg_pct_passes, reject_reason
+from src.processing.filters import apply_screener_filters, chg_pct_passes, is_us_primary_listing, reject_reason
 
 log = logging.getLogger(__name__)
 
@@ -291,6 +291,21 @@ async def collect_screener_records(
                     drop_log[sym] = f"sector '{info.sector}' is excluded"
             if not contract_infos:
                 log.warning("All symbols excluded by sector filter")
+                return {}, {}, drop_log
+
+        # Step 2d: foreign-primary-listing exclusion (dual-listed stocks like EQX/HBM whose
+        # home exchange is e.g. TSX — see filters.is_us_primary_listing)
+        if screener_config.exclude_foreign_primary_listings:
+            pre = dict(contract_infos)
+            contract_infos = {
+                sym: info for sym, info in pre.items()
+                if is_us_primary_listing(info.primary_exchange)
+            }
+            for sym, info in pre.items():
+                if not is_us_primary_listing(info.primary_exchange):
+                    drop_log[sym] = f"foreign primary listing (primaryExchange={info.primary_exchange})"
+            if not contract_infos:
+                log.warning("All symbols excluded by foreign-primary-listing filter")
                 return {}, {}, drop_log
 
         # Step 5: market snapshots (batched — all symbols share the 10s wait)

@@ -38,38 +38,66 @@ class ChatRequest(BaseModel):
     attachments: list[ChatAttachment] = []
 
 
-async def _fetch_search_context(query: str) -> str:
-    """Run a Tavily search and return a formatted context block, or empty string on failure."""
-    if not settings.search_enabled or not settings.tavily_api_key:
-        return ""
-    try:
-        client = AsyncTavilyClient(api_key=settings.tavily_api_key)
-        raw: dict[str, Any] = await client.search(
-            query=query,
-            search_depth=settings.search_depth,
-            max_results=settings.search_max_results,
-        )
-        results = raw.get("results", [])
-        if not results:
-            return ""
+def _is_quota_or_rate_limit_error(exc: Exception) -> bool:
+    """Return True if this Tavily error means the current key is spent (quota or rate limit).
 
-        retrieved_at = datetime.now(timezone.utc).isoformat()
-        lines = [
-            "--- LIVE WEB SEARCH CONTEXT ---",
-            f'Query: "{query}"',
-            f"Retrieved: {retrieved_at}",
-            "",
-        ]
-        for i, r in enumerate(results, start=1):
-            domain = urlparse(r.get("url", "")).netloc or r.get("url", "")
-            snippet = r.get("content", "")[:400].rstrip()
-            if len(r.get("content", "")) > 400:
-                snippet += "..."
-            lines += [f"[{i}] {r.get('title', '')}", f"    Source: {domain}", f"    {snippet}", ""]
-        lines.append("--- END SEARCH CONTEXT ---")
-        return "\n".join(lines)
-    except Exception:
+    Duplicated from ai_service/models/search_client.py rather than imported — backend
+    and ai_service are independently deployed services and don't share modules.
+    """
+    text = str(exc).lower()
+    return (
+        "plan's set usage limit" in text
+        or "rate limit" in text
+        or "429" in text
+        or "usage limit" in text
+    )
+
+
+async def _fetch_search_context(query: str) -> str:
+    """Run a Tavily search and return a formatted context block, or empty string on failure.
+
+    Tries each configured key in order, moving to the next on a quota/rate-limit
+    error (mirrors ai_service's TavilyKeyPool rotation, without needing a persistent
+    pool since chat requests are one-shot).
+    """
+    if not settings.search_enabled:
         return ""
+    keys = settings.tavily_api_key_list
+    if not keys:
+        return ""
+
+    for key in keys:
+        try:
+            client = AsyncTavilyClient(api_key=key)
+            raw: dict[str, Any] = await client.search(
+                query=query,
+                search_depth=settings.search_depth,
+                max_results=settings.search_max_results,
+            )
+            results = raw.get("results", [])
+            if not results:
+                return ""
+
+            retrieved_at = datetime.now(timezone.utc).isoformat()
+            lines = [
+                "--- LIVE WEB SEARCH CONTEXT ---",
+                f'Query: "{query}"',
+                f"Retrieved: {retrieved_at}",
+                "",
+            ]
+            for i, r in enumerate(results, start=1):
+                domain = urlparse(r.get("url", "")).netloc or r.get("url", "")
+                snippet = r.get("content", "")[:400].rstrip()
+                if len(r.get("content", "")) > 400:
+                    snippet += "..."
+                lines += [f"[{i}] {r.get('title', '')}", f"    Source: {domain}", f"    {snippet}", ""]
+            lines.append("--- END SEARCH CONTEXT ---")
+            return "\n".join(lines)
+        except Exception as exc:
+            if _is_quota_or_rate_limit_error(exc):
+                continue  # try the next key
+            return ""
+    return ""
 
 
 async def _sse_stream(

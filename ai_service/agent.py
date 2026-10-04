@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -12,6 +13,7 @@ from ai_service.config import settings
 from ai_service.models.llm_client import LLMClient, LLMError
 from ai_service.models.search_client import SearchClient
 from ai_service.utils.logger import get_logger
+from ai_service.utils.market_calendar import last_market_close
 from ai_service.utils.run_logger import RunLogger
 from ai_service.utils.search_tool import WEB_SEARCH_TOOL, execute_search
 from ai_service.utils.grounding_tool import GOOGLE_GROUNDING_TOOL, is_gemini_model
@@ -73,7 +75,12 @@ def _resolve_placeholders(text: str) -> str:
     """Replace known placeholders in a prompt string before sending to the LLM."""
     now = datetime.now(ZoneInfo("America/New_York"))
     current_date = now.strftime(f"%B {now.day}, %Y, %H:%M %Z")
-    return text.replace("{CURRENTDATE}", current_date)
+    text = text.replace("{CURRENTDATE}", current_date)
+    if "{SEARCH_WINDOW_START}" in text:
+        window_start = last_market_close(now)
+        window_start_str = window_start.strftime(f"%B {window_start.day}, %Y, %H:%M %Z")
+        text = text.replace("{SEARCH_WINDOW_START}", window_start_str)
+    return text
 
 
 def _build_system_prompt(
@@ -124,14 +131,16 @@ class Agent:
 
     @property
     def _use_grounding(self) -> bool:
-        """Prod runs on a Gemini model use live Google Search grounding instead of Tavily.
+        """Test runs on a Gemini model use live Google Search grounding instead of Tavily.
 
-        Only for prompts actually configured to search — matches the same
-        per-prompt `search_enabled` gate Pipeline uses for the Tavily prefetch path.
+        Prod always uses Tavily — it returns a real, verified `published_date`
+        per article, which grounding cannot guarantee. Only for prompts actually
+        configured to search — matches the same per-prompt `search_enabled` gate
+        Pipeline uses for the Tavily prefetch path.
         """
         return (
-            self._env == "prod"
-            and settings.search_grounding_enabled_prod
+            self._env == "test"
+            and settings.search_grounding_enabled_test
             and is_gemini_model(self._llm.model_id)
             and self._search_enabled
         )
@@ -167,12 +176,14 @@ class Agent:
         try:
             if effective_search_mode == "tool_call" and self._search_enabled:
                 if self._use_grounding:
-                    raw = await self._llm.complete(
+                    raw = await self._run_grounded(
                         system_prompt=system_prompt,
                         user_message=json.dumps(user_content),
                         log_context=full_log_context,
-                        thinking_budget_tokens=self._thinking_budget_tokens,
-                        tools=GOOGLE_GROUNDING_TOOL,
+                        ticker=ticker,
+                        prompt_title=prompt_title,
+                        pipeline_id=pipeline_id,
+                        pipeline_type=(log_context or {}).get("pipeline_type", ""),
                     )
                 else:
                     search_handler = self._make_search_handler(
@@ -196,12 +207,14 @@ class Agent:
                     # Prefetch mode: Pipeline already skipped the Tavily prefetch for
                     # grounding-eligible agents — use live grounding instead of
                     # injecting prefetched text.
-                    raw = await self._llm.complete(
+                    raw = await self._run_grounded(
                         system_prompt=system_prompt,
                         user_message=json.dumps(user_content),
                         log_context=full_log_context,
-                        thinking_budget_tokens=self._thinking_budget_tokens,
-                        tools=GOOGLE_GROUNDING_TOOL,
+                        ticker=ticker,
+                        prompt_title=prompt_title,
+                        pipeline_id=pipeline_id,
+                        pipeline_type=(log_context or {}).get("pipeline_type", ""),
                     )
                     return self._parse_and_validate(raw, extra)
                 if search_context:
@@ -276,6 +289,55 @@ class Agent:
                 return {**result, "schema_error": True, "schema_errors": errors}
 
         return result
+
+    async def _run_grounded(
+        self,
+        *,
+        system_prompt: str,
+        user_message: str,
+        log_context: dict[str, Any],
+        ticker: str,
+        prompt_title: str,
+        pipeline_id: str,
+        pipeline_type: str,
+    ) -> str:
+        """Run one LLM call with Gemini's native google_search grounding tool.
+
+        Logged as a search_request/search_response pair (provider="grounding") so
+        the run log shows which web-search tool an agent actually used — grounding
+        has no separate request/response of its own to log otherwise, since the
+        search happens inside the LLM call rather than as a distinct step.
+        """
+        if self._run_logger:
+            await self._run_logger.search_request(
+                agent_id=self.agent_id,
+                prompt_title=prompt_title,
+                query="(Gemini native google_search grounding tool — no explicit query string)",
+                pipeline_id=pipeline_id,
+                pipeline_type=pipeline_type,
+                entity=ticker,
+                provider="grounding",
+            )
+        start = time.monotonic()
+        raw = await self._llm.complete(
+            system_prompt=system_prompt,
+            user_message=user_message,
+            log_context=log_context,
+            thinking_budget_tokens=self._thinking_budget_tokens,
+            tools=GOOGLE_GROUNDING_TOOL,
+        )
+        if self._run_logger:
+            await self._run_logger.search_response(
+                agent_id=self.agent_id,
+                prompt_title=prompt_title,
+                duration_ms=int((time.monotonic() - start) * 1000),
+                sources=[],
+                pipeline_id=pipeline_id,
+                pipeline_type=pipeline_type,
+                entity=ticker,
+                provider="grounding",
+            )
+        return raw
 
     def _make_search_handler(
         self,

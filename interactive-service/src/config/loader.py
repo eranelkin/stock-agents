@@ -190,6 +190,7 @@ class ScreenerConfig:
     market_cap_max_usd: Optional[float] = None
     avg_volume_min: Optional[int] = None
     exclude_etfs: bool = True
+    exclude_foreign_primary_listings: bool = True  # drop interlisted stocks whose home exchange isn't US (e.g. EQX/HBM on TSX)
     atr_min: Optional[float] = None
     price_min: Optional[float] = None
     pre_market_vol_min: Optional[float] = None

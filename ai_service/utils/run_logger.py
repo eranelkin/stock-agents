@@ -24,6 +24,7 @@ _TYPE_META: dict[str, tuple[str, str, str]] = {
     "search_request":     ("⌕",  "srch-req",  "SEARCH REQ"),
     "search_response":    ("◉",  "srch-resp", "SEARCH RESP"),
     "search_error":       ("✗",  "srch-err",  "SEARCH ERROR"),
+    "key_switch":         ("⇄",  "key-swap",  "KEY SWITCH"),
 }
 
 _ENTITY_COLORS = ["#4a9eff", "#34d399", "#a78bfa", "#fb923c", "#f472b6", "#38bdf8"]
@@ -190,6 +191,7 @@ class RunLogger:
         pipeline_id: str = "",
         pipeline_type: str = "",
         entity: str = "",
+        provider: str = "tavily",
     ) -> None:
         async with self._lock:
             self._seq += 1
@@ -198,7 +200,7 @@ class RunLogger:
                 pipeline_type=pipeline_type, entity=entity, model="",
                 pipeline_id=pipeline_id, agent_id=agent_id,
                 prompt_title=prompt_title, status="", duration_ms=-1,
-                payload={"query": query},
+                payload={"query": query, "provider": provider},
             ))
 
     async def search_response(
@@ -211,6 +213,7 @@ class RunLogger:
         pipeline_id: str = "",
         pipeline_type: str = "",
         entity: str = "",
+        provider: str = "tavily",
     ) -> None:
         async with self._lock:
             self._seq += 1
@@ -219,7 +222,7 @@ class RunLogger:
                 pipeline_type=pipeline_type, entity=entity, model="",
                 pipeline_id=pipeline_id, agent_id=agent_id,
                 prompt_title=prompt_title, status="ok", duration_ms=duration_ms,
-                payload={"sources": sources, "result_count": len(sources)},
+                payload={"sources": sources, "result_count": len(sources), "provider": provider},
             ))
 
     async def search_error(
@@ -231,6 +234,7 @@ class RunLogger:
         pipeline_id: str = "",
         pipeline_type: str = "",
         entity: str = "",
+        provider: str = "tavily",
     ) -> None:
         """Log a search failure worth surfacing (e.g. Tavily quota exceeded).
 
@@ -244,7 +248,40 @@ class RunLogger:
                 pipeline_type=pipeline_type, entity=entity, model="",
                 pipeline_id=pipeline_id, agent_id=agent_id,
                 prompt_title=prompt_title, status="error", duration_ms=-1,
-                payload={"error": error},
+                payload={"error": error, "provider": provider},
+            ))
+
+    async def key_switch(
+        self,
+        *,
+        agent_id: str,
+        prompt_title: str,
+        exhausted_index: int,
+        next_index: int,
+        total_keys: int,
+        reason: str,
+        pipeline_id: str = "",
+        pipeline_type: str = "",
+        entity: str = "",
+    ) -> None:
+        """Log a Tavily key rotation — key N exhausted, switched to key M.
+
+        Indices are 0-based internally; logged 1-based (key N/total) for display.
+        Never logs the actual key value, only its position in the configured list.
+        """
+        async with self._lock:
+            self._seq += 1
+            await self._append(_Event(
+                seq=self._seq, ts=_ts(), type="key_switch",
+                pipeline_type=pipeline_type, entity=entity, model="",
+                pipeline_id=pipeline_id, agent_id=agent_id,
+                prompt_title=prompt_title, status="", duration_ms=-1,
+                payload={
+                    "exhausted_key": exhausted_index + 1,
+                    "next_key": next_index + 1,
+                    "total_keys": total_keys,
+                    "reason": reason,
+                },
             ))
 
     async def llm_request(
@@ -538,6 +575,11 @@ def _render_row(e: _Event, entity: str, color: str) -> str:
     elif e.type == "search_request":
         extra = f' data-search-query="{_h(e.payload.get("query", ""))}"'
 
+    provider_badge = ""
+    if e.type in ("search_request", "search_response", "search_error"):
+        provider = e.payload.get("provider", "tavily")
+        provider_badge = f'<span class="provider-badge provider-{_h(provider)}">{_h(provider.upper())}</span>'
+
     if e.pipeline_type:
         pipeline_disp = (
             f'<span class="pipeline-badge pipeline-badge-{e.pipeline_type}">'
@@ -557,7 +599,7 @@ def _render_row(e: _Event, entity: str, color: str) -> str:
         f'<td class="col-entity"><span class="entity-dot" style="background:{color}"></span>'
         f'{entity_disp}</td>'
         f'<td class="col-type"><span class="type-badge {css_cls}">'
-        f'<span class="ti">{icon}</span>{label}</span>'
+        f'<span class="ti">{icon}</span>{label}</span>{provider_badge}'
         + (
             f'<button class="srch-info-btn" title="Show aggregated queries"'
             f' onmouseenter="showSearchPopup(this,{e.seq})"'
@@ -623,16 +665,35 @@ def _card_body(e: _Event) -> str:
             f'</div>'
         )
     if e.type == "search_request":
-        return _section_kv([("Query", p.get("query", ""))])
+        return _section_kv([
+            ("Provider", p.get("provider", "tavily").upper()),
+            ("Query", p.get("query", "")),
+        ])
     if e.type == "search_response":
         sources = p.get("sources", [])
         items = "".join(f'<li class="src-item">{_h(s)}</li>' for s in sources)
         return (
             f'<div class="card-section">'
+            f'<div class="kv-grid">'
+            f'<div class="kv-row"><span class="kv-key">Provider</span>'
+            f'<span class="kv-val">{_h(p.get("provider", "tavily").upper())}</span></div>'
+            f'</div>'
+            f'</div>'
+            f'<div class="card-section">'
             f'<div class="section-label">{len(sources)} source(s)</div>'
             f'<ol class="src-list">{items}</ol>'
             f'</div>'
         )
+    if e.type == "search_error":
+        return _section_kv([
+            ("Provider", p.get("provider", "tavily").upper()),
+            ("Error", p.get("error", "")),
+        ])
+    if e.type == "key_switch":
+        return _section_kv([
+            ("Switched", f'Key {p.get("exhausted_key")}/{p.get("total_keys")} → Key {p.get("next_key")}/{p.get("total_keys")}'),
+            ("Reason", p.get("reason", "")),
+        ])
     return ""
 
 
@@ -934,6 +995,16 @@ table#events-table th{
 .type-badge.llm-err  {background:rgba(248,113,113,.15);color:#f87171}
 .type-badge.srch-req {background:rgba(167,139,250,.15);color:#a78bfa}
 .type-badge.srch-resp{background:rgba(251,146,60,.15); color:#fb923c}
+.type-badge.srch-err {background:rgba(248,113,113,.15);color:#f87171}
+.type-badge.key-swap {background:rgba(250,204,21,.15); color:#facc15}
+
+/* Search provider badge (Tavily / Grounding) */
+.provider-badge{
+  display:inline-block;margin-left:6px;padding:1px 6px;border-radius:3px;
+  font-size:9px;font-weight:700;letter-spacing:.04em;vertical-align:middle;
+}
+.provider-badge.provider-tavily   {background:rgba(56,189,248,.15); color:#38bdf8}
+.provider-badge.provider-grounding{background:rgba(52,211,153,.15); color:#34d399}
 
 .entity-dot{
   display:inline-block;width:7px;height:7px;border-radius:50%;
@@ -1196,7 +1267,8 @@ function ensureFilterOption(ddId, value, color) {
 var _PTYPE_COLORS = {'stocks':'#38bdf8','sectors':'#a78bfa','ceo':'#fbbf24'};
 var _ETYPE_COLORS = {
   'LLM REQUEST':'#4a9eff','LLM RESPONSE':'#34d399','LLM ERROR':'#f87171',
-  'SEARCH REQ':'#a78bfa','SEARCH RESP':'#fb923c',
+  'SEARCH REQ':'#a78bfa','SEARCH RESP':'#fb923c','SEARCH ERROR':'#f87171',
+  'KEY SWITCH':'#facc15',
   'PIPELINE':'#9ca3af','PIPELINE END':'#9ca3af','RUN START':'#e2e8f0','RUN END':'#e2e8f0'
 };
 

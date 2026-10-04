@@ -31,10 +31,35 @@ interface CeoResultsPageProps {
 
 type Row = Record<string, unknown> & { _ticker: string; _model: string }
 
+interface Annotation {
+  successSetup: boolean
+  comments: string
+  maxGain: string
+}
+
+const EMPTY_ANNOTATION: Annotation = { successSetup: false, comments: '', maxGain: '' }
+
+function rowAnnotationKey(row: Row): string {
+  return `${row._ticker}::${row._model}`
+}
+
 const COLUMN_LABELS: Record<string, string> = {
   volume_dollar: 'VOLUME $',
   ratio_vol_market_cap: 'RATIO VOL - MARKET CAP',
   ai_model_name: 'Model',
+  max_gain_pct: 'Max Gain %',
+  success_setup: 'Success Setup',
+  comments: 'Comments',
+}
+
+// Manual review columns — not part of the streamed agent output. Their values are
+// entered by the user and persisted in the `ceo_analysis` DB table, shared across
+// browsers/machines (see ANNOTATION_COLUMNS below).
+const ANNOTATION_COLUMNS = ['max_gain_pct', 'success_setup', 'comments'] as const
+type AnnotationColumn = typeof ANNOTATION_COLUMNS[number]
+
+function isAnnotationColumn(col: string): col is AnnotationColumn {
+  return (ANNOTATION_COLUMNS as readonly string[]).includes(col)
 }
 
 const COLUMN_ORDER = [
@@ -62,6 +87,10 @@ const COLUMN_ORDER = [
   'catalyst reason',
   'ai_suggestion',
   'suggested_strategy',
+  'sector sympathy',
+  'max_gain_pct',
+  'success_setup',
+  'comments',
   'required_volume',
   'r-multiple',
   'regime',
@@ -69,7 +98,6 @@ const COLUMN_ORDER = [
   'poc node',
   'absorption',
   'bid/ask spread',
-  'sector sympathy',
   'spx/qqq_corr',
   'date',
 ]
@@ -102,6 +130,32 @@ const HEADER_TOOLTIPS: Record<string, string> = {
   short_ratio: 'Shown in red when > 8',
   short_float: 'Shown in red when > 12%',
   'success prob': 'Rows below 20% are hidden. Shown in red when < 30%, green when > 70%.',
+  max_gain_pct: 'Manual entry — your reviewed max gain, range -20.00 to +30.00.',
+}
+
+// Filters like ">2.3", "<=10", "=5" numerically compare against the column value
+// instead of doing a text search. Only meaningful on numeric/percentage columns —
+// on text columns the cell simply won't parse as a number and the row is excluded.
+const FILTER_OP_RE = /^(>=|<=|>|<|=)\s*(-?\d+(?:\.\d+)?)$/
+
+function matchesFilter(raw: unknown, needle: string): boolean {
+  const trimmed = needle.trim()
+  const opMatch = trimmed.match(FILTER_OP_RE)
+  if (opMatch) {
+    const [, op, numStr] = opMatch
+    const threshold = parseFloat(numStr)
+    const cellNum = parseNumeric(raw)
+    if (cellNum === null) return false
+    switch (op) {
+      case '>': return cellNum > threshold
+      case '<': return cellNum < threshold
+      case '>=': return cellNum >= threshold
+      case '<=': return cellNum <= threshold
+      case '=': return cellNum === threshold
+      default: return true
+    }
+  }
+  return cellText(raw).toLowerCase().includes(trimmed.toLowerCase())
 }
 
 function parseNumeric(value: unknown): number | null {
@@ -198,6 +252,75 @@ function CellValue({ col, value }: { col: string; value: unknown }) {
   return <span style={alertSx}>{text}</span>
 }
 
+const MAX_GAIN_MIN = -20
+const MAX_GAIN_MAX = 30
+
+function AnnotationCell({
+  col, row, annotation, onChange,
+}: {
+  col: AnnotationColumn
+  row: Row
+  annotation: Annotation | undefined
+  onChange: (row: Row, patch: Partial<Annotation>) => void
+}) {
+  const value = annotation ?? EMPTY_ANNOTATION
+
+  if (col === 'success_setup') {
+    return (
+      <input
+        type="checkbox"
+        checked={value.successSetup}
+        onChange={e => onChange(row, { successSetup: e.target.checked })}
+        style={{ width: 16, height: 16, cursor: 'pointer' }}
+      />
+    )
+  }
+
+  if (col === 'max_gain_pct') {
+    return (
+      <input
+        type="number"
+        min={MAX_GAIN_MIN}
+        max={MAX_GAIN_MAX}
+        step={0.01}
+        value={value.maxGain}
+        placeholder="00.00"
+        onChange={e => onChange(row, { maxGain: e.target.value })}
+        onBlur={e => {
+          const n = parseFloat(e.target.value)
+          if (isNaN(n)) return
+          const clamped = Math.min(MAX_GAIN_MAX, Math.max(MAX_GAIN_MIN, n))
+          onChange(row, { maxGain: clamped.toFixed(2) })
+        }}
+        style={annotationInputSx}
+      />
+    )
+  }
+
+  // comments
+  return (
+    <input
+      type="text"
+      value={value.comments}
+      placeholder="Notes…"
+      onChange={e => onChange(row, { comments: e.target.value })}
+      style={{ ...annotationInputSx, width: 180 }}
+    />
+  )
+}
+
+const annotationInputSx: React.CSSProperties = {
+  width: 80,
+  boxSizing: 'border-box',
+  padding: '2px 6px',
+  fontSize: '0.8rem',
+  color: '#e8eaed',
+  background: 'rgba(255,255,255,0.06)',
+  border: '1px solid rgba(255,255,255,0.14)',
+  borderRadius: 4,
+  outline: 'none',
+}
+
 function StatItem({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25, minWidth: 0 }}>
@@ -263,7 +386,107 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
   const [filters, setFilters] = useState<Record<string, string>>({})
   const [groupBy, setGroupBy] = useState<'none' | 'ticker' | 'model'>('none')
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const [annotations, setAnnotations] = useState<Record<string, Annotation>>({})
+  // Testing-period toggle for the CEO-analysis DB dual-write (see backend
+  // /runs/{id}/ceo-analysis). Defaults to the existing file/SSE behavior —
+  // "Database" is strictly opt-in while the DB path is being validated.
+  const [dataSource, setDataSource] = useState<'files' | 'database'>('files')
   const esRef = useRef<EventSource | null>(null)
+
+  // Success/comments/max-gain are manual review notes, not agent output. The DB
+  // (`ceo_analysis` table) is authoritative and shared across browsers/machines;
+  // localStorage is kept only as an instant local echo while typing so edits feel
+  // responsive without waiting on a round-trip.
+  const annotationsStorageKey = `ceo-annotations-${run.id}`
+
+  useEffect(() => {
+    if (!open) return
+
+    let cancelled = false
+    let localAnnotations: Record<string, Annotation> = {}
+    try {
+      const raw = localStorage.getItem(annotationsStorageKey)
+      localAnnotations = raw ? (JSON.parse(raw) as Record<string, Annotation>) : {}
+    } catch {
+      localAnnotations = {}
+    }
+    setAnnotations(localAnnotations)
+
+    const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://127.0.0.1:4101'
+    fetch(`${BACKEND}/runs/${run.id}/ceo-analysis`)
+      .then(res => res.json())
+      .then((items: Array<{
+        ticker: string
+        model: string | null
+        success_setup: boolean | null
+        comments: string | null
+        max_gain_pct: number | null
+      }>) => {
+        if (cancelled) return
+        const fromDb: Record<string, Annotation> = {}
+        for (const it of items) {
+          if (it.success_setup === null && it.comments === null && it.max_gain_pct === null) continue
+          const key = `${it.ticker}::${it.model ?? ''}`
+          fromDb[key] = {
+            successSetup: it.success_setup ?? false,
+            comments: it.comments ?? '',
+            maxGain: it.max_gain_pct !== null ? String(it.max_gain_pct) : '',
+          }
+        }
+        // DB wins over localStorage — it's the shared/authoritative store.
+        setAnnotations(prev => ({ ...prev, ...fromDb }))
+      })
+      .catch(() => { /* offline/backend down — keep whatever localStorage had */ })
+
+    return () => { cancelled = true }
+  }, [open, annotationsStorageKey, run.id])
+
+  const updateAnnotation = useCallback((row: Row, patch: Partial<Annotation>) => {
+    const key = rowAnnotationKey(row)
+    setAnnotations(prev => {
+      const next = { ...prev, [key]: { ...EMPTY_ANNOTATION, ...prev[key], ...patch } }
+      try {
+        localStorage.setItem(annotationsStorageKey, JSON.stringify(next))
+      } catch {
+        // storage full or unavailable — annotation still updates in memory
+      }
+      return next
+    })
+
+    // Persist to the DB (see backend /runs/{id}/ceo-analysis PATCH) — this is now the
+    // authoritative store read back on load; localStorage above is just a local echo.
+    const dbPatch: Record<string, unknown> = {}
+    if (patch.successSetup !== undefined) dbPatch.success_setup = patch.successSetup
+    if (patch.comments !== undefined) dbPatch.comments = patch.comments
+    if (patch.maxGain !== undefined) {
+      const n = parseFloat(patch.maxGain)
+      if (!isNaN(n)) dbPatch.max_gain_pct = n
+    }
+    if (Object.keys(dbPatch).length > 0) {
+      const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://127.0.0.1:4101'
+      fetch(
+        `${BACKEND}/runs/${run.id}/ceo-analysis/${encodeURIComponent(row._ticker)}/${encodeURIComponent(row._model)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(dbPatch),
+        },
+      ).then(res => {
+        if (!res.ok) {
+          console.error(`Failed to save annotation for ${row._ticker}/${row._model}: HTTP ${res.status}`)
+        }
+      }).catch(err => {
+        console.error(`Failed to save annotation for ${row._ticker}/${row._model}:`, err)
+      })
+    }
+  }, [annotationsStorageKey, run.id])
+
+  const getCellValue = useCallback((row: Row, col: string): unknown => {
+    if (col === 'max_gain_pct') return annotations[rowAnnotationKey(row)]?.maxGain ?? ''
+    if (col === 'success_setup') return annotations[rowAnnotationKey(row)]?.successSetup ? 'Yes' : 'No'
+    if (col === 'comments') return annotations[rowAnnotationKey(row)]?.comments ?? ''
+    return row[col]
+  }, [annotations])
 
   const handleGroupByChange = useCallback((next: 'none' | 'ticker' | 'model') => {
     setGroupBy(next)
@@ -293,7 +516,7 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
   }, [])
 
   const orderedColumns = useMemo(() => {
-    const known = COLUMN_ORDER.filter(c => columns.includes(c))
+    const known = COLUMN_ORDER.filter(c => columns.includes(c) || isAnnotationColumn(c))
     const rest = columns.filter(c => !COLUMN_ORDER.includes(c))
     return [...known, ...rest]
   }, [columns])
@@ -306,23 +529,23 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
         if (n !== null && n < threshold) return false
       }
       return active.every(([col, needle]) => {
-        const raw = col === '_ticker' ? row._ticker : row[col]
-        return cellText(raw).toLowerCase().includes(needle.trim().toLowerCase())
+        const raw = col === '_ticker' ? row._ticker : getCellValue(row, col)
+        return matchesFilter(raw, needle)
       })
     })
-  }, [rows, filters])
+  }, [rows, filters, getCellValue])
 
   const sortedRows = useMemo(() => {
     if (!sortCol) return filteredRows
     return [...filteredRows].sort((a, b) => {
-      const av = sortKey(sortCol === '_ticker' ? a._ticker : a[sortCol])
-      const bv = sortKey(sortCol === '_ticker' ? b._ticker : b[sortCol])
+      const av = sortKey(sortCol === '_ticker' ? a._ticker : getCellValue(a, sortCol))
+      const bv = sortKey(sortCol === '_ticker' ? b._ticker : getCellValue(b, sortCol))
       const cmp = typeof av === 'number' && typeof bv === 'number'
         ? av - bv
         : String(av).localeCompare(String(bv))
       return sortDir === 'asc' ? cmp : -cmp
     })
-  }, [filteredRows, sortCol, sortDir])
+  }, [filteredRows, sortCol, sortDir, getCellValue])
 
   // Grouping clusters rows by ticker or model, inserting a section header between
   // groups. It re-sorts by the group key as the primary key, but Array.sort is
@@ -383,8 +606,9 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
   }, [dragCol])
   const handleDragEnd = useCallback(() => { setDragCol(null); setDragOverCol(null) }, [])
 
+  // Files mode (default) — unchanged live SSE tail of CEO_*.yaml files on disk.
   useEffect(() => {
-    if (!open) return
+    if (!open || dataSource !== 'files') return
     setRows([]); setColumns([]); setStreamDone(false)
     const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://127.0.0.1:4101'
     const es = new EventSource(`${BACKEND}/runs/${run.id}/ceo-stream`)
@@ -415,7 +639,71 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
     es.addEventListener('done', () => { setStreamDone(true); es.close(); esRef.current = null })
     es.onerror = () => { setStreamDone(true); es.close(); esRef.current = null }
     return () => { es.close(); esRef.current = null }
-  }, [open, run.id])
+  }, [open, run.id, dataSource])
+
+  // Database mode (testing toggle) — polls the ceo_analysis table dual-written by
+  // ai_service instead of tailing files. One-shot for a completed run; polls every
+  // 2s while the run is still active so it can be compared live against Files mode.
+  useEffect(() => {
+    if (!open || dataSource !== 'database') return
+    setRows([]); setColumns([]); setStreamDone(false)
+    const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://127.0.0.1:4101'
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`${BACKEND}/runs/${run.id}/ceo-analysis`)
+        const items = await res.json() as Array<{
+          ticker: string
+          model: string | null
+          data: Record<string, unknown>
+          success_setup: boolean | null
+          comments: string | null
+          max_gain_pct: number | null
+        }>
+        if (cancelled) return
+        const modelName = (m: string | null) => m ?? ''
+        setColumns(existing => {
+          const allKeys = items.flatMap(it => Object.keys(it.data).filter(k => k !== 'symbol'))
+          const newCols = allKeys.filter(k => !existing.includes(k))
+          return newCols.length > 0 ? [...existing, ...new Set(newCols)] : existing
+        })
+        setRows(items.map(it => ({
+          _ticker: it.ticker,
+          _model: modelName(it.model),
+          ...it.data,
+          ai_model_name: modelName(it.model) || it.data.ai_model_name,
+        }) as Row))
+        // Annotations are manual review fields, not agent-output columns — keep them
+        // in `annotations` state (DB-authoritative) rather than merging into `data`.
+        setAnnotations(prev => {
+          const next = { ...prev }
+          for (const it of items) {
+            if (it.success_setup === null && it.comments === null && it.max_gain_pct === null) continue
+            const key = `${it.ticker}::${modelName(it.model)}`
+            next[key] = {
+              successSetup: it.success_setup ?? false,
+              comments: it.comments ?? '',
+              maxGain: it.max_gain_pct !== null ? String(it.max_gain_pct) : '',
+            }
+          }
+          return next
+        })
+      } catch { /* ignore — try again on next tick */ }
+
+      if (cancelled) return
+      const done = run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled'
+      if (done) {
+        setStreamDone(true)
+        return
+      }
+      timer = setTimeout(poll, 2000)
+    }
+    void poll()
+
+    return () => { cancelled = true; if (timer) clearTimeout(timer) }
+  }, [open, run.id, run.status, dataSource])
 
   const [copied, setCopied] = useState(false)
 
@@ -531,6 +819,26 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
           </Box>
 
           <Box sx={{ flex: 1 }} />
+
+          {/* Testing-period toggle: read CEO rows from files (SSE tail, default) or
+              from the new ceo_analysis DB table, to compare the two while the
+              DB dual-write is being validated. */}
+          <Tooltip title="Testing: choose whether this table reads from the CEO_*.yaml files (current) or the new ceo_analysis DB table (dual-written alongside the files)">
+            <ToggleButtonGroup
+              value={dataSource}
+              exclusive
+              size="small"
+              onChange={(_, v) => { if (v) setDataSource(v) }}
+              sx={{ height: 26, mr: 2 }}
+            >
+              <ToggleButton value="files" sx={{ px: 1.25, textTransform: 'none', fontSize: '0.7rem', fontWeight: 600 }}>
+                Files
+              </ToggleButton>
+              <ToggleButton value="database" sx={{ px: 1.25, textTransform: 'none', fontSize: '0.7rem', fontWeight: 600 }}>
+                Database
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Tooltip>
 
           {/* Live / Completed indicator — no chip */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.5 }}>
@@ -856,7 +1164,9 @@ export default function CeoResultsPage({ open, onClose, run }: CeoResultsPagePro
                         key={col}
                         sx={{ ...dataCellSx, ...(isLongCol(col) && { whiteSpace: 'normal' }) }}
                       >
-                        <CellValue col={col} value={item.row[col]} />
+                        {isAnnotationColumn(col)
+                          ? <AnnotationCell col={col} row={item.row} annotation={annotations[rowAnnotationKey(item.row)]} onChange={updateAnnotation} />
+                          : <CellValue col={col} value={item.row[col]} />}
                       </TableCell>
                     ))}
                   </TableRow>

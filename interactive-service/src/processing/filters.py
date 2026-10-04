@@ -8,6 +8,19 @@ from src.processing.enrichment import StockRecord
 
 log = logging.getLogger(__name__)
 
+# IB primaryExchange values for US-based listings. Any other value (e.g. "TSE"/"TSX",
+# "LSE", "ASX", "HKEX") means the symbol's home/primary listing is a foreign exchange —
+# even if it also trades on a US exchange under the identical ticker (e.g. EQX, HBM).
+# ADRs (BABA, TSM, SHEL, ...) are unaffected: the ADR itself is a distinct instrument
+# from the foreign home-market shares (different ticker there), so IB reports the ADR's
+# primaryExchange as the US exchange it lists on.
+_US_PRIMARY_EXCHANGES = {"NYSE", "NASDAQ", "AMEX", "ARCA", "BATS", "IEX", "NYSENAT"}
+
+
+def is_us_primary_listing(primary_exchange: str) -> bool:
+    """True if primary_exchange (IB's ContractDetails.contract.primaryExchange) is a US exchange."""
+    return (primary_exchange or "").upper() in _US_PRIMARY_EXCHANGES
+
 
 def chg_pct_passes(chg: float, threshold: float, direction: str) -> bool:
     """True if chg% clears the pre_market_chg_pct_min magnitude threshold for this direction.

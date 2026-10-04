@@ -14,12 +14,13 @@ import httpx
 import yaml
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
-from sqlalchemy import delete as sql_delete, select
+from sqlalchemy import delete as sql_delete, func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.broadcaster import broadcaster
 from backend.config import settings
-from backend.db.models import AIModel, Prompt, Run, TickerResult
+from backend.db.models import AIModel, CeoAnalysis, Prompt, Run, TickerResult
 from backend.db.session import AsyncSessionLocal, get_session
 from pydantic import BaseModel
 
@@ -409,10 +410,15 @@ async def start_ai_for_run(
     return run
 
 
+_MAX_RUNS_RETURNED = 300  # growth cap — payload was unbounded and growing with every run ever created
+
+
 @router.get("", response_model=list[RunResponse])
 async def list_runs(session: AsyncSession = Depends(get_session)) -> list[Run]:
-    """Return all runs ordered by creation time descending."""
-    result = await session.execute(select(Run).order_by(Run.created_at.desc()))
+    """Return the most recent runs, newest first (capped, see _MAX_RUNS_RETURNED)."""
+    result = await session.execute(
+        select(Run).order_by(Run.created_at.desc()).limit(_MAX_RUNS_RETURNED)
+    )
     return list(result.scalars().all())
 
 
@@ -424,7 +430,9 @@ async def stream_runs() -> StreamingResponse:
         try:
             try:
                 async with AsyncSessionLocal() as session:
-                    result = await session.execute(select(Run).order_by(Run.created_at.desc()))
+                    result = await session.execute(
+                        select(Run).order_by(Run.created_at.desc()).limit(_MAX_RUNS_RETURNED)
+                    )
                     runs = result.scalars().all()
                 payload = json.dumps(
                     [RunResponse.model_validate(r).model_dump(mode="json") for r in runs],
@@ -441,7 +449,9 @@ async def stream_runs() -> StreamingResponse:
                     # Broadcaster may have missed an update — re-poll DB directly as fallback
                     try:
                         async with AsyncSessionLocal() as session:
-                            result = await session.execute(select(Run).order_by(Run.created_at.desc()))
+                            result = await session.execute(
+                                select(Run).order_by(Run.created_at.desc()).limit(_MAX_RUNS_RETURNED)
+                            )
                             runs = result.scalars().all()
                         payload = json.dumps(
                             [RunResponse.model_validate(r).model_dump(mode="json") for r in runs],
@@ -842,6 +852,71 @@ async def stream_ceo_results(run_id: uuid.UUID) -> StreamingResponse:
     )
 
 
+class CeoAnnotationUpdate(BaseModel):
+    success_setup: bool | None = None
+    comments: str | None = None
+    max_gain_pct: float | None = None
+
+
+@router.get("/{run_id}/ceo-analysis")
+async def get_ceo_analysis(
+    run_id: uuid.UUID, session: AsyncSession = Depends(get_session),
+) -> list[dict[str, Any]]:
+    """DB-backed read path for the CEO Results table (testing-period 'Database' source toggle).
+
+    Reads from the `ceo_analysis` table dual-written by ai_service alongside the
+    CEO_*.yaml files — same row shape the frontend already renders from the file/SSE
+    path, just sourced from Postgres instead of the filesystem.
+    """
+    result = await session.execute(
+        select(CeoAnalysis).where(CeoAnalysis.run_id == run_id).order_by(CeoAnalysis.ticker)
+    )
+    rows = result.scalars().all()
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        parsed = _extract_ceo_fields(row.data) if row.data else None
+        data, model_name = parsed if parsed else ({}, None)
+        out.append({
+            "ticker": row.ticker,
+            "model": model_name or row.model_name,
+            "data": data,
+            "success_setup": row.success_setup,
+            "comments": row.comments,
+            "max_gain_pct": float(row.max_gain_pct) if row.max_gain_pct is not None else None,
+        })
+    return out
+
+
+@router.patch("/{run_id}/ceo-analysis/{ticker}/{model_name}")
+async def update_ceo_annotation(
+    run_id: uuid.UUID,
+    ticker: str,
+    model_name: str,
+    body: CeoAnnotationUpdate,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Upsert manual review fields (success setup / comments / max gain) for one
+    (run, ticker, model). Creates the row with data=NULL if the CEO result dual-write
+    hasn't landed yet (e.g. annotating an older, file-only run) — testing-period
+    mirror of the frontend's localStorage annotations, which remain authoritative.
+    """
+    patch = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not patch:
+        raise HTTPException(status_code=400, detail="No annotation fields provided")
+    patch["annotation_updated_at"] = func.now()
+
+    stmt = pg_insert(CeoAnalysis).values(
+        run_id=run_id, ticker=ticker, model_name=model_name, **patch,
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["run_id", "ticker", "model_name"],
+        set_=patch,
+    )
+    await session.execute(stmt)
+    await session.commit()
+    return {"ok": True}
+
+
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _log_file_path(output_dir: str) -> Path:
@@ -917,68 +992,78 @@ def _try_parse_raw_output(raw: str) -> dict | None:
     return None
 
 
-def _parse_ceo_file(file_path: Path) -> tuple[dict, str | None] | None:
-    """Extract the stock analysis dict (+ producing model name) from a CEO_*.yaml/json file.
+# Normalize snake_case keys that some LLMs output instead of the canonical
+# space/slash/dash-separated names expected by the schema and frontend.
+_CANONICAL_KEYS = {
+    "current_price": "current price",
+    "ceo_verdict": "ceo verdict",
+    "conviction_score": "conviction score",
+    "success_prob": "success prob",
+    "entry_range": "entry range",
+    "entry_time": "entry time",
+    "sl_range": "sl range",
+    "tp_range": "tp range",
+    "poc_node": "poc node",
+    "bid_ask_spread": "bid/ask spread",
+    "bid/ask_spread": "bid/ask spread",
+    "sector_sympathy": "sector sympathy",
+    "spx_qqq_corr": "spx/qqq_corr",
+    "r_multiple": "r-multiple",
+    "catalyst_reason": "catalyst reason",
+}
+
+
+def _extract_ceo_fields(doc: dict) -> tuple[dict, str | None] | None:
+    """Extract the stock analysis dict (+ producing model name) from an already-parsed
+    CEO PipelineOutput document (loaded from a file, or read straight from the DB's
+    `ceo_analysis.data` JSONB column — same shape either way).
 
     Handles three LLM output patterns:
     - Each analysis field as a separate list item under `stocks` (old JSON pattern)
     - Analysis fields nested under a key (e.g. "symbol") in agent_data (current YAML pattern)
     - parse_error: true with raw_output containing a JSON string (LLM returned invalid JSON)
-    All are merged into one flat dict. The model name comes from the file's own top-level
+    All are merged into one flat dict. The model name comes from the document's own top-level
     `model_name` field (always present — it's part of PipelineOutput), not from the filename
     or any LLM self-reported value, so it's reliable even for pre-existing single-model runs.
     """
+    model_name = doc.get("model_name") if isinstance(doc, dict) else None
+    for agent_data in doc.get("agents", {}).values():
+        if not isinstance(agent_data, dict):
+            continue
+        merged: dict = {}
+        _SKIP = {"stocks", "raw_output", "parse_error", "reasoning", "schema_error", "schema_errors"}
+        # Old JSON pattern: stocks is a list of single-key dicts
+        for item in agent_data.get("stocks") or []:
+            if isinstance(item, dict):
+                merged.update(item)
+        # Current YAML pattern: data is a dict nested under a key (e.g. "symbol"),
+        # or flat sibling keys alongside stocks
+        for k, v in agent_data.items():
+            if k in _SKIP:
+                continue
+            if isinstance(v, dict):
+                merged.update(v)
+            else:
+                merged.setdefault(k, v)
+        # Fallback: parse_error pattern — LLM returned a JSON string in raw_output
+        # The string may be truncated mid-stream, so we attempt repair before parsing.
+        if not merged and agent_data.get("parse_error") and agent_data.get("raw_output"):
+            raw_str = agent_data["raw_output"]
+            parsed = _try_parse_raw_output(raw_str)
+            if parsed:
+                merged.update(parsed)
+        if merged:
+            merged = {_CANONICAL_KEYS.get(k, k): v for k, v in merged.items()}
+            return merged, model_name
+    return None
+
+
+def _parse_ceo_file(file_path: Path) -> tuple[dict, str | None] | None:
+    """Load a CEO_*.yaml/json file and extract its CEO fields via `_extract_ceo_fields`."""
     try:
         with open(file_path) as f:
             doc = yaml.safe_load(f) if file_path.suffix == ".yaml" else json.load(f)
-        model_name = doc.get("model_name") if isinstance(doc, dict) else None
-        for agent_data in doc.get("agents", {}).values():
-            if not isinstance(agent_data, dict):
-                continue
-            merged: dict = {}
-            _SKIP = {"stocks", "raw_output", "parse_error", "reasoning", "schema_error", "schema_errors"}
-            # Old JSON pattern: stocks is a list of single-key dicts
-            for item in agent_data.get("stocks") or []:
-                if isinstance(item, dict):
-                    merged.update(item)
-            # Current YAML pattern: data is a dict nested under a key (e.g. "symbol"),
-            # or flat sibling keys alongside stocks
-            for k, v in agent_data.items():
-                if k in _SKIP:
-                    continue
-                if isinstance(v, dict):
-                    merged.update(v)
-                else:
-                    merged.setdefault(k, v)
-            # Fallback: parse_error pattern — LLM returned a JSON string in raw_output
-            # The string may be truncated mid-stream, so we attempt repair before parsing.
-            if not merged and agent_data.get("parse_error") and agent_data.get("raw_output"):
-                raw_str = agent_data["raw_output"]
-                parsed = _try_parse_raw_output(raw_str)
-                if parsed:
-                    merged.update(parsed)
-            if merged:
-                # Normalize snake_case keys that some LLMs output instead of the canonical
-                # space/slash/dash-separated names expected by the schema and frontend.
-                _CANONICAL_KEYS = {
-                    "current_price": "current price",
-                    "ceo_verdict": "ceo verdict",
-                    "conviction_score": "conviction score",
-                    "success_prob": "success prob",
-                    "entry_range": "entry range",
-                    "entry_time": "entry time",
-                    "sl_range": "sl range",
-                    "tp_range": "tp range",
-                    "poc_node": "poc node",
-                    "bid_ask_spread": "bid/ask spread",
-                    "bid/ask_spread": "bid/ask spread",
-                    "sector_sympathy": "sector sympathy",
-                    "spx_qqq_corr": "spx/qqq_corr",
-                    "r_multiple": "r-multiple",
-                    "catalyst_reason": "catalyst reason",
-                }
-                merged = {_CANONICAL_KEYS.get(k, k): v for k, v in merged.items()}
-                return merged, model_name
+        return _extract_ceo_fields(doc)
     except Exception:
         pass
     return None
